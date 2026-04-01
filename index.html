@@ -240,28 +240,65 @@
         /* Team list */
         .team-card {
             display: flex;
-            justify-content: space-between;
+            gap: 16px;
             align-items: center;
-            padding: 16px 20px;
+            padding: 18px 20px;
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 10px;
-            margin-bottom: 10px;
+            border-radius: 12px;
+            margin-bottom: 12px;
             cursor: pointer;
             transition: all 0.2s;
         }
 
-        .team-card:hover { border-color: #a78bfa; background: #1e293b; }
+        .team-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+        .team-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #7c3aed, #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3em;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .team-info { flex: 1; min-width: 0; }
 
         .team-name {
             font-size: 1.1em;
             font-weight: 600;
         }
 
-        .team-meta {
+        .team-desc {
             font-size: 0.8em;
-            color: #64748b;
-            margin-top: 4px;
+            color: var(--text-dim);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .team-stats {
+            display: flex;
+            gap: 12px;
+            margin-top: 6px;
+            font-size: 0.75em;
+            color: var(--text-muted);
+        }
+
+        .team-stats span { display: flex; align-items: center; gap: 3px; }
+
+        .team-card-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            flex-shrink: 0;
         }
 
         .team-role {
@@ -932,20 +969,29 @@
             const teams = data.teams || [];
 
             let html = `
-                <h3 style="color:#94a3b8;margin:20px 0 12px">Your Teams</h3>
+                <h3 style="color:var(--text-muted);margin:20px 0 14px;font-size:1.1em">Your Teams</h3>
             `;
 
             if (teams.length === 0) {
                 html += '<div class="empty-state">No teams yet. Create or join one above.</div>';
             } else {
                 for (const t of teams) {
+                    const initials = t.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
                     html += `
                         <div class="team-card" onclick="openTeam('${t.id}')">
-                            <div>
+                            <div class="team-icon">${initials}</div>
+                            <div class="team-info">
                                 <div class="team-name">${t.name}</div>
-                                <div class="team-meta">${t.member_count} member${t.member_count !== 1 ? 's' : ''}</div>
+                                ${t.description ? `<div class="team-desc">${t.description}</div>` : ''}
+                                <div class="team-stats">
+                                    <span>${t.member_count} member${t.member_count !== 1 ? 's' : ''}</span>
+                                    <span style="color:#34d399">${t.online_count || 0} online</span>
+                                    ${t.upcoming_events_24h > 0 ? `<span style="color:#f59e0b">${t.upcoming_events_24h} event${t.upcoming_events_24h !== 1 ? 's' : ''} today</span>` : ''}
+                                </div>
                             </div>
-                            <span class="team-role ${t.role}">${t.role}</span>
+                            <div class="team-card-right">
+                                <span class="team-role ${t.role}">${t.role}</span>
+                            </div>
                         </div>
                     `;
                 }

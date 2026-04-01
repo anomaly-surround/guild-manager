@@ -662,11 +662,14 @@ async function handleRequest(request, env) {
   if (path === '/api/teams' && request.method === 'GET') {
     const teams = await env.DB.prepare(`
       SELECT t.*, tm.role,
-        (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count
+        (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count,
+        (SELECT COUNT(*) FROM member_activity WHERE team_id = t.id AND last_seen > unixepoch() - 300) as online_count,
+        (SELECT team_description FROM team_settings WHERE team_id = t.id) as description,
+        (SELECT COUNT(*) FROM events WHERE team_id = t.id AND event_time > ? AND event_time <= ? + 86400000) as upcoming_events_24h
       FROM teams t
       JOIN team_members tm ON tm.team_id = t.id AND tm.user_id = ?
       ORDER BY t.created_at DESC
-    `).bind(user.userId).all();
+    `).bind(Date.now(), Date.now(), user.userId).all();
     return json({ teams: teams.results });
   }
 
