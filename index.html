@@ -657,6 +657,17 @@
         let currentUser = null;
         let currentTeamId = null;
 
+        // Double-tap guard
+        const _busy = {};
+        function guard(name, fn) {
+            return async function(...args) {
+                if (_busy[name]) return;
+                _busy[name] = true;
+                try { await fn(...args); }
+                finally { _busy[name] = false; }
+            };
+        }
+
         // --- Init ---
 
         // Check for token in URL (from OAuth redirect)
@@ -1166,7 +1177,7 @@
             el.querySelector('.toggle-arrow').classList.toggle('open');
         }
 
-        async function addBoss() {
+        const addBoss = guard('addBoss', async function() {
             const name = document.getElementById('bossName').value.trim();
             if (!name) return;
             const type = document.getElementById('bossType').value;
@@ -1201,13 +1212,13 @@
             showToast(`${name} added`);
             await loadTeamBosses(currentTeamId);
             renderTeamView();
-        }
+        });
 
-        async function killBoss(bossId) {
+        const killBoss = guard('killBoss', async function(bossId) {
             await api('POST', `/api/teams/${currentTeamId}/bosses/${bossId}/kill`, { deathTime: Date.now() });
             await loadTeamBosses(currentTeamId);
             renderTeamView();
-        }
+        });
 
         function openDeathModal(bossId, bossName) {
             const now = new Date();
@@ -1252,23 +1263,23 @@
             renderTeamView();
         }
 
-        async function deleteBoss(bossId) {
+        const deleteBoss = guard('deleteBoss', async function(bossId) {
             if (!confirm('Remove this boss timer?')) return;
             await api('DELETE', `/api/teams/${currentTeamId}/bosses/${bossId}`);
             await loadTeamBosses(currentTeamId);
             renderTeamView();
-        }
+        });
 
-        async function saveWebhook() {
+        const saveWebhook = guard('saveWebhook', async function() {
             const url = document.getElementById('webhookUrl').value.trim();
             await api('PUT', `/api/teams/${currentTeamId}/settings`, { webhookUrl: url });
             showToast(url ? 'Webhook saved' : 'Webhook removed');
-        }
+        });
 
-        async function testWebhook() {
+        const testWebhook = guard('testWebhook', async function() {
             const data = await api('POST', `/api/teams/${currentTeamId}/settings/test`);
             showToast(data.ok ? 'Test sent!' : data.error || 'Failed');
-        }
+        });
 
         async function saveNotifSettings() {
             await api('PUT', `/api/teams/${currentTeamId}/settings`, {
@@ -1469,7 +1480,7 @@
             return html;
         }
 
-        async function addAnnouncement() {
+        const addAnnouncement = guard('addAnnouncement', async function() {
             const title = document.getElementById('announcementTitle').value.trim();
             if (!title) return showToast('Title required');
             const body = document.getElementById('announcementBody').value.trim();
@@ -1478,18 +1489,18 @@
             if (data.error) { showToast(data.error); return; }
             showToast('Announcement posted!');
             loadAndRenderAnnouncements();
-        }
+        });
 
-        async function deleteAnnouncement(id) {
+        const deleteAnnouncement = guard('deleteAnnouncement', async function(id) {
             if (!confirm('Delete this announcement?')) return;
             await api('DELETE', `/api/teams/${currentTeamId}/announcements/${id}`);
             loadAndRenderAnnouncements();
-        }
+        });
 
-        async function togglePin(id) {
+        const togglePin = guard('togglePin', async function(id) {
             await api('POST', `/api/teams/${currentTeamId}/announcements/${id}/pin`);
             loadAndRenderAnnouncements();
-        }
+        });
 
         // --- Wars & Stats ---
 
@@ -1633,7 +1644,7 @@
             return html;
         }
 
-        async function addWar() {
+        const addWar = guard('addWar', async function() {
             const opponent = document.getElementById('warOpponent').value.trim();
             const result = document.getElementById('warResult').value;
             if (!opponent) return showToast('Opponent required');
@@ -1651,12 +1662,12 @@
             if (data.error) { showToast(data.error); return; }
             showToast('War result logged!');
             loadAndRenderWars();
-        }
+        });
 
-        async function deleteWar(id) {
+        const deleteWar = guard('deleteWar', async function(id) {
             await api('DELETE', `/api/teams/${currentTeamId}/wars/${id}`);
             loadAndRenderWars();
-        }
+        });
 
         // --- Loot Tracker ---
 
@@ -1730,7 +1741,7 @@
             return html;
         }
 
-        async function addLoot() {
+        const addLoot = guard('addLoot', async function() {
             const itemName = document.getElementById('lootItemName').value.trim();
             const bossName = document.getElementById('lootBossName').value.trim();
             const recipientId = document.getElementById('lootRecipient').value;
@@ -1740,12 +1751,12 @@
             if (data.error) { showToast(data.error); return; }
             showToast('Loot logged!');
             loadAndRenderLoot();
-        }
+        });
 
-        async function deleteLoot(id) {
+        const deleteLoot = guard('deleteLoot', async function(id) {
             await api('DELETE', `/api/teams/${currentTeamId}/loot/${id}`);
             loadAndRenderLoot();
-        }
+        });
 
         // --- DKP Points ---
 
@@ -1846,7 +1857,7 @@
             return html;
         }
 
-        async function awardDKP() {
+        const awardDKP = guard('awardDKP', async function() {
             const memberId = document.getElementById('dkpMember').value;
             const amount = parseInt(document.getElementById('dkpAmount').value);
             const reason = document.getElementById('dkpReason').value.trim();
@@ -1863,7 +1874,7 @@
                 showToast('DKP updated!');
             }
             loadAndRenderDKP();
-        }
+        });
 
         // --- Availability ---
 
@@ -1950,7 +1961,7 @@
             container.appendChild(div);
         }
 
-        async function saveAvailability() {
+        const saveAvailability = guard('saveAvailability', async function() {
             const rows = document.querySelectorAll('#myAvailSlots .form-row');
             const slots = [];
             for (const row of rows) {
@@ -1963,7 +1974,7 @@
             if (data.error) { showToast(data.error); return; }
             showToast('Availability saved!');
             loadAndRenderAvailability();
-        }
+        });
 
         // --- Events ---
 
@@ -2107,7 +2118,7 @@
             return d + 'd ' + (h % 24) + 'h';
         }
 
-        async function addEvent() {
+        const addEvent = guard('addEvent', async function() {
             const title = document.getElementById('eventTitle').value.trim();
             const dateTime = document.getElementById('eventDateTime').value;
             if (!title || !dateTime) return showToast('Title and date/time required');
@@ -2128,19 +2139,19 @@
             if (data.error) { showToast(data.error); return; }
             showToast(`Event "${title}" created`);
             loadAndRenderEvents();
-        }
+        });
 
-        async function rsvpEvent(eventId, status) {
+        const rsvpEvent = guard('rsvpEvent', async function(eventId, status) {
             await api('POST', `/api/teams/${currentTeamId}/events/${eventId}/rsvp`, { status });
             loadAndRenderEvents();
-        }
+        });
 
-        async function deleteEvent(eventId) {
+        const deleteEvent = guard('deleteEvent', async function(eventId) {
             if (!confirm('Delete this event?')) return;
             await api('DELETE', `/api/teams/${currentTeamId}/events/${eventId}`);
             showToast('Event deleted');
             loadAndRenderEvents();
-        }
+        });
 
         function formatTime(ms) {
             if (ms <= 0) return '00:00';
@@ -2234,14 +2245,14 @@
 
         // --- Actions ---
 
-        async function checkout(type) {
+        const checkout = guard('checkout', async function(type) {
             const data = await api('POST', '/api/checkout', { type });
             if (data.url) {
                 window.location.href = data.url;
             } else {
                 showToast(data.error || 'Failed to create checkout');
             }
-        }
+        });
 
         function login() {
             window.location.href = API + '/auth/login';
@@ -2256,7 +2267,7 @@
             showLogin();
         }
 
-        async function createTeam() {
+        const createTeam = guard('createTeam', async function() {
             const name = document.getElementById('teamName').value.trim();
             if (!name) return;
             const data = await api('POST', '/api/teams', { name });
@@ -2264,9 +2275,9 @@
             document.getElementById('deathModal').innerHTML = '';
             showToast(`Team "${name}" created!`);
             showTeamList();
-        }
+        });
 
-        async function joinTeam() {
+        const joinTeam = guard('joinTeam', async function() {
             const code = document.getElementById('inviteCode').value.trim();
             if (!code) return;
             const data = await api('POST', `/api/invite/${code}`);
@@ -2274,37 +2285,37 @@
             document.getElementById('deathModal').innerHTML = '';
             showToast(`Joined ${data.team.name}!`);
             showTeamList();
-        }
+        });
 
-        async function changeRole(teamId, userId, role) {
+        const changeRole = guard('changeRole', async function(teamId, userId, role) {
             await api('POST', `/api/teams/${teamId}/members/role`, { userId, role });
             openTeam(teamId);
-        }
+        });
 
-        async function kickMember(teamId, userId, username) {
+        const kickMember = guard('kickMember', async function(teamId, userId, username) {
             if (!confirm(`Kick ${username}?`)) return;
             await api('POST', `/api/teams/${teamId}/kick`, { userId });
             showToast(`${username} kicked`);
             openTeam(teamId);
-        }
+        });
 
-        async function deleteTeam(teamId) {
+        const deleteTeam = guard('deleteTeam', async function(teamId) {
             if (!confirm('Delete this team? This cannot be undone.')) return;
             await api('DELETE', `/api/teams/${teamId}`);
             showToast('Team deleted');
             showTeamList();
-        }
+        });
 
-        async function leaveTeam(teamId) {
+        const leaveTeam = guard('leaveTeam', async function(teamId) {
             if (!confirm('Leave this team?')) return;
             await api('POST', `/api/teams/${teamId}/leave`);
             showToast('Left team');
             showTeamList();
-        }
+        });
 
         // --- Member Notes ---
 
-        async function openMemberNotes(userId, username) {
+        const openMemberNotes = guard('openMemberNotes', async function(userId, username) {
             const data = await api('GET', `/api/teams/${currentTeamId}/members/${userId}/notes`);
             const notes = data.notes || [];
             let notesHtml = '';
@@ -2333,20 +2344,20 @@
                         </div>
                     </div>
                 </div>`;
-        }
+        });
 
-        async function addMemberNote(userId, username) {
+        const addMemberNote = guard('addMemberNote', async function(userId, username) {
             const note = document.getElementById('newNoteText').value.trim();
             if (!note) return;
             const data = await api('POST', `/api/teams/${currentTeamId}/members/${userId}/notes`, { note });
             if (data.error) { showToast(data.error); return; }
             openMemberNotes(userId, username);
-        }
+        });
 
-        async function deleteMemberNote(noteId, userId, username) {
+        const deleteMemberNote = guard('deleteMemberNote', async function(noteId, userId, username) {
             await api('DELETE', `/api/teams/${currentTeamId}/notes/${noteId}`);
             openMemberNotes(userId, username);
-        }
+        });
 
         function copyInvite(code) {
             navigator.clipboard.writeText(code);
