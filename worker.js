@@ -73,6 +73,10 @@ async function initDB(db) {
       discord_id TEXT UNIQUE NOT NULL,
       username TEXT NOT NULL,
       avatar TEXT,
+      premium INTEGER DEFAULT 0,
+      premium_type TEXT,
+      premium_until INTEGER,
+      ls_customer_id TEXT,
       created_at INTEGER DEFAULT (unixepoch())
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS teams (
@@ -372,12 +376,111 @@ async function handleRequest(request, env) {
     if (!user) return json({ error: 'Not logged in' }, 401);
     const dbUser = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user.userId).first();
     if (!dbUser) return json({ error: 'User not found' }, 404);
+    // Check if subscription is still active
+    let isPremium = false;
+    if (dbUser.premium) {
+      if (dbUser.premium_type === 'lifetime') {
+        isPremium = true;
+      } else if (dbUser.premium_until && dbUser.premium_until > Math.floor(Date.now() / 1000)) {
+        isPremium = true;
+      } else {
+        // Subscription expired
+        await env.DB.prepare('UPDATE users SET premium = 0 WHERE id = ?').bind(dbUser.id).run();
+      }
+    }
+
     return json({
       id: dbUser.id,
       username: dbUser.username,
       avatar: dbUser.avatar,
       discordId: dbUser.discord_id,
+      premium: isPremium,
+      premiumType: isPremium ? dbUser.premium_type : null,
     });
+  }
+
+  // --- LemonSqueezy webhook (no auth required) ---
+  if (path === '/ls/webhook' && request.method === 'POST') {
+    const body = await request.json();
+    const eventName = body.meta?.event_name;
+
+    if (eventName === 'order_created') {
+      const attrs = body.data?.attributes;
+      const customData = body.meta?.custom_data;
+      const userId = customData?.user_id;
+      const variantId = attrs?.first_order_item?.variant_id;
+
+      if (userId) {
+        const isLifetime = String(variantId) === env.LS_LIFETIME_VARIANT;
+        if (isLifetime) {
+          await env.DB.prepare('UPDATE users SET premium = 1, premium_type = ?, ls_customer_id = ? WHERE id = ?')
+            .bind('lifetime', String(attrs.customer_id), userId).run();
+        } else {
+          // Monthly — set expiry 35 days out (gives buffer)
+          const until = Math.floor(Date.now() / 1000) + 35 * 86400;
+          await env.DB.prepare('UPDATE users SET premium = 1, premium_type = ?, premium_until = ?, ls_customer_id = ? WHERE id = ?')
+            .bind('monthly', until, String(attrs.customer_id), userId).run();
+        }
+      }
+    }
+
+    if (eventName === 'subscription_payment_success') {
+      const customData = body.meta?.custom_data;
+      const userId = customData?.user_id;
+      if (userId) {
+        const until = Math.floor(Date.now() / 1000) + 35 * 86400;
+        await env.DB.prepare('UPDATE users SET premium = 1, premium_until = ? WHERE id = ?')
+          .bind(until, userId).run();
+      }
+    }
+
+    if (eventName === 'subscription_expired' || eventName === 'subscription_cancelled') {
+      const customData = body.meta?.custom_data;
+      const userId = customData?.user_id;
+      if (userId) {
+        await env.DB.prepare('UPDATE users SET premium = 0, premium_type = NULL, premium_until = NULL WHERE id = ?')
+          .bind(userId).run();
+      }
+    }
+
+    return json({ ok: true });
+  }
+
+  // --- Checkout URL generator ---
+  if (path === '/api/checkout' && request.method === 'POST') {
+    const user = await getUser(request, env);
+    if (!user) return json({ error: 'Not logged in' }, 401);
+
+    const body = await request.json();
+    const variant = body.type === 'lifetime' ? env.LS_LIFETIME_VARIANT : env.LS_MONTHLY_VARIANT;
+
+    const res = await fetch('https://api.lemonsqueezy.com/v1/checkouts', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.LS_API_KEY}`,
+        'Content-Type': 'application/vnd.api+json',
+        'Accept': 'application/vnd.api+json',
+      },
+      body: JSON.stringify({
+        data: {
+          type: 'checkouts',
+          attributes: {
+            checkout_data: {
+              custom: { user_id: user.userId },
+            },
+          },
+          relationships: {
+            store: { data: { type: 'stores', id: env.LS_STORE_ID } },
+            variant: { data: { type: 'variants', id: variant } },
+          },
+        },
+      }),
+    });
+
+    const checkout = await res.json();
+    const url = checkout.data?.attributes?.url;
+    if (!url) return json({ error: 'Failed to create checkout' }, 500);
+    return json({ url });
   }
 
   // --- Protected routes (require auth) ---
@@ -403,11 +506,13 @@ async function handleRequest(request, env) {
     const body = await request.json();
     if (!body.name || !body.name.trim()) return json({ error: 'Name required' }, 400);
 
-    // Check team limit (free = 1 team)
+    // Check team limit (free = 1, premium = unlimited)
+    const dbUser = await env.DB.prepare('SELECT premium FROM users WHERE id = ?').bind(user.userId).first();
+    const isPremium = dbUser?.premium;
     const teamCount = await env.DB.prepare(
       'SELECT COUNT(*) as count FROM teams WHERE owner_id = ?'
     ).bind(user.userId).first();
-    if (teamCount.count >= 1) {
+    if (!isPremium && teamCount.count >= 1) {
       return json({ error: 'Free tier: 1 team max. Upgrade for more.' }, 403);
     }
 
@@ -548,12 +653,14 @@ async function handleRequest(request, env) {
     ).bind(team.id, user.userId).first();
     if (existing) return json({ error: 'Already a member', team: { id: team.id, name: team.name } }, 400);
 
-    // Check member limit
+    // Check member limit (premium owner = 50 members, free = 5)
+    const owner = await env.DB.prepare('SELECT premium FROM users WHERE id = ?').bind(team.owner_id).first();
+    const maxMembers = owner?.premium ? 50 : 5;
     const count = await env.DB.prepare(
       'SELECT COUNT(*) as count FROM team_members WHERE team_id = ?'
     ).bind(team.id).first();
-    if (count.count >= team.max_members) {
-      return json({ error: `Team is full (${team.max_members} members max)` }, 403);
+    if (count.count >= maxMembers) {
+      return json({ error: `Team is full (${maxMembers} members max)` }, 403);
     }
 
     await env.DB.prepare('INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)')

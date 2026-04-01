@@ -548,7 +548,8 @@
         function showUserInfo() {
             const el = document.getElementById('userInfo');
             el.style.display = 'flex';
-            document.getElementById('userName').textContent = currentUser.username;
+            document.getElementById('userName').textContent = currentUser.username +
+                (currentUser.premium ? ' (Premium)' : '');
             if (currentUser.avatar) {
                 document.getElementById('userAvatar').src =
                     `https://cdn.discordapp.com/avatars/${currentUser.discordId}/${currentUser.avatar}.png?size=64`;
@@ -592,6 +593,19 @@
 
                 <h3 style="color:#94a3b8;margin:20px 0 12px">Your Teams</h3>
             `;
+
+            if (!currentUser.premium) {
+                html += `
+                    <div class="card" style="border-color:#7c3aed;margin-bottom:16px">
+                        <h2 style="color:#a78bfa">Upgrade to Premium</h2>
+                        <p style="color:#94a3b8;font-size:0.9em;margin-bottom:12px">Unlimited teams, up to 50 members per team</p>
+                        <div style="display:flex;gap:10px">
+                            <button class="btn btn-primary" onclick="checkout('monthly')">Monthly Plan</button>
+                            <button class="btn btn-primary" onclick="checkout('lifetime')">Lifetime (one-time)</button>
+                        </div>
+                    </div>
+                `;
+            }
 
             if (teams.length === 0) {
                 html += '<div class="empty-state">No teams yet. Create or join one above.</div>';
@@ -1230,6 +1244,15 @@
         }, 15000);
 
         // --- Actions ---
+
+        async function checkout(type) {
+            const data = await api('POST', '/api/checkout', { type });
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                showToast(data.error || 'Failed to create checkout');
+            }
+        }
 
         function login() {
             window.location.href = API + '/auth/login';
