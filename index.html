@@ -54,7 +54,7 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 1100px;
             margin: 0 auto;
             padding: 24px;
         }
@@ -379,21 +379,46 @@
         .toggle-arrow { font-size: 0.8em; color: #64748b; transition: transform 0.2s; }
         .toggle-arrow.open { transform: rotate(180deg); }
 
-        .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; }
+        /* Sidebar layout */
+        .team-layout {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .sidebar {
+            width: 160px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: sticky;
+            top: 16px;
+        }
 
         .tab-btn {
-            padding: 8px 16px;
+            padding: 10px 14px;
             background: #1e293b;
             color: #64748b;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 0.85em;
             font-weight: 600;
+            text-align: left;
+            transition: all 0.15s;
         }
 
-        .tab-btn:hover { color: #e0e6f0; }
-        .tab-btn.active { background: #334155; color: #a78bfa; }
+        .tab-btn:hover { color: #e0e6f0; background: #253347; }
+        .tab-btn.active { background: #334155; color: #a78bfa; border-left: 3px solid #a78bfa; }
+
+        .tab-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* Legacy tab-bar hidden but kept for settings page */
+        .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; }
 
         /* Events */
         .event-card {
@@ -620,10 +645,24 @@
         .note-text { font-size: 0.85em; white-space: pre-wrap; }
         .note-meta { font-size: 0.7em; color: #64748b; margin-top: 4px; }
 
+        @media (max-width: 768px) {
+            .team-layout { flex-direction: column; }
+            .sidebar {
+                width: 100%;
+                flex-direction: row;
+                flex-wrap: wrap;
+                position: static;
+                gap: 4px;
+            }
+            .sidebar .tab-btn {
+                padding: 6px 10px;
+                font-size: 0.8em;
+                text-align: center;
+            }
+        }
         @media (max-width: 600px) {
             .form-row { flex-direction: column; }
             .container { padding: 16px; }
-            .tab-btn { padding: 8px 10px; font-size: 0.8em; }
         }
     </style>
 </head>
@@ -847,6 +886,27 @@
             const members = teamData.members;
             const canManage = team.my_role === 'leader' || team.my_role === 'officer';
 
+            let tabContent = '';
+            if (teamTab === 'timers') {
+                tabContent = renderTimersTab(team, canManage);
+            } else if (teamTab === 'members') {
+                tabContent = renderMembersTab(team, members, canManage);
+            } else if (teamTab === 'events') {
+                tabContent = '<div id="eventsContent"><div class="empty-state">Loading...</div></div>';
+            } else if (teamTab === 'chat') {
+                tabContent = '<div id="chatContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'announcements') {
+                tabContent = '<div id="announcementsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'wars') {
+                tabContent = '<div id="warsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'loot') {
+                tabContent = '<div id="lootContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'dkp') {
+                tabContent = '<div id="dkpContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'availability') {
+                tabContent = '<div id="availabilityContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            }
+
             let html = `
                 <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
                 <div class="card">
@@ -861,39 +921,22 @@
                     </div>
                 </div>
 
-                <div class="tab-bar">
-                    <button class="tab-btn ${teamTab === 'chat' ? 'active' : ''}" onclick="loadAndRenderChat()">Chat</button>
-                    <button class="tab-btn ${teamTab === 'announcements' ? 'active' : ''}" onclick="loadAndRenderAnnouncements()">Announcements</button>
-                    <button class="tab-btn ${teamTab === 'timers' ? 'active' : ''}" onclick="teamTab='timers';renderTeamView()">Boss Timers</button>
-                    <button class="tab-btn ${teamTab === 'events' ? 'active' : ''}" onclick="teamTab='events';loadAndRenderEvents()">Events</button>
-                    <button class="tab-btn ${teamTab === 'members' ? 'active' : ''}" onclick="teamTab='members';renderTeamView()">Members (${members.length})</button>
-                    <button class="tab-btn ${teamTab === 'loot' ? 'active' : ''}" onclick="loadAndRenderLoot()">Loot</button>
-                    <button class="tab-btn ${teamTab === 'dkp' ? 'active' : ''}" onclick="loadAndRenderDKP()">DKP</button>
-                    <button class="tab-btn ${teamTab === 'wars' ? 'active' : ''}" onclick="loadAndRenderWars()">Wars</button>
-                    <button class="tab-btn ${teamTab === 'availability' ? 'active' : ''}" onclick="loadAndRenderAvailability()">Availability</button>
-                    <button class="tab-btn ${teamTab === 'settings' ? 'active' : ''}" onclick="teamTab='settings';renderTeamSettings()">Settings</button>
+                <div class="team-layout">
+                    <div class="sidebar">
+                        <button class="tab-btn ${teamTab === 'chat' ? 'active' : ''}" onclick="loadAndRenderChat()">Chat</button>
+                        <button class="tab-btn ${teamTab === 'announcements' ? 'active' : ''}" onclick="loadAndRenderAnnouncements()">Announcements</button>
+                        <button class="tab-btn ${teamTab === 'timers' ? 'active' : ''}" onclick="teamTab='timers';renderTeamView()">Boss Timers</button>
+                        <button class="tab-btn ${teamTab === 'events' ? 'active' : ''}" onclick="teamTab='events';loadAndRenderEvents()">Events</button>
+                        <button class="tab-btn ${teamTab === 'members' ? 'active' : ''}" onclick="teamTab='members';renderTeamView()">Members (${members.length})</button>
+                        <button class="tab-btn ${teamTab === 'loot' ? 'active' : ''}" onclick="loadAndRenderLoot()">Loot</button>
+                        <button class="tab-btn ${teamTab === 'dkp' ? 'active' : ''}" onclick="loadAndRenderDKP()">DKP</button>
+                        <button class="tab-btn ${teamTab === 'wars' ? 'active' : ''}" onclick="loadAndRenderWars()">Wars</button>
+                        <button class="tab-btn ${teamTab === 'availability' ? 'active' : ''}" onclick="loadAndRenderAvailability()">Availability</button>
+                        <button class="tab-btn ${teamTab === 'settings' ? 'active' : ''}" onclick="teamTab='settings';renderTeamSettings()">Settings</button>
+                    </div>
+                    <div class="tab-content">${tabContent}</div>
                 </div>
             `;
-
-            if (teamTab === 'timers') {
-                html += renderTimersTab(team, canManage);
-            } else if (teamTab === 'members') {
-                html += renderMembersTab(team, members, canManage);
-            } else if (teamTab === 'events') {
-                html += '<div id="eventsContent"><div class="empty-state">Loading...</div></div>';
-            } else if (teamTab === 'chat') {
-                html += '<div id="chatContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-            } else if (teamTab === 'announcements') {
-                html += '<div id="announcementsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-            } else if (teamTab === 'wars') {
-                html += '<div id="warsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-            } else if (teamTab === 'loot') {
-                html += '<div id="lootContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-            } else if (teamTab === 'dkp') {
-                html += '<div id="dkpContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-            } else if (teamTab === 'availability') {
-                html += '<div id="availabilityContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-            }
 
             content.innerHTML = html;
         }
@@ -1117,28 +1160,9 @@
 
             const settings = await api('GET', `/api/teams/${currentTeamId}/settings`);
 
-            let html = `
-                <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
-                <div class="card">
-                    <div style="display:flex;justify-content:space-between;align-items:center">
-                        <h2>${team.name}</h2>
-                        <span class="team-role ${team.my_role}">${team.my_role}</span>
-                    </div>
-                </div>
+            const members = teamData.members;
 
-                <div class="tab-bar">
-                    <button class="tab-btn" onclick="loadAndRenderChat()">Chat</button>
-                    <button class="tab-btn" onclick="loadAndRenderAnnouncements()">Announcements</button>
-                    <button class="tab-btn" onclick="teamTab='timers';loadTeamBosses(currentTeamId).then(()=>renderTeamView())">Boss Timers</button>
-                    <button class="tab-btn" onclick="loadAndRenderEvents()">Events</button>
-                    <button class="tab-btn" onclick="teamTab='members';renderTeamView()">Members</button>
-                    <button class="tab-btn" onclick="loadAndRenderLoot()">Loot</button>
-                    <button class="tab-btn" onclick="loadAndRenderDKP()">DKP</button>
-                    <button class="tab-btn" onclick="loadAndRenderWars()">Wars</button>
-                    <button class="tab-btn" onclick="loadAndRenderAvailability()">Availability</button>
-                    <button class="tab-btn active">Settings</button>
-                </div>
-
+            let settingsContent = `
                 <div class="card">
                     <h3>Discord Webhook</h3>
                     ${canManage ? `
@@ -1150,12 +1174,38 @@
                             <div><button class="btn btn-primary btn-sm" onclick="saveWebhook()">Save</button></div>
                             <div><button class="btn btn-secondary btn-sm" onclick="testWebhook()">Test</button></div>
                         </div>
-                        <div style="margin-top:10px;display:flex;gap:16px;font-size:0.85em;color:#94a3b8">
+                        <div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.85em;color:#94a3b8">
                             <label><input type="checkbox" id="onWarning" ${settings.onWarning ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Warning before spawn</label>
                             <label><input type="checkbox" id="onSpawn" ${settings.onSpawn ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Spawn notification</label>
                             <label><input type="checkbox" id="onAnnouncement" ${settings.onAnnouncement !== false ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Announcements</label>
                         </div>
                     ` : `<p style="color:#64748b;font-size:0.85em">Only officers and leaders can manage settings.</p>`}
+                </div>
+            `;
+
+            let html = `
+                <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <h2>${team.name}</h2>
+                        <span class="team-role ${team.my_role}">${team.my_role}</span>
+                    </div>
+                </div>
+
+                <div class="team-layout">
+                    <div class="sidebar">
+                        <button class="tab-btn" onclick="loadAndRenderChat()">Chat</button>
+                        <button class="tab-btn" onclick="loadAndRenderAnnouncements()">Announcements</button>
+                        <button class="tab-btn" onclick="teamTab='timers';loadTeamBosses(currentTeamId).then(()=>renderTeamView())">Boss Timers</button>
+                        <button class="tab-btn" onclick="loadAndRenderEvents()">Events</button>
+                        <button class="tab-btn" onclick="teamTab='members';renderTeamView()">Members (${members.length})</button>
+                        <button class="tab-btn" onclick="loadAndRenderLoot()">Loot</button>
+                        <button class="tab-btn" onclick="loadAndRenderDKP()">DKP</button>
+                        <button class="tab-btn" onclick="loadAndRenderWars()">Wars</button>
+                        <button class="tab-btn" onclick="loadAndRenderAvailability()">Availability</button>
+                        <button class="tab-btn active">Settings</button>
+                    </div>
+                    <div class="tab-content">${settingsContent}</div>
                 </div>
             `;
 
