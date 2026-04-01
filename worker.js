@@ -344,7 +344,7 @@ async function initDB(db) {
   ]);
 
   // Run migrations only once (check if latest column exists)
-  const hasAccentColor = await db.prepare("SELECT 1 FROM pragma_table_info('team_settings') WHERE name='accent_color'").first().catch(() => null);
+  const hasAccentColor = await db.prepare("SELECT accent_color FROM team_settings LIMIT 1").first().then(() => true).catch(() => false);
   if (!hasAccentColor) {
     const migrations = [
       'ALTER TABLE team_settings ADD COLUMN on_announcement INTEGER DEFAULT 1',
