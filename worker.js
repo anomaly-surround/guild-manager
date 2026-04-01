@@ -2,6 +2,7 @@
  * Guild Manager - Cloudflare Worker
  * Phase 1: Discord OAuth + Team creation + Invite system
  * Phase 2: Shared boss timers per team + Discord webhook notifications
+ * Phase 3: Event scheduling + RSVP + attendance
  *
  * Bindings: DB (D1), DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, JWT_SECRET
  */
@@ -113,6 +114,38 @@ async function initDB(db) {
       created_at INTEGER DEFAULT (unixepoch()),
       FOREIGN KEY (team_id) REFERENCES teams(id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS events (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      event_type TEXT DEFAULT 'other',
+      event_time INTEGER NOT NULL,
+      duration_minutes INTEGER DEFAULT 60,
+      created_by TEXT NOT NULL,
+      reminder_sent INTEGER DEFAULT 0,
+      start_notified INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS event_rsvps (
+      event_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      status TEXT DEFAULT 'going',
+      responded_at INTEGER DEFAULT (unixepoch()),
+      PRIMARY KEY (event_id, user_id),
+      FOREIGN KEY (event_id) REFERENCES events(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS event_attendance (
+      event_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      attended INTEGER DEFAULT 0,
+      PRIMARY KEY (event_id, user_id),
+      FOREIGN KEY (event_id) REFERENCES events(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS team_settings (
       team_id TEXT PRIMARY KEY,
       webhook_url TEXT,
@@ -212,6 +245,37 @@ async function handleScheduled(env) {
       await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = ?, auto_reset_at = ?, spawn_notified = 1 WHERE id = ?')
         .bind('spawned', now, now + 300000, boss.id).run();
     }
+  }
+
+  // Event reminders (15 min before)
+  const upcomingEvents = await env.DB.prepare(
+    'SELECT * FROM events WHERE event_time > ? AND event_time <= ? AND reminder_sent = 0'
+  ).bind(now, now + 15 * 60000).all();
+
+  for (const event of upcomingEvents.results) {
+    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
+    if (settings?.webhook_url) {
+      const minLeft = Math.max(1, Math.round((event.event_time - now) / 60000));
+      const rsvps = await env.DB.prepare("SELECT COUNT(*) as count FROM event_rsvps WHERE event_id = ? AND status = 'going'").bind(event.id).first();
+      await sendDiscord(settings.webhook_url, `${event.title} - Starting Soon!`,
+        `**${event.title}** starts in **${minLeft} minute${minLeft !== 1 ? 's' : ''}**!\n${rsvps.count} member${rsvps.count !== 1 ? 's' : ''} going.${event.description ? '\n\n' + event.description : ''}`,
+        16760576);
+    }
+    await env.DB.prepare('UPDATE events SET reminder_sent = 1 WHERE id = ?').bind(event.id).run();
+  }
+
+  // Event start notifications
+  const startingEvents = await env.DB.prepare(
+    'SELECT * FROM events WHERE event_time <= ? AND start_notified = 0'
+  ).bind(now).all();
+
+  for (const event of startingEvents.results) {
+    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
+    if (settings?.webhook_url) {
+      await sendDiscord(settings.webhook_url, `${event.title} is starting NOW!`,
+        `**${event.title}** has started!${event.description ? '\n\n' + event.description : ''}`, 15548997);
+    }
+    await env.DB.prepare('UPDATE events SET start_notified = 1 WHERE id = ?').bind(event.id).run();
   }
 
   // Auto-reset spawned bosses
@@ -659,6 +723,161 @@ async function handleRequest(request, env) {
     if (!settings?.webhook_url) return json({ error: 'No webhook' }, 400);
     await sendDiscord(settings.webhook_url, 'Test Notification', 'Guild Manager webhook is working!', 5793266);
     return json({ ok: true });
+  }
+
+  // === EVENT ROUTES ===
+
+  // GET /api/teams/:id/events
+  const eventListMatch = path.match(/^\/api\/teams\/([^/]+)\/events$/);
+  if (eventListMatch && request.method === 'GET') {
+    const teamId = eventListMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const events = await env.DB.prepare(`
+      SELECT e.*, u.username as creator_name,
+        (SELECT COUNT(*) FROM event_rsvps WHERE event_id = e.id AND status = 'going') as going_count,
+        (SELECT COUNT(*) FROM event_rsvps WHERE event_id = e.id AND status = 'maybe') as maybe_count,
+        (SELECT COUNT(*) FROM event_rsvps WHERE event_id = e.id AND status = 'not_going') as not_going_count,
+        (SELECT status FROM event_rsvps WHERE event_id = e.id AND user_id = ?) as my_rsvp
+      FROM events e
+      JOIN users u ON u.id = e.created_by
+      WHERE e.team_id = ?
+      ORDER BY e.event_time ASC
+    `).bind(user.userId, teamId).all();
+
+    return json({ events: events.results });
+  }
+
+  // POST /api/teams/:id/events — create event
+  if (eventListMatch && request.method === 'POST') {
+    const teamId = eventListMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const body = await request.json();
+    if (!body.title?.trim() || !body.eventTime) return json({ error: 'Title and time required' }, 400);
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO events (id, team_id, title, description, event_type, event_time, duration_minutes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, teamId, body.title.trim(), body.description || null, body.eventType || 'other',
+        body.eventTime, body.durationMinutes || 60, user.userId).run();
+
+    // Auto-RSVP creator as going
+    await env.DB.prepare('INSERT INTO event_rsvps (event_id, user_id, status) VALUES (?, ?, ?)')
+      .bind(id, user.userId, 'going').run();
+
+    // Discord notification
+    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    if (settings?.webhook_url) {
+      const date = new Date(body.eventTime).toLocaleString('en-US', { timeZone: settings.timezone || 'Asia/Manila' });
+      await sendDiscord(settings.webhook_url, `New Event: ${body.title}`,
+        `**${body.title}** scheduled for **${date}**\nCreated by ${user.username}${body.description ? '\n\n' + body.description : ''}`,
+        5793266);
+    }
+
+    return json({ ok: true, id });
+  }
+
+  // DELETE /api/teams/:id/events/:eventId
+  const eventDeleteMatch = path.match(/^\/api\/teams\/([^/]+)\/events\/([^/]+)$/);
+  if (eventDeleteMatch && request.method === 'DELETE') {
+    const [, teamId, eventId] = eventDeleteMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const event = await env.DB.prepare('SELECT * FROM events WHERE id = ? AND team_id = ?').bind(eventId, teamId).first();
+    if (!event) return json({ error: 'Not found' }, 404);
+
+    // Creator, officers, or leader can delete
+    if (event.created_by !== user.userId && member.role === 'member') {
+      return json({ error: 'No permission' }, 403);
+    }
+
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM event_rsvps WHERE event_id = ?').bind(eventId),
+      env.DB.prepare('DELETE FROM event_attendance WHERE event_id = ?').bind(eventId),
+      env.DB.prepare('DELETE FROM events WHERE id = ?').bind(eventId),
+    ]);
+    return json({ ok: true });
+  }
+
+  // POST /api/teams/:id/events/:eventId/rsvp
+  const rsvpMatch = path.match(/^\/api\/teams\/([^/]+)\/events\/([^/]+)\/rsvp$/);
+  if (rsvpMatch && request.method === 'POST') {
+    const [, teamId, eventId] = rsvpMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const body = await request.json();
+    const status = ['going', 'maybe', 'not_going'].includes(body.status) ? body.status : 'going';
+
+    const existing = await env.DB.prepare('SELECT 1 FROM event_rsvps WHERE event_id = ? AND user_id = ?')
+      .bind(eventId, user.userId).first();
+
+    if (existing) {
+      await env.DB.prepare('UPDATE event_rsvps SET status = ?, responded_at = ? WHERE event_id = ? AND user_id = ?')
+        .bind(status, Math.floor(Date.now() / 1000), eventId, user.userId).run();
+    } else {
+      await env.DB.prepare('INSERT INTO event_rsvps (event_id, user_id, status) VALUES (?, ?, ?)')
+        .bind(eventId, user.userId, status).run();
+    }
+
+    return json({ ok: true });
+  }
+
+  // GET /api/teams/:id/events/:eventId/rsvps — get RSVP details
+  const rsvpListMatch = path.match(/^\/api\/teams\/([^/]+)\/events\/([^/]+)\/rsvps$/);
+  if (rsvpListMatch && request.method === 'GET') {
+    const [, teamId, eventId] = rsvpListMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const rsvps = await env.DB.prepare(`
+      SELECT u.username, u.avatar, u.discord_id, r.status
+      FROM event_rsvps r JOIN users u ON u.id = r.user_id
+      WHERE r.event_id = ? ORDER BY r.responded_at ASC
+    `).bind(eventId).all();
+
+    return json({ rsvps: rsvps.results });
+  }
+
+  // POST /api/teams/:id/events/:eventId/attendance — mark attendance (officers+)
+  const attendMatch = path.match(/^\/api\/teams\/([^/]+)\/events\/([^/]+)\/attendance$/);
+  if (attendMatch && request.method === 'POST') {
+    const [, teamId, eventId] = attendMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const body = await request.json();
+    // body.attendance = [{userId, attended: true/false}, ...]
+    for (const a of (body.attendance || [])) {
+      const existing = await env.DB.prepare('SELECT 1 FROM event_attendance WHERE event_id = ? AND user_id = ?')
+        .bind(eventId, a.userId).first();
+      if (existing) {
+        await env.DB.prepare('UPDATE event_attendance SET attended = ? WHERE event_id = ? AND user_id = ?')
+          .bind(a.attended ? 1 : 0, eventId, a.userId).run();
+      } else {
+        await env.DB.prepare('INSERT INTO event_attendance (event_id, user_id, attended) VALUES (?, ?, ?)')
+          .bind(eventId, a.userId, a.attended ? 1 : 0).run();
+      }
+    }
+    return json({ ok: true });
+  }
+
+  // GET /api/teams/:id/events/:eventId/attendance
+  if (attendMatch && request.method === 'GET') {
+    const [, teamId, eventId] = attendMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const attendance = await env.DB.prepare(`
+      SELECT u.username, u.avatar, u.discord_id, a.attended
+      FROM event_attendance a JOIN users u ON u.id = a.user_id
+      WHERE a.event_id = ?
+    `).bind(eventId).all();
+
+    return json({ attendance: attendance.results });
   }
 
   return json({ error: 'Not found' }, 404);
