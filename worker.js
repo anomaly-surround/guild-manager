@@ -282,6 +282,20 @@ async function handleScheduled(env) {
     await env.DB.prepare('UPDATE events SET start_notified = 1 WHERE id = ?').bind(event.id).run();
   }
 
+  // Event end notifications
+  const endedEvents = await env.DB.prepare(
+    'SELECT * FROM events WHERE event_time + duration_minutes * 60000 <= ? AND start_notified = 1 AND end_notified = 0'
+  ).bind(now).all().catch(() => ({ results: [] }));
+
+  for (const event of endedEvents.results) {
+    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
+    if (settings?.webhook_url) {
+      await sendDiscord(settings.webhook_url, `${event.title} has ended!`,
+        `**${event.title}** has ended. Thanks to everyone who participated!`, 5763719);
+    }
+    await env.DB.prepare('UPDATE events SET end_notified = 1 WHERE id = ?').bind(event.id).run();
+  }
+
   // Auto-reset spawned bosses
   const spawned = await env.DB.prepare('SELECT * FROM bosses WHERE status = ? AND auto_reset_at <= ?')
     .bind('spawned', now).all();
