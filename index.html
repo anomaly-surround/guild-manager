@@ -1164,7 +1164,7 @@
             else if (remaining > 0) countdown = ` (in ${formatTimeLong(remaining)})`;
 
             return `
-                <div class="event-card ${isPast ? 'past' : ''}">
+                <div class="event-card ${isPast ? 'past' : ''}" data-event-id="${e.id}">
                     <div class="event-header">
                         <div>
                             <span class="event-title">${e.title}</span>
@@ -1172,7 +1172,7 @@
                         </div>
                         ${canManage || e.created_by === currentUser?.id ? `<button class="btn btn-danger btn-sm" onclick="deleteEvent('${e.id}')">X</button>` : ''}
                     </div>
-                    <div class="event-time">${dateStr} at ${timeStr} (${e.duration_minutes || 60}min)${countdown}</div>
+                    <div class="event-time">${dateStr} at ${timeStr} (${e.duration_minutes || 60}min)<span class="event-countdown">${countdown}</span></div>
                     ${e.description ? `<div class="event-desc">${e.description}</div>` : ''}
                     <div class="event-time" style="margin-top:4px;font-size:0.75em">by ${e.creator_name}</div>
                     <div class="rsvp-bar">
@@ -1262,6 +1262,33 @@
             if (!currentTeamId || teamTab !== 'timers') return;
             await loadTeamBosses(currentTeamId);
         }, 15000);
+
+        // Tick — update event countdowns every second
+        setInterval(() => {
+            if (!currentTeamId || teamTab !== 'events') return;
+            for (const e of teamEvents) {
+                const el = document.querySelector(`[data-event-id="${e.id}"] .event-countdown`);
+                if (!el) continue;
+                const remaining = e.event_time - Date.now();
+                const isLive = remaining <= 0 && remaining > -(e.duration_minutes || 60) * 60000;
+                if (isLive) {
+                    el.innerHTML = '<span style="color:#ef4444;font-weight:600"> LIVE NOW</span>';
+                } else if (remaining > 0) {
+                    el.textContent = ` (in ${formatTimeLong(remaining)})`;
+                } else {
+                    el.textContent = '';
+                }
+            }
+        }, 1000);
+
+        // Refresh event data from server every 30 seconds
+        setInterval(async () => {
+            if (!currentTeamId || teamTab !== 'events') return;
+            const data = await api('GET', `/api/teams/${currentTeamId}/events`);
+            teamEvents = data.events || [];
+            const el = document.getElementById('eventsContent');
+            if (el) el.innerHTML = renderEventsContent();
+        }, 30000);
 
         // --- Actions ---
 
