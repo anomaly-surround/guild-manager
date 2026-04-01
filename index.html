@@ -1015,7 +1015,7 @@
             teamData = data;
             teamTab = 'dashboard';
             await loadTeamBosses(teamId);
-            renderTeamView();
+            loadAndRenderDashboard();
         }
 
         async function loadTeamBosses(teamId) {
