@@ -468,7 +468,13 @@
 </head>
 <body>
     <div class="header">
-        <h1 onclick="goHome()"><img src="icon.svg" alt="" style="height:1.2em;vertical-align:middle;margin-right:6px;">Guild Manager</h1>
+        <div style="display:flex;align-items:center;gap:16px;">
+            <h1 onclick="goHome()"><img src="icon.svg" alt="" style="height:1.2em;vertical-align:middle;margin-right:6px;">Guild Manager</h1>
+            <div id="headerActions" style="display:none;gap:8px;align-items:center;">
+                <button class="btn btn-primary" style="padding:6px 14px;font-size:0.85em;" onclick="showCreateTeamModal()">Create Team</button>
+                <button class="btn" style="padding:6px 14px;font-size:0.85em;background:#1e293b;color:#e0e6f0;" onclick="showJoinTeamModal()">Join Team</button>
+            </div>
+        </div>
         <div class="user-info" id="userInfo" style="display:none">
             <img class="user-avatar" id="userAvatar" src="">
             <span class="user-name" id="userName"></span>
@@ -549,12 +555,47 @@
         function showUserInfo() {
             const el = document.getElementById('userInfo');
             el.style.display = 'flex';
+            document.getElementById('headerActions').style.display = 'flex';
             document.getElementById('userName').textContent = currentUser.username +
                 (currentUser.premium ? ' (Premium)' : '');
             if (currentUser.avatar) {
                 document.getElementById('userAvatar').src =
                     `https://cdn.discordapp.com/avatars/${currentUser.discordId}/${currentUser.avatar}.png?size=64`;
             }
+        }
+
+        function showCreateTeamModal() {
+            document.getElementById('deathModal').innerHTML = `
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                    <div class="card" style="width:400px;max-width:90vw;margin:0;">
+                        <h2>Create Team</h2>
+                        <div class="form-group">
+                            <label>Team Name</label>
+                            <input type="text" id="teamName" placeholder="e.g. Shadow Guild">
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:12px;">
+                            <button class="btn btn-primary" onclick="createTeam()">Create</button>
+                            <button class="btn" style="background:#1e293b;color:#e0e6f0;" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function showJoinTeamModal() {
+            document.getElementById('deathModal').innerHTML = `
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                    <div class="card" style="width:400px;max-width:90vw;margin:0;">
+                        <h2>Join Team</h2>
+                        <div class="form-group">
+                            <label>Invite Code</label>
+                            <input type="text" id="inviteCode" placeholder="e.g. AbCd1234">
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:12px;">
+                            <button class="btn btn-primary" onclick="joinTeam()">Join</button>
+                            <button class="btn" style="background:#1e293b;color:#e0e6f0;" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
+                        </div>
+                    </div>
+                </div>`;
         }
 
         async function showTeamList() {
@@ -566,32 +607,6 @@
             const teams = data.teams || [];
 
             let html = `
-                <div class="card">
-                    <h2>Create Team</h2>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Team Name</label>
-                            <input type="text" id="teamName" placeholder="e.g. Shadow Guild">
-                        </div>
-                        <div>
-                            <button class="btn btn-primary" onclick="createTeam()">Create</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h2>Join Team</h2>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Invite Code</label>
-                            <input type="text" id="inviteCode" placeholder="e.g. AbCd1234">
-                        </div>
-                        <div>
-                            <button class="btn btn-primary" onclick="joinTeam()">Join</button>
-                        </div>
-                    </div>
-                </div>
-
                 <h3 style="color:#94a3b8;margin:20px 0 12px">Your Teams</h3>
             `;
 
@@ -1264,6 +1279,7 @@
             token = '';
             currentUser = null;
             document.getElementById('userInfo').style.display = 'none';
+            document.getElementById('headerActions').style.display = 'none';
             showLogin();
         }
 
@@ -1272,6 +1288,7 @@
             if (!name) return;
             const data = await api('POST', '/api/teams', { name });
             if (data.error) { showToast(data.error); return; }
+            document.getElementById('deathModal').innerHTML = '';
             showToast(`Team "${name}" created!`);
             showTeamList();
         }
@@ -1281,6 +1298,7 @@
             if (!code) return;
             const data = await api('POST', `/api/invite/${code}`);
             if (data.error) { showToast(data.error); return; }
+            document.getElementById('deathModal').innerHTML = '';
             showToast(`Joined ${data.team.name}!`);
             showTeamList();
         }
