@@ -460,9 +460,54 @@
             margin-left: auto;
         }
 
+        /* Announcements */
+        .announcement-card {
+            background: #0f1623;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+        }
+        .announcement-card.pinned { border-left: 3px solid #f59e0b; }
+        .announcement-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .announcement-title { font-weight: 600; font-size: 1em; }
+        .announcement-body { font-size: 0.85em; color: #94a3b8; margin-top: 6px; white-space: pre-wrap; }
+        .announcement-meta { font-size: 0.7em; color: #64748b; margin-top: 6px; }
+        .pin-icon { color: #f59e0b; font-size: 0.85em; margin-right: 4px; }
+
+        /* Activity */
+        .activity-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+        .activity-dot.online { background: #34d399; }
+        .activity-dot.away { background: #f59e0b; }
+        .activity-dot.inactive { background: #ef4444; }
+        .activity-text { font-size: 0.7em; color: #64748b; }
+
+        /* Notes */
+        .note-item {
+            background: #0f1623;
+            border: 1px solid #1e293b;
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+        }
+        .note-text { font-size: 0.85em; white-space: pre-wrap; }
+        .note-meta { font-size: 0.7em; color: #64748b; margin-top: 4px; }
+
         @media (max-width: 600px) {
             .form-row { flex-direction: column; }
             .container { padding: 16px; }
+            .tab-btn { padding: 8px 10px; font-size: 0.8em; }
         }
     </style>
 </head>
@@ -690,6 +735,7 @@
                 </div>
 
                 <div class="tab-bar">
+                    <button class="tab-btn ${teamTab === 'announcements' ? 'active' : ''}" onclick="loadAndRenderAnnouncements()">Announcements</button>
                     <button class="tab-btn ${teamTab === 'timers' ? 'active' : ''}" onclick="teamTab='timers';renderTeamView()">Boss Timers</button>
                     <button class="tab-btn ${teamTab === 'events' ? 'active' : ''}" onclick="teamTab='events';loadAndRenderEvents()">Events</button>
                     <button class="tab-btn ${teamTab === 'members' ? 'active' : ''}" onclick="teamTab='members';renderTeamView()">Members (${members.length})</button>
@@ -703,6 +749,8 @@
                 html += renderMembersTab(team, members, canManage);
             } else if (teamTab === 'events') {
                 html += '<div id="eventsContent"><div class="empty-state">Loading...</div></div>';
+            } else if (teamTab === 'announcements') {
+                html += '<div id="announcementsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
             }
 
             content.innerHTML = html;
@@ -866,6 +914,7 @@
 
         function renderMembersTab(team, members, canManage) {
             const isLeader = team.my_role === 'leader';
+            const now = Math.floor(Date.now() / 1000);
             let html = '<div class="card"><h3>Members (' + members.length + '/' + team.max_members + ')</h3>';
 
             for (const m of members) {
@@ -873,13 +922,29 @@
                 const isMe = m.id === currentUser.id;
                 const isMemberLeader = m.role === 'leader';
 
+                // Activity status
+                let activityDot = 'inactive';
+                let activityLabel = 'Never seen';
+                if (m.last_seen) {
+                    const ago = now - m.last_seen;
+                    if (ago < 300) { activityDot = 'online'; activityLabel = 'Online'; }
+                    else if (ago < 3600) { activityDot = 'away'; activityLabel = Math.floor(ago / 60) + 'm ago'; }
+                    else if (ago < 86400) { activityDot = 'away'; activityLabel = Math.floor(ago / 3600) + 'h ago'; }
+                    else if (ago < 604800) { activityDot = 'inactive'; activityLabel = Math.floor(ago / 86400) + 'd ago'; }
+                    else { activityDot = 'inactive'; activityLabel = 'Inactive (7d+)'; }
+                }
+
                 html += `
                     <div class="member-item">
                         <img class="member-avatar" src="${avatarUrl}" onerror="this.style.background='#334155'">
-                        <div class="member-info"><div class="member-name">${m.username}${isMe ? ' (you)' : ''}</div></div>
+                        <div class="member-info">
+                            <div class="member-name">${m.username}${isMe ? ' (you)' : ''}</div>
+                            <div class="activity-text"><span class="activity-dot ${activityDot}"></span>${activityLabel}</div>
+                        </div>
                         <span class="member-role-badge team-role ${m.role}">${m.role}</span>
-                        ${canManage && !isMe && !isMemberLeader ? `
-                            <div class="member-actions">
+                        <div class="member-actions">
+                            ${canManage && !isMe ? `<button class="btn btn-sm btn-secondary" onclick="openMemberNotes('${m.id}','${m.username}')" style="font-size:0.75em;padding:4px 8px">Notes</button>` : ''}
+                            ${canManage && !isMe && !isMemberLeader ? `
                                 ${isLeader ? `
                                     <select onchange="changeRole('${currentTeamId}','${m.id}',this.value)" style="background:#1e293b;color:#e0e6f0;border:1px solid #334155;border-radius:4px;padding:4px;font-size:0.75em">
                                         <option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option>
@@ -887,8 +952,8 @@
                                     </select>
                                 ` : ''}
                                 <button class="btn btn-danger btn-sm" onclick="kickMember('${currentTeamId}','${m.id}','${m.username}')">Kick</button>
-                            </div>
-                        ` : ''}
+                            ` : ''}
+                        </div>
                     </div>
                 `;
             }
@@ -917,6 +982,7 @@
                 </div>
 
                 <div class="tab-bar">
+                    <button class="tab-btn" onclick="loadAndRenderAnnouncements()">Announcements</button>
                     <button class="tab-btn" onclick="teamTab='timers';loadTeamBosses(currentTeamId).then(()=>renderTeamView())">Boss Timers</button>
                     <button class="tab-btn" onclick="loadAndRenderEvents()">Events</button>
                     <button class="tab-btn" onclick="teamTab='members';renderTeamView()">Members</button>
@@ -937,6 +1003,7 @@
                         <div style="margin-top:10px;display:flex;gap:16px;font-size:0.85em;color:#94a3b8">
                             <label><input type="checkbox" id="onWarning" ${settings.onWarning ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Warning before spawn</label>
                             <label><input type="checkbox" id="onSpawn" ${settings.onSpawn ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Spawn notification</label>
+                            <label><input type="checkbox" id="onAnnouncement" ${settings.onAnnouncement !== false ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Announcements</label>
                         </div>
                     ` : `<p style="color:#64748b;font-size:0.85em">Only officers and leaders can manage settings.</p>`}
                 </div>
@@ -1068,7 +1135,100 @@
             await api('PUT', `/api/teams/${currentTeamId}/settings`, {
                 onWarning: document.getElementById('onWarning').checked,
                 onSpawn: document.getElementById('onSpawn').checked,
+                onAnnouncement: document.getElementById('onAnnouncement').checked,
             });
+        }
+
+        // --- Announcements ---
+
+        let teamAnnouncements = [];
+
+        async function loadAndRenderAnnouncements() {
+            teamTab = 'announcements';
+            renderTeamView();
+            const data = await api('GET', `/api/teams/${currentTeamId}/announcements`);
+            teamAnnouncements = data.announcements || [];
+            const el = document.getElementById('announcementsContent');
+            if (el) el.innerHTML = renderAnnouncementsContent();
+        }
+
+        function renderAnnouncementsContent() {
+            const team = teamData.team;
+            const canManage = team.my_role === 'leader' || team.my_role === 'officer';
+            let html = '';
+
+            if (canManage) {
+                html += `
+                    <div class="card">
+                        <div class="collapsible-header" onclick="toggleSection('addAnnouncementForm', this)">
+                            <h3>+ Post Announcement</h3>
+                            <span class="toggle-arrow">&#9660;</span>
+                        </div>
+                        <div class="collapsible-body" id="addAnnouncementForm">
+                            <div class="form-group" style="margin-top:12px">
+                                <label>Title</label>
+                                <input type="text" id="announcementTitle" placeholder="e.g. Weekly Raid Schedule">
+                            </div>
+                            <div class="form-group">
+                                <label>Body (optional)</label>
+                                <textarea id="announcementBody" rows="3" placeholder="Details..." style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px;width:100%;resize:vertical;font-family:inherit"></textarea>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:center">
+                                <label style="font-size:0.85em;color:#94a3b8"><input type="checkbox" id="announcementPinned" style="accent-color:#f59e0b"> Pin</label>
+                                <button class="btn btn-primary" onclick="addAnnouncement()">Post</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (teamAnnouncements.length === 0) {
+                html += '<div class="empty-state">No announcements yet</div>';
+            } else {
+                for (const a of teamAnnouncements) {
+                    const date = new Date(a.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    html += `
+                        <div class="announcement-card ${a.pinned ? 'pinned' : ''}">
+                            <div class="announcement-header">
+                                <div>
+                                    ${a.pinned ? '<span class="pin-icon">&#128204;</span>' : ''}
+                                    <span class="announcement-title">${a.title}</span>
+                                </div>
+                                <div style="display:flex;gap:4px;">
+                                    ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="togglePin('${a.id}')" style="font-size:0.7em;padding:2px 8px">${a.pinned ? 'Unpin' : 'Pin'}</button>` : ''}
+                                    ${canManage || a.created_by === currentUser?.id ? `<button class="btn btn-danger btn-sm" onclick="deleteAnnouncement('${a.id}')" style="font-size:0.7em;padding:2px 8px">X</button>` : ''}
+                                </div>
+                            </div>
+                            ${a.body ? `<div class="announcement-body">${a.body}</div>` : ''}
+                            <div class="announcement-meta">by ${a.author_name} &middot; ${date}</div>
+                        </div>
+                    `;
+                }
+            }
+
+            return html;
+        }
+
+        async function addAnnouncement() {
+            const title = document.getElementById('announcementTitle').value.trim();
+            if (!title) return showToast('Title required');
+            const body = document.getElementById('announcementBody').value.trim();
+            const pinned = document.getElementById('announcementPinned').checked;
+            const data = await api('POST', `/api/teams/${currentTeamId}/announcements`, { title, body: body || null, pinned });
+            if (data.error) { showToast(data.error); return; }
+            showToast('Announcement posted!');
+            loadAndRenderAnnouncements();
+        }
+
+        async function deleteAnnouncement(id) {
+            if (!confirm('Delete this announcement?')) return;
+            await api('DELETE', `/api/teams/${currentTeamId}/announcements/${id}`);
+            loadAndRenderAnnouncements();
+        }
+
+        async function togglePin(id) {
+            await api('POST', `/api/teams/${currentTeamId}/announcements/${id}/pin`);
+            loadAndRenderAnnouncements();
         }
 
         // --- Events ---
@@ -1290,6 +1450,21 @@
             if (el) el.innerHTML = renderEventsContent();
         }, 30000);
 
+        // Refresh announcements every 30 seconds
+        setInterval(async () => {
+            if (!currentTeamId || teamTab !== 'announcements') return;
+            const data = await api('GET', `/api/teams/${currentTeamId}/announcements`);
+            teamAnnouncements = data.announcements || [];
+            const el = document.getElementById('announcementsContent');
+            if (el) el.innerHTML = renderAnnouncementsContent();
+        }, 30000);
+
+        // Activity heartbeat every 5 minutes
+        setInterval(async () => {
+            if (!currentTeamId) return;
+            await api('POST', `/api/teams/${currentTeamId}/heartbeat`);
+        }, 300000);
+
         // --- Actions ---
 
         async function checkout(type) {
@@ -1358,6 +1533,52 @@
             await api('POST', `/api/teams/${teamId}/leave`);
             showToast('Left team');
             showTeamList();
+        }
+
+        // --- Member Notes ---
+
+        async function openMemberNotes(userId, username) {
+            const data = await api('GET', `/api/teams/${currentTeamId}/members/${userId}/notes`);
+            const notes = data.notes || [];
+            let notesHtml = '';
+            for (const n of notes) {
+                const date = new Date(n.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                notesHtml += `
+                    <div class="note-item">
+                        <div class="note-text">${n.note}</div>
+                        <div class="note-meta">${n.author_name} &middot; ${date}
+                            ${n.author_id === currentUser.id || teamData.team.my_role === 'leader' ? `<button class="btn btn-danger btn-sm" onclick="deleteMemberNote('${n.id}','${userId}','${username}')" style="font-size:0.65em;padding:1px 6px;margin-left:6px">X</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            document.getElementById('deathModal').innerHTML = `
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                    <div class="card" style="width:450px;max-width:90vw;margin:0;max-height:80vh;overflow-y:auto;">
+                        <h2>Notes — ${username}</h2>
+                        <div id="notesListModal">${notesHtml || '<div class="empty-state" style="padding:12px">No notes yet</div>'}</div>
+                        <div class="form-group" style="margin-top:12px">
+                            <textarea id="newNoteText" rows="2" placeholder="Add a note..." style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px;width:100%;resize:vertical;font-family:inherit"></textarea>
+                        </div>
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn btn-primary" onclick="addMemberNote('${userId}','${username}')">Add Note</button>
+                            <button class="btn" style="background:#1e293b;color:#e0e6f0;" onclick="document.getElementById('deathModal').innerHTML=''">Close</button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        async function addMemberNote(userId, username) {
+            const note = document.getElementById('newNoteText').value.trim();
+            if (!note) return;
+            const data = await api('POST', `/api/teams/${currentTeamId}/members/${userId}/notes`, { note });
+            if (data.error) { showToast(data.error); return; }
+            openMemberNotes(userId, username);
+        }
+
+        async function deleteMemberNote(noteId, userId, username) {
+            await api('DELETE', `/api/teams/${currentTeamId}/notes/${noteId}`);
+            openMemberNotes(userId, username);
         }
 
         function copyInvite(code) {

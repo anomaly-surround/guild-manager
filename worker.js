@@ -155,10 +155,43 @@ async function initDB(db) {
       webhook_url TEXT,
       on_warning INTEGER DEFAULT 1,
       on_spawn INTEGER DEFAULT 1,
+      on_announcement INTEGER DEFAULT 1,
       timezone TEXT DEFAULT 'Asia/Manila',
       FOREIGN KEY (team_id) REFERENCES teams(id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS announcements (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT,
+      pinned INTEGER DEFAULT 0,
+      created_by TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS member_activity (
+      team_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      last_seen INTEGER DEFAULT (unixepoch()),
+      PRIMARY KEY (team_id, user_id),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS member_notes (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      target_user_id TEXT NOT NULL,
+      author_id TEXT NOT NULL,
+      note TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (target_user_id) REFERENCES users(id),
+      FOREIGN KEY (author_id) REFERENCES users(id)
+    )`),
   ]);
+  // Migrate existing team_settings
+  await db.exec('ALTER TABLE team_settings ADD COLUMN on_announcement INTEGER DEFAULT 1').catch(() => {});
 }
 
 // --- Boss timer helpers ---
@@ -554,13 +587,19 @@ async function handleRequest(request, env) {
     ).bind(teamId, user.userId).first();
     if (!membership) return json({ error: 'Not a member' }, 403);
 
+    // Track activity
+    await env.DB.prepare('INSERT OR REPLACE INTO member_activity (team_id, user_id, last_seen) VALUES (?, ?, unixepoch())')
+      .bind(teamId, user.userId).run();
+
     const team = await env.DB.prepare('SELECT * FROM teams WHERE id = ?').bind(teamId).first();
     if (!team) return json({ error: 'Team not found' }, 404);
 
     const members = await env.DB.prepare(`
-      SELECT u.id, u.username, u.avatar, u.discord_id, tm.role, tm.joined_at
+      SELECT u.id, u.username, u.avatar, u.discord_id, tm.role, tm.joined_at,
+        ma.last_seen
       FROM team_members tm
       JOIN users u ON u.id = tm.user_id
+      LEFT JOIN member_activity ma ON ma.team_id = tm.team_id AND ma.user_id = tm.user_id
       WHERE tm.team_id = ?
       ORDER BY
         CASE tm.role WHEN 'leader' THEN 0 WHEN 'officer' THEN 1 ELSE 2 END,
@@ -582,6 +621,9 @@ async function handleRequest(request, env) {
     if (!team) return json({ error: 'Not the owner' }, 403);
 
     await env.DB.batch([
+      env.DB.prepare('DELETE FROM member_notes WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM member_activity WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM announcements WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM team_members WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM teams WHERE id = ?').bind(teamId),
     ]);
@@ -633,8 +675,11 @@ async function handleRequest(request, env) {
       return json({ error: 'Only leader can kick officers' }, 403);
     }
 
-    await env.DB.prepare('DELETE FROM team_members WHERE team_id = ? AND user_id = ?')
-      .bind(teamId, body.userId).run();
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM member_notes WHERE team_id = ? AND target_user_id = ?').bind(teamId, body.userId),
+      env.DB.prepare('DELETE FROM member_activity WHERE team_id = ? AND user_id = ?').bind(teamId, body.userId),
+      env.DB.prepare('DELETE FROM team_members WHERE team_id = ? AND user_id = ?').bind(teamId, body.userId),
+    ]);
     return json({ ok: true });
   }
 
@@ -648,8 +693,11 @@ async function handleRequest(request, env) {
       return json({ error: 'Leader cannot leave. Delete the team or transfer ownership.' }, 400);
     }
 
-    await env.DB.prepare('DELETE FROM team_members WHERE team_id = ? AND user_id = ?')
-      .bind(teamId, user.userId).run();
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM member_notes WHERE team_id = ? AND target_user_id = ?').bind(teamId, user.userId),
+      env.DB.prepare('DELETE FROM member_activity WHERE team_id = ? AND user_id = ?').bind(teamId, user.userId),
+      env.DB.prepare('DELETE FROM team_members WHERE team_id = ? AND user_id = ?').bind(teamId, user.userId),
+    ]);
     return json({ ok: true });
   }
 
@@ -802,6 +850,7 @@ async function handleRequest(request, env) {
       webhookUrl: settings?.webhook_url ? '...' + settings.webhook_url.slice(-8) : '',
       onWarning: settings?.on_warning ?? true,
       onSpawn: settings?.on_spawn ?? true,
+      onAnnouncement: settings?.on_announcement ?? true,
       timezone: settings?.timezone || 'Asia/Manila',
     });
   }
@@ -823,14 +872,15 @@ async function handleRequest(request, env) {
       if (body.webhookUrl !== undefined) { sets.push('webhook_url = ?'); vals.push(body.webhookUrl); }
       if (body.onWarning !== undefined) { sets.push('on_warning = ?'); vals.push(body.onWarning ? 1 : 0); }
       if (body.onSpawn !== undefined) { sets.push('on_spawn = ?'); vals.push(body.onSpawn ? 1 : 0); }
+      if (body.onAnnouncement !== undefined) { sets.push('on_announcement = ?'); vals.push(body.onAnnouncement ? 1 : 0); }
       if (body.timezone !== undefined) { sets.push('timezone = ?'); vals.push(body.timezone); }
       if (sets.length > 0) {
         vals.push(teamId);
         await env.DB.prepare(`UPDATE team_settings SET ${sets.join(', ')} WHERE team_id = ?`).bind(...vals).run();
       }
     } else {
-      await env.DB.prepare('INSERT INTO team_settings (team_id, webhook_url, on_warning, on_spawn, timezone) VALUES (?, ?, ?, ?, ?)')
-        .bind(teamId, body.webhookUrl || null, body.onWarning !== false ? 1 : 0, body.onSpawn !== false ? 1 : 0, body.timezone || 'Asia/Manila').run();
+      await env.DB.prepare('INSERT INTO team_settings (team_id, webhook_url, on_warning, on_spawn, on_announcement, timezone) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(teamId, body.webhookUrl || null, body.onWarning !== false ? 1 : 0, body.onSpawn !== false ? 1 : 0, body.onAnnouncement !== false ? 1 : 0, body.timezone || 'Asia/Manila').run();
     }
 
     return json({ ok: true });
@@ -999,6 +1049,147 @@ async function handleRequest(request, env) {
     `).bind(eventId).all();
 
     return json({ attendance: attendance.results });
+  }
+
+  // --- Announcements ---
+
+  // GET/POST /api/teams/:id/announcements
+  const announcementListMatch = path.match(/^\/api\/teams\/([^/]+)\/announcements$/);
+  if (announcementListMatch && request.method === 'GET') {
+    const teamId = announcementListMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const announcements = await env.DB.prepare(`
+      SELECT a.*, u.username as author_name
+      FROM announcements a JOIN users u ON u.id = a.created_by
+      WHERE a.team_id = ?
+      ORDER BY a.pinned DESC, a.created_at DESC
+    `).bind(teamId).all();
+
+    return json({ announcements: announcements.results });
+  }
+
+  if (announcementListMatch && request.method === 'POST') {
+    const teamId = announcementListMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const body = await request.json();
+    if (!body.title?.trim()) return json({ error: 'Title required' }, 400);
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO announcements (id, team_id, title, body, pinned, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(id, teamId, body.title.trim(), body.body || null, body.pinned ? 1 : 0, user.userId).run();
+
+    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    if (settings?.webhook_url && settings?.on_announcement !== 0) {
+      await sendDiscord(settings.webhook_url, `Announcement: ${body.title.trim()}`,
+        `**${body.title.trim()}**${body.body ? '\n\n' + body.body.substring(0, 1500) : ''}\n\n— ${user.username}`, 5793266);
+    }
+
+    return json({ ok: true, id });
+  }
+
+  // PUT/DELETE /api/teams/:id/announcements/:announcementId
+  const announcementMatch = path.match(/^\/api\/teams\/([^/]+)\/announcements\/([^/]+)$/);
+  if (announcementMatch && request.method === 'PUT') {
+    const [, teamId, announcementId] = announcementMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const body = await request.json();
+    await env.DB.prepare('UPDATE announcements SET title = ?, body = ?, pinned = ? WHERE id = ? AND team_id = ?')
+      .bind(body.title?.trim(), body.body || null, body.pinned ? 1 : 0, announcementId, teamId).run();
+    return json({ ok: true });
+  }
+
+  if (announcementMatch && request.method === 'DELETE') {
+    const [, teamId, announcementId] = announcementMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const announcement = await env.DB.prepare('SELECT * FROM announcements WHERE id = ? AND team_id = ?').bind(announcementId, teamId).first();
+    if (!announcement) return json({ error: 'Not found' }, 404);
+    if (announcement.created_by !== user.userId && member.role === 'member') return json({ error: 'No permission' }, 403);
+
+    await env.DB.prepare('DELETE FROM announcements WHERE id = ?').bind(announcementId).run();
+    return json({ ok: true });
+  }
+
+  // POST /api/teams/:id/announcements/:id/pin — toggle pin
+  const pinMatch = path.match(/^\/api\/teams\/([^/]+)\/announcements\/([^/]+)\/pin$/);
+  if (pinMatch && request.method === 'POST') {
+    const [, teamId, announcementId] = pinMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const a = await env.DB.prepare('SELECT pinned FROM announcements WHERE id = ? AND team_id = ?').bind(announcementId, teamId).first();
+    if (!a) return json({ error: 'Not found' }, 404);
+
+    await env.DB.prepare('UPDATE announcements SET pinned = ? WHERE id = ?').bind(a.pinned ? 0 : 1, announcementId).run();
+    return json({ ok: true, pinned: !a.pinned });
+  }
+
+  // --- Member Notes ---
+
+  // GET/POST /api/teams/:id/members/:userId/notes
+  const notesMatch = path.match(/^\/api\/teams\/([^/]+)\/members\/([^/]+)\/notes$/);
+  if (notesMatch && request.method === 'GET') {
+    const [, teamId, targetUserId] = notesMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const notes = await env.DB.prepare(`
+      SELECT n.*, u.username as author_name
+      FROM member_notes n JOIN users u ON u.id = n.author_id
+      WHERE n.team_id = ? AND n.target_user_id = ?
+      ORDER BY n.created_at DESC
+    `).bind(teamId, targetUserId).all();
+
+    return json({ notes: notes.results });
+  }
+
+  if (notesMatch && request.method === 'POST') {
+    const [, teamId, targetUserId] = notesMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const body = await request.json();
+    if (!body.note?.trim()) return json({ error: 'Note required' }, 400);
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO member_notes (id, team_id, target_user_id, author_id, note) VALUES (?, ?, ?, ?, ?)')
+      .bind(id, teamId, targetUserId, user.userId, body.note.trim()).run();
+    return json({ ok: true, id });
+  }
+
+  // DELETE /api/teams/:id/notes/:noteId
+  const noteDeleteMatch = path.match(/^\/api\/teams\/([^/]+)\/notes\/([^/]+)$/);
+  if (noteDeleteMatch && request.method === 'DELETE') {
+    const [, teamId, noteId] = noteDeleteMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const note = await env.DB.prepare('SELECT * FROM member_notes WHERE id = ? AND team_id = ?').bind(noteId, teamId).first();
+    if (!note) return json({ error: 'Not found' }, 404);
+    if (note.author_id !== user.userId && member.role !== 'leader') return json({ error: 'No permission' }, 403);
+
+    await env.DB.prepare('DELETE FROM member_notes WHERE id = ?').bind(noteId).run();
+    return json({ ok: true });
+  }
+
+  // --- Activity Heartbeat ---
+
+  const heartbeatMatch = path.match(/^\/api\/teams\/([^/]+)\/heartbeat$/);
+  if (heartbeatMatch && request.method === 'POST') {
+    const teamId = heartbeatMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    await env.DB.prepare('INSERT OR REPLACE INTO member_activity (team_id, user_id, last_seen) VALUES (?, ?, unixepoch())')
+      .bind(teamId, user.userId).run();
+    return json({ ok: true });
   }
 
   return json({ error: 'Not found' }, 404);
