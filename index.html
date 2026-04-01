@@ -3309,7 +3309,7 @@
             const name = document.getElementById('teamName').value.trim();
             if (!name) return;
             const data = await api('POST', '/api/teams', { name });
-            if (data.error) { showToast(data.error); return; }
+            if (data.error) { showToast(data.error); document.getElementById('deathModal').innerHTML = ''; return; }
             document.getElementById('deathModal').innerHTML = '';
             showToast(`Team "${name}" created!`);
             showTeamList();
@@ -3319,7 +3319,7 @@
             const code = document.getElementById('inviteCode').value.trim();
             if (!code) return;
             const data = await api('POST', `/api/invite/${code}`);
-            if (data.error) { showToast(data.error); return; }
+            if (data.error) { showToast(data.error); document.getElementById('deathModal').innerHTML = ''; return; }
             document.getElementById('deathModal').innerHTML = '';
             showToast(`Joined ${data.team.name}!`);
             showTeamList();
