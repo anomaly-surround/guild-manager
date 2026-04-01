@@ -1088,7 +1088,7 @@
                             <input type="text" id="eventDesc" placeholder="Details, links, etc.">
                         </div>
                         <div style="margin-top:10px">
-                            <button class="btn btn-primary" onclick="createEvent()">Create Event</button>
+                            <button class="btn btn-primary" onclick="addEvent()">Create Event</button>
                         </div>
                     </div>
                 </div>
@@ -1158,7 +1158,7 @@
             return d + 'd ' + (h % 24) + 'h';
         }
 
-        async function createEvent() {
+        async function addEvent() {
             const title = document.getElementById('eventTitle').value.trim();
             const dateTime = document.getElementById('eventDateTime').value;
             if (!title || !dateTime) return showToast('Title and date/time required');
