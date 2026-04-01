@@ -443,6 +443,35 @@
 
         .boss-actions { display: flex; gap: 6px; }
 
+        /* Boss grid mode */
+        .boss-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 10px;
+        }
+        .boss-grid .boss-item {
+            flex-direction: column;
+            text-align: center;
+            padding: 16px 12px;
+        }
+        .boss-grid .boss-item > div:first-child { text-align: center; }
+        .boss-grid .boss-countdown { min-width: auto; text-align: center; font-size: 1.6em; }
+        .boss-grid .boss-actions { justify-content: center; }
+        .boss-grid .boss-meta-text { font-size: 0.7em; }
+
+        .view-toggle { display: flex; gap: 2px; }
+        .view-toggle button {
+            padding: 5px 10px;
+            background: var(--tab-bg);
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+        .view-toggle button:first-child { border-radius: 6px 0 0 6px; }
+        .view-toggle button:last-child { border-radius: 0 6px 6px 0; }
+        .view-toggle button.active { background: var(--tab-active); color: var(--accent); }
+
         .collapsible-header {
             display: flex;
             justify-content: space-between;
@@ -1019,6 +1048,7 @@
         let teamBosses = [];
         let teamData = null;
         let teamTab = 'timers';
+        let bossViewMode = localStorage.getItem('gm_boss_view') || 'list';
 
         async function openTeam(teamId) {
             currentTeamId = teamId;
@@ -1201,14 +1231,18 @@
                 </div>
             `;
 
-            // Premium boss features
-            if (teamData?.team?.premium_team) {
-                html += `<div style="display:flex;gap:8px;margin-bottom:12px">
-                    <button class="btn btn-secondary btn-sm" onclick="showBossHistory()">Kill History</button>
-                    <button class="btn btn-secondary btn-sm" onclick="showBossTemplates()">Templates</button>
+            html += `<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+                <div class="view-toggle">
+                    <button class="${bossViewMode === 'list' ? 'active' : ''}" onclick="setBossView('list')">List</button>
+                    <button class="${bossViewMode === 'grid' ? 'active' : ''}" onclick="setBossView('grid')">Grid</button>
                 </div>`;
+            if (teamData?.team?.premium_team) {
+                html += `
+                    <button class="btn btn-secondary btn-sm" onclick="showBossHistory()">Kill History</button>
+                    <button class="btn btn-secondary btn-sm" onclick="showBossTemplates()">Templates</button>`;
             }
-            html += '<div id="bossListArea">' + renderBossListOnly(canManage) + '</div>';
+            html += '</div>';
+            html += '<div id="bossListArea" class="' + (bossViewMode === 'grid' ? 'boss-grid' : '') + '">' + renderBossListOnly(canManage) + '</div>';
             return html;
         }
 
@@ -1589,6 +1623,12 @@
         }
 
         // --- Boss timer actions ---
+
+        function setBossView(mode) {
+            bossViewMode = mode;
+            localStorage.setItem('gm_boss_view', mode);
+            renderTeamView();
+        }
 
         function toggleBossInputs() {
             const type = document.getElementById('bossType').value;
