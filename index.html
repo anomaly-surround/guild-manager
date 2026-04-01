@@ -623,6 +623,7 @@
                                     <option value="interval">Interval</option>
                                     <option value="fixed">Daily</option>
                                     <option value="weekly">Weekly</option>
+                                    <option value="biweekly">Twice a Week</option>
                                 </select>
                             </div>
                         </div>
@@ -653,6 +654,34 @@
                             <div class="form-group" style="max-width:150px">
                                 <label>Time</label>
                                 <input type="time" id="bossWeeklyTime">
+                            </div>
+                        </div>
+                        <div style="margin-top:8px;display:none" id="bossBiweeklyRow">
+                            <div class="form-row">
+                                <div class="form-group" style="max-width:120px">
+                                    <label>Day 1</label>
+                                    <select id="bossBiDay1" style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px">
+                                        <option value="0">Sun</option><option value="1">Mon</option><option value="2">Tue</option>
+                                        <option value="3">Wed</option><option value="4">Thu</option><option value="5">Fri</option><option value="6">Sat</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="max-width:150px">
+                                    <label>Time 1</label>
+                                    <input type="time" id="bossBiTime1">
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top:6px">
+                                <div class="form-group" style="max-width:120px">
+                                    <label>Day 2</label>
+                                    <select id="bossBiDay2" style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px">
+                                        <option value="0">Sun</option><option value="1">Mon</option><option value="2">Tue</option>
+                                        <option value="3">Wed</option><option value="4">Thu</option><option value="5">Fri</option><option value="6">Sat</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="max-width:150px">
+                                    <label>Time 2</label>
+                                    <input type="time" id="bossBiTime2">
+                                </div>
                             </div>
                         </div>
                         <div class="form-row" style="margin-top:8px">
@@ -692,6 +721,7 @@
                     if (isSpawned) { countdownCls = 'boss-countdown spawned'; countdownText = 'SPAWNED'; }
                     else if (isWarning) { countdownCls = 'boss-countdown warning-text'; }
 
+                    const fullDayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
                     let meta = '';
                     if (boss.type === 'interval') {
                         const totalMin = boss.interval_ms / 60000;
@@ -700,7 +730,12 @@
                     } else if (boss.type === 'fixed') {
                         meta = 'Daily at ' + boss.fixed_time;
                     } else if (boss.type === 'weekly') {
-                        meta = dayNames[boss.weekly_day] + ' at ' + boss.weekly_time;
+                        meta = fullDayNames[boss.weekly_day] + ' at ' + boss.weekly_time;
+                    } else if (boss.type === 'biweekly') {
+                        try {
+                            const days = typeof boss.biweekly_days === 'string' ? JSON.parse(boss.biweekly_days) : boss.biweekly_days;
+                            meta = days.map(d => dayNames[d.day] + ' ' + d.time).join(' & ');
+                        } catch { meta = 'Twice a week'; }
                     }
 
                     html += `
@@ -811,6 +846,7 @@
             document.getElementById('bossIntervalRow').style.display = type === 'interval' ? '' : 'none';
             document.getElementById('bossFixedRow').style.display = type === 'fixed' ? '' : 'none';
             document.getElementById('bossWeeklyRow').style.display = type === 'weekly' ? '' : 'none';
+            document.getElementById('bossBiweeklyRow').style.display = type === 'biweekly' ? '' : 'none';
         }
 
         function toggleSection(id, el) {
@@ -838,6 +874,14 @@
                 body.weeklyDay = parseInt(document.getElementById('bossWeeklyDay').value);
                 body.weeklyTime = document.getElementById('bossWeeklyTime').value;
                 if (!body.weeklyTime) return;
+            } else if (type === 'biweekly') {
+                const time1 = document.getElementById('bossBiTime1').value;
+                const time2 = document.getElementById('bossBiTime2').value;
+                if (!time1 || !time2) return;
+                body.biweeklyDays = [
+                    { day: parseInt(document.getElementById('bossBiDay1').value), time: time1 },
+                    { day: parseInt(document.getElementById('bossBiDay2').value), time: time2 },
+                ];
             }
 
             const data = await api('POST', `/api/teams/${currentTeamId}/bosses`, body);
