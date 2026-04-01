@@ -342,32 +342,39 @@ async function initDB(db) {
       FOREIGN KEY (logged_by) REFERENCES users(id)
     )`),
   ]);
-  // Migrations
-  await db.exec('ALTER TABLE team_settings ADD COLUMN on_announcement INTEGER DEFAULT 1').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN on_event INTEGER DEFAULT 1').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN on_war INTEGER DEFAULT 1').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN event_reminder_minutes INTEGER DEFAULT 15').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN inactive_days INTEGER DEFAULT 7').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN default_event_duration INTEGER DEFAULT 60').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN team_description TEXT').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN members_create_events INTEGER DEFAULT 1').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN auto_delete_events_days INTEGER DEFAULT 0').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN auto_delete_chat_days INTEGER DEFAULT 0').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN starting_dkp INTEGER DEFAULT 0').catch(() => {});
-  await db.exec('ALTER TABLE events ADD COLUMN recurrence TEXT').catch(() => {});
-  await db.exec('ALTER TABLE events ADD COLUMN parent_event_id TEXT').catch(() => {});
-  // Premium feature migrations
-  await db.exec('ALTER TABLE team_settings ADD COLUMN webhook_boss TEXT').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN webhook_events TEXT').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN webhook_wars TEXT').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN webhook_announcements TEXT').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN dkp_decay_enabled INTEGER DEFAULT 0').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN dkp_decay_percent INTEGER DEFAULT 10').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN dkp_decay_inactive_days INTEGER DEFAULT 14').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN dkp_decay_interval_days INTEGER DEFAULT 7').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN dkp_decay_last_run INTEGER').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN accent_color TEXT').catch(() => {});
-  await db.exec('ALTER TABLE team_settings ADD COLUMN team_icon TEXT').catch(() => {});
+
+  // Run migrations only once (check if latest column exists)
+  const hasAccentColor = await db.prepare("SELECT 1 FROM pragma_table_info('team_settings') WHERE name='accent_color'").first().catch(() => null);
+  if (!hasAccentColor) {
+    const migrations = [
+      'ALTER TABLE team_settings ADD COLUMN on_announcement INTEGER DEFAULT 1',
+      'ALTER TABLE team_settings ADD COLUMN on_event INTEGER DEFAULT 1',
+      'ALTER TABLE team_settings ADD COLUMN on_war INTEGER DEFAULT 1',
+      'ALTER TABLE team_settings ADD COLUMN event_reminder_minutes INTEGER DEFAULT 15',
+      'ALTER TABLE team_settings ADD COLUMN inactive_days INTEGER DEFAULT 7',
+      'ALTER TABLE team_settings ADD COLUMN default_event_duration INTEGER DEFAULT 60',
+      'ALTER TABLE team_settings ADD COLUMN team_description TEXT',
+      'ALTER TABLE team_settings ADD COLUMN members_create_events INTEGER DEFAULT 1',
+      'ALTER TABLE team_settings ADD COLUMN auto_delete_events_days INTEGER DEFAULT 0',
+      'ALTER TABLE team_settings ADD COLUMN auto_delete_chat_days INTEGER DEFAULT 0',
+      'ALTER TABLE team_settings ADD COLUMN starting_dkp INTEGER DEFAULT 0',
+      'ALTER TABLE events ADD COLUMN recurrence TEXT',
+      'ALTER TABLE events ADD COLUMN parent_event_id TEXT',
+      'ALTER TABLE events ADD COLUMN end_notified INTEGER DEFAULT 0',
+      'ALTER TABLE team_settings ADD COLUMN webhook_boss TEXT',
+      'ALTER TABLE team_settings ADD COLUMN webhook_events TEXT',
+      'ALTER TABLE team_settings ADD COLUMN webhook_wars TEXT',
+      'ALTER TABLE team_settings ADD COLUMN webhook_announcements TEXT',
+      'ALTER TABLE team_settings ADD COLUMN dkp_decay_enabled INTEGER DEFAULT 0',
+      'ALTER TABLE team_settings ADD COLUMN dkp_decay_percent INTEGER DEFAULT 10',
+      'ALTER TABLE team_settings ADD COLUMN dkp_decay_inactive_days INTEGER DEFAULT 14',
+      'ALTER TABLE team_settings ADD COLUMN dkp_decay_interval_days INTEGER DEFAULT 7',
+      'ALTER TABLE team_settings ADD COLUMN dkp_decay_last_run INTEGER',
+      'ALTER TABLE team_settings ADD COLUMN accent_color TEXT',
+      'ALTER TABLE team_settings ADD COLUMN team_icon TEXT',
+    ];
+    for (const sql of migrations) await db.exec(sql).catch(() => {});
+  }
 }
 
 // --- Boss timer helpers ---
