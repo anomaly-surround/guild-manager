@@ -526,6 +526,38 @@
             margin-left: auto;
         }
 
+        /* Dashboard */
+        .dash-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .dash-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+        .dash-card:hover { border-color: var(--accent); }
+        .dash-card h4 {
+            font-size: 0.8em;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .dash-card .dash-value {
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+        .dash-card .dash-sub {
+            font-size: 0.8em;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
         /* Chat */
         .chat-container {
             display: flex;
@@ -686,6 +718,9 @@
         .note-text { font-size: 0.85em; white-space: pre-wrap; }
         .note-meta { font-size: 0.7em; color: #64748b; margin-top: 4px; }
 
+        @media (max-width: 900px) {
+            .dash-grid { grid-template-columns: 1fr; }
+        }
         @media (max-width: 768px) {
             .team-layout { flex-direction: column; }
             .sidebar {
@@ -932,7 +967,7 @@
             if (data.error) { showToast(data.error); showTeamList(); return; }
 
             teamData = data;
-            teamTab = 'timers';
+            teamTab = 'dashboard';
             await loadTeamBosses(teamId);
             renderTeamView();
         }
@@ -949,7 +984,9 @@
             const canManage = team.my_role === 'leader' || team.my_role === 'officer';
 
             let tabContent = '';
-            if (teamTab === 'timers') {
+            if (teamTab === 'dashboard') {
+                tabContent = '<div id="dashboardContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'timers') {
                 tabContent = renderTimersTab(team, canManage);
             } else if (teamTab === 'members') {
                 tabContent = renderMembersTab(team, members, canManage);
@@ -985,6 +1022,7 @@
 
                 <div class="team-layout">
                     <div class="sidebar">
+                        <button class="tab-btn ${teamTab === 'dashboard' ? 'active' : ''}" onclick="loadAndRenderDashboard()">Dashboard</button>
                         <button class="tab-btn ${teamTab === 'chat' ? 'active' : ''}" onclick="loadAndRenderChat()">Chat</button>
                         <button class="tab-btn ${teamTab === 'announcements' ? 'active' : ''}" onclick="loadAndRenderAnnouncements()">Announcements</button>
                         <button class="tab-btn ${teamTab === 'timers' ? 'active' : ''}" onclick="teamTab='timers';renderTeamView()">Boss Timers</button>
@@ -1256,6 +1294,7 @@
 
                 <div class="team-layout">
                     <div class="sidebar">
+                        <button class="tab-btn" onclick="loadAndRenderDashboard()">Dashboard</button>
                         <button class="tab-btn" onclick="loadAndRenderChat()">Chat</button>
                         <button class="tab-btn" onclick="loadAndRenderAnnouncements()">Announcements</button>
                         <button class="tab-btn" onclick="teamTab='timers';loadTeamBosses(currentTeamId).then(()=>renderTeamView())">Boss Timers</button>
@@ -1399,6 +1438,134 @@
                 onSpawn: document.getElementById('onSpawn').checked,
                 onAnnouncement: document.getElementById('onAnnouncement').checked,
             });
+        }
+
+        // --- Dashboard ---
+
+        async function loadAndRenderDashboard() {
+            teamTab = 'dashboard';
+            renderTeamView();
+
+            // Fetch all data in parallel
+            const [eventsData, announcementsData, warsData, chatData] = await Promise.all([
+                api('GET', `/api/teams/${currentTeamId}/events`),
+                api('GET', `/api/teams/${currentTeamId}/announcements`),
+                api('GET', `/api/teams/${currentTeamId}/wars`),
+                api('GET', `/api/teams/${currentTeamId}/chat?after=0`),
+            ]);
+
+            const el = document.getElementById('dashboardContent');
+            if (!el) return;
+
+            const now = Date.now();
+            const events = eventsData.events || [];
+            const announcements = announcementsData.announcements || [];
+            const wars = warsData.wars || [];
+            const stats = warsData.stats || {};
+            const messages = chatData.messages || [];
+            const members = teamData.members || [];
+
+            // Next boss spawn
+            let nextBoss = null;
+            const waitingBosses = teamBosses.filter(b => b.status === 'waiting' && b.next_spawn > now);
+            if (waitingBosses.length > 0) {
+                nextBoss = waitingBosses.sort((a, b) => a.next_spawn - b.next_spawn)[0];
+            }
+            const spawnedBosses = teamBosses.filter(b => b.status === 'spawned' || b.next_spawn <= now);
+
+            // Next event
+            const upcomingEvents = events.filter(e => e.event_time > now).sort((a, b) => a.event_time - b.event_time);
+            const liveEvents = events.filter(e => e.event_time <= now && e.event_time + (e.duration_minutes || 60) * 60000 > now);
+
+            // Latest announcement
+            const latestAnnouncement = announcements[0];
+
+            // Recent chat
+            const recentMessages = messages.slice(-3);
+
+            // Online members
+            const nowSec = Math.floor(now / 1000);
+            const onlineCount = members.filter(m => m.last_seen && (nowSec - m.last_seen) < 300).length;
+
+            let html = '<div class="dash-grid">';
+
+            // Boss Timers card
+            html += `<div class="dash-card" onclick="teamTab='timers';renderTeamView()">
+                <h4>Boss Timers</h4>`;
+            if (spawnedBosses.length > 0) {
+                html += `<div class="dash-value" style="color:#ef4444">${spawnedBosses.length} SPAWNED!</div>`;
+                html += `<div class="dash-sub">${spawnedBosses.map(b => b.name).join(', ')}</div>`;
+            } else if (nextBoss) {
+                const remaining = nextBoss.next_spawn - now;
+                html += `<div class="dash-value">${nextBoss.name}</div>`;
+                html += `<div class="dash-sub">in ${formatTimeLong(remaining)}</div>`;
+            } else {
+                html += `<div class="dash-value" style="color:var(--text-dim)">No timers</div>`;
+            }
+            html += '</div>';
+
+            // Events card
+            html += `<div class="dash-card" onclick="teamTab='events';loadAndRenderEvents()">
+                <h4>Events</h4>`;
+            if (liveEvents.length > 0) {
+                html += `<div class="dash-value" style="color:#ef4444">${liveEvents[0].title} — LIVE</div>`;
+            } else if (upcomingEvents.length > 0) {
+                const e = upcomingEvents[0];
+                const eventDate = new Date(e.event_time);
+                const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                const timeStr = eventDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                html += `<div class="dash-value">${e.title}</div>`;
+                html += `<div class="dash-sub">${dateStr} at ${timeStr}</div>`;
+            } else {
+                html += `<div class="dash-value" style="color:var(--text-dim)">No upcoming</div>`;
+            }
+            html += '</div>';
+
+            // Announcements card
+            html += `<div class="dash-card" onclick="loadAndRenderAnnouncements()">
+                <h4>Latest Announcement</h4>`;
+            if (latestAnnouncement) {
+                html += `<div class="dash-value">${latestAnnouncement.title}</div>`;
+                html += `<div class="dash-sub">by ${latestAnnouncement.author_name}</div>`;
+            } else {
+                html += `<div class="dash-value" style="color:var(--text-dim)">None yet</div>`;
+            }
+            html += '</div>';
+
+            // Wars card
+            html += `<div class="dash-card" onclick="loadAndRenderWars()">
+                <h4>War Record</h4>`;
+            const total = (stats.wins || 0) + (stats.losses || 0) + (stats.draws || 0);
+            if (total > 0) {
+                const winRate = Math.round(((stats.wins || 0) / total) * 100);
+                html += `<div class="dash-value"><span style="color:#34d399">${stats.wins}W</span> / <span style="color:#ef4444">${stats.losses}L</span> / <span style="color:#f59e0b">${stats.draws}D</span></div>`;
+                html += `<div class="dash-sub">${winRate}% win rate</div>`;
+            } else {
+                html += `<div class="dash-value" style="color:var(--text-dim)">No wars yet</div>`;
+            }
+            html += '</div>';
+
+            // Members card
+            html += `<div class="dash-card" onclick="teamTab='members';renderTeamView()">
+                <h4>Members</h4>
+                <div class="dash-value">${members.length} total</div>
+                <div class="dash-sub"><span style="color:#34d399">${onlineCount} online</span></div>
+            </div>`;
+
+            // Chat card
+            html += `<div class="dash-card" onclick="loadAndRenderChat()">
+                <h4>Recent Chat</h4>`;
+            if (recentMessages.length > 0) {
+                for (const m of recentMessages) {
+                    html += `<div class="dash-sub" style="margin-top:2px"><b>${m.username}:</b> ${escapeHtml(m.message).substring(0, 40)}${m.message.length > 40 ? '...' : ''}</div>`;
+                }
+            } else {
+                html += `<div class="dash-value" style="color:var(--text-dim)">No messages</div>`;
+            }
+            html += '</div>';
+
+            html += '</div>';
+            el.innerHTML = html;
         }
 
         // --- Chat ---
