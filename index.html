@@ -476,6 +476,7 @@
             </div>
         </div>
         <div class="user-info" id="userInfo" style="display:none">
+            <button class="btn" id="upgradeBtn" style="display:none;padding:6px 14px;font-size:0.85em;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;" onclick="showUpgradeModal()">Upgrade</button>
             <img class="user-avatar" id="userAvatar" src="">
             <span class="user-name" id="userName"></span>
             <button class="btn btn-logout" onclick="logout()">Logout</button>
@@ -562,6 +563,22 @@
                 document.getElementById('userAvatar').src =
                     `https://cdn.discordapp.com/avatars/${currentUser.discordId}/${currentUser.avatar}.png?size=64`;
             }
+            document.getElementById('upgradeBtn').style.display = currentUser.premium ? 'none' : 'inline-block';
+        }
+
+        function showUpgradeModal() {
+            document.getElementById('deathModal').innerHTML = `
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                    <div class="card" style="width:400px;max-width:90vw;margin:0;border-color:#7c3aed;">
+                        <h2 style="color:#a78bfa">Upgrade to Premium</h2>
+                        <p style="color:#94a3b8;font-size:0.9em;margin-bottom:12px">Unlimited teams, up to 50 members per team</p>
+                        <div style="display:flex;gap:10px;">
+                            <button class="btn btn-primary" onclick="checkout('monthly')">Monthly Plan</button>
+                            <button class="btn btn-primary" onclick="checkout('lifetime')">Lifetime (one-time)</button>
+                        </div>
+                        <button class="btn" style="margin-top:12px;background:#1e293b;color:#e0e6f0;" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
+                    </div>
+                </div>`;
         }
 
         function showCreateTeamModal() {
@@ -609,19 +626,6 @@
             let html = `
                 <h3 style="color:#94a3b8;margin:20px 0 12px">Your Teams</h3>
             `;
-
-            if (!currentUser.premium) {
-                html += `
-                    <div class="card" style="border-color:#7c3aed;margin-bottom:16px">
-                        <h2 style="color:#a78bfa">Upgrade to Premium</h2>
-                        <p style="color:#94a3b8;font-size:0.9em;margin-bottom:12px">Unlimited teams, up to 50 members per team</p>
-                        <div style="display:flex;gap:10px">
-                            <button class="btn btn-primary" onclick="checkout('monthly')">Monthly Plan</button>
-                            <button class="btn btn-primary" onclick="checkout('lifetime')">Lifetime (one-time)</button>
-                        </div>
-                    </div>
-                `;
-            }
 
             if (teams.length === 0) {
                 html += '<div class="empty-state">No teams yet. Create or join one above.</div>';
