@@ -1370,10 +1370,16 @@
             if (!message) return;
             chatSending = true;
             input.value = '';
-            const data = await api('POST', `/api/teams/${currentTeamId}/chat`, { message });
-            chatSending = false;
-            if (data.error) { showToast(data.error); return; }
-            await fetchChatMessages(false);
+            input.disabled = true;
+            try {
+                const data = await api('POST', `/api/teams/${currentTeamId}/chat`, { message });
+                if (data.error) { showToast(data.error); return; }
+                await fetchChatMessages(false);
+            } finally {
+                chatSending = false;
+                const inp = document.getElementById('chatInput');
+                if (inp) { inp.disabled = false; inp.focus(); }
+            }
         }
 
         async function deleteChat(id) {
