@@ -225,6 +225,21 @@ async function initDB(db) {
       FOREIGN KEY (target_user_id) REFERENCES users(id),
       FOREIGN KEY (author_id) REFERENCES users(id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS war_log (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      opponent TEXT NOT NULL,
+      result TEXT NOT NULL,
+      event_type TEXT DEFAULT 'gvg',
+      score_us INTEGER,
+      score_them INTEGER,
+      notes TEXT,
+      war_date INTEGER DEFAULT (unixepoch()),
+      logged_by TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (logged_by) REFERENCES users(id)
+    )`),
   ]);
   // Migrations
   await db.exec('ALTER TABLE team_settings ADD COLUMN on_announcement INTEGER DEFAULT 1').catch(() => {});
@@ -694,6 +709,7 @@ async function handleRequest(request, env) {
       env.DB.prepare('DELETE FROM member_availability WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM boss_loot WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM dkp_ledger WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM war_log WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM announcements WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM team_members WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM teams WHERE id = ?').bind(teamId),
@@ -1391,6 +1407,78 @@ async function handleRequest(request, env) {
         .bind(id, teamId, userId, body.amount, body.reason.trim(), user.userId).run();
     }
 
+    return json({ ok: true });
+  }
+
+  // --- War Log & Stats ---
+
+  const warLogMatch = path.match(/^\/api\/teams\/([^/]+)\/wars$/);
+  if (warLogMatch && request.method === 'GET') {
+    const teamId = warLogMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const wars = await env.DB.prepare(`
+      SELECT wl.*, u.username as logged_by_name
+      FROM war_log wl JOIN users u ON u.id = wl.logged_by
+      WHERE wl.team_id = ?
+      ORDER BY wl.war_date DESC
+      LIMIT 100
+    `).bind(teamId).all();
+
+    // Compute stats
+    const results = wars.results;
+    const stats = { wins: 0, losses: 0, draws: 0, byOpponent: {} };
+    for (const w of results) {
+      if (w.result === 'win') stats.wins++;
+      else if (w.result === 'loss') stats.losses++;
+      else stats.draws++;
+
+      if (!stats.byOpponent[w.opponent]) stats.byOpponent[w.opponent] = { wins: 0, losses: 0, draws: 0 };
+      if (w.result === 'win') stats.byOpponent[w.opponent].wins++;
+      else if (w.result === 'loss') stats.byOpponent[w.opponent].losses++;
+      else stats.byOpponent[w.opponent].draws++;
+    }
+
+    return json({ wars: results, stats });
+  }
+
+  if (warLogMatch && request.method === 'POST') {
+    const teamId = warLogMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const body = await request.json();
+    if (!body.opponent?.trim() || !['win', 'loss', 'draw'].includes(body.result)) {
+      return json({ error: 'Opponent and result (win/loss/draw) required' }, 400);
+    }
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO war_log (id, team_id, opponent, result, event_type, score_us, score_them, notes, war_date, logged_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, teamId, body.opponent.trim(), body.result, body.eventType || 'gvg',
+        body.scoreUs ?? null, body.scoreThem ?? null, body.notes || null,
+        body.warDate || Math.floor(Date.now() / 1000), user.userId).run();
+
+    // Discord notification
+    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    if (settings?.webhook_url) {
+      const emoji = body.result === 'win' ? '🏆' : body.result === 'loss' ? '❌' : '🤝';
+      const scoreText = body.scoreUs !== undefined && body.scoreThem !== undefined ? ` (${body.scoreUs}-${body.scoreThem})` : '';
+      await sendDiscord(settings.webhook_url, `War Result: ${body.result.toUpperCase()}`,
+        `${emoji} **${body.result.toUpperCase()}** vs **${body.opponent.trim()}**${scoreText}${body.notes ? '\n' + body.notes : ''}`,
+        body.result === 'win' ? 5763719 : body.result === 'loss' ? 15548997 : 16760576);
+    }
+
+    return json({ ok: true, id });
+  }
+
+  const warDeleteMatch = path.match(/^\/api\/teams\/([^/]+)\/wars\/([^/]+)$/);
+  if (warDeleteMatch && request.method === 'DELETE') {
+    const [, teamId, warId] = warDeleteMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    await env.DB.prepare('DELETE FROM war_log WHERE id = ? AND team_id = ?').bind(warId, teamId).run();
     return json({ ok: true });
   }
 
