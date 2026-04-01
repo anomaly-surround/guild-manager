@@ -11,16 +11,56 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        :root {
+            --bg: #0a0e17;
+            --bg-card: #111827;
+            --bg-input: #1e293b;
+            --bg-header: linear-gradient(135deg, #0f1623, #1a1040);
+            --bg-item: #0f1623;
+            --border: #1e293b;
+            --border-header: #2a1f5e;
+            --border-input: #334155;
+            --text: #e0e6f0;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --text-label: #7a8baa;
+            --accent: #a78bfa;
+            --accent2: #60a5fa;
+            --tab-bg: #1e293b;
+            --tab-active: #334155;
+            --color-scheme: dark;
+        }
+
+        [data-theme="light"] {
+            --bg: #f1f5f9;
+            --bg-card: #ffffff;
+            --bg-input: #e2e8f0;
+            --bg-header: linear-gradient(135deg, #e2e8f0, #ddd6fe);
+            --bg-item: #f8fafc;
+            --border: #cbd5e1;
+            --border-header: #a78bfa;
+            --border-input: #94a3b8;
+            --text: #1e293b;
+            --text-muted: #475569;
+            --text-dim: #64748b;
+            --text-label: #475569;
+            --accent: #7c3aed;
+            --accent2: #3b82f6;
+            --tab-bg: #e2e8f0;
+            --tab-active: #cbd5e1;
+            --color-scheme: light;
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #0a0e17;
-            color: #e0e6f0;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
         }
 
         .header {
-            background: linear-gradient(135deg, #0f1623, #1a1040);
-            border-bottom: 2px solid #2a1f5e;
+            background: var(--bg-header);
+            border-bottom: 2px solid var(--border-header);
             padding: 16px 24px;
             display: flex;
             justify-content: space-between;
@@ -29,7 +69,7 @@
 
         .header h1 {
             font-size: 1.5em;
-            background: linear-gradient(90deg, #a78bfa, #60a5fa);
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             cursor: pointer;
@@ -45,12 +85,12 @@
             width: 32px;
             height: 32px;
             border-radius: 50%;
-            background: #1e293b;
+            background: var(--bg-input);
         }
 
         .user-name {
             font-size: 0.9em;
-            color: #94a3b8;
+            color: var(--text-muted);
         }
 
         .container {
@@ -102,15 +142,15 @@
         .btn-danger:hover { background: #7f1d1d33; }
 
         .btn-secondary {
-            background: #1e293b;
-            color: #94a3b8;
+            background: var(--bg-input);
+            color: var(--text-muted);
         }
 
-        .btn-secondary:hover { background: #334155; color: #e0e6f0; }
+        .btn-secondary:hover { background: var(--tab-active); color: var(--text); }
 
         .btn-logout {
             background: transparent;
-            color: #64748b;
+            color: var(--text-dim);
             padding: 6px 12px;
             font-size: 0.8em;
         }
@@ -129,20 +169,20 @@
 
         .login-screen h2 {
             font-size: 2em;
-            background: linear-gradient(90deg, #a78bfa, #60a5fa);
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
         .login-screen p {
-            color: #64748b;
+            color: var(--text-dim);
             margin-bottom: 12px;
         }
 
         /* Cards */
         .card {
-            background: #111827;
-            border: 1px solid #1e293b;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             border-radius: 12px;
             padding: 20px;
             margin-bottom: 16px;
@@ -150,13 +190,13 @@
 
         .card h2 {
             font-size: 1.1em;
-            color: #a78bfa;
+            color: var(--accent);
             margin-bottom: 12px;
         }
 
         .card h3 {
             font-size: 1em;
-            color: #94a3b8;
+            color: var(--text-muted);
             margin-bottom: 12px;
         }
 
@@ -176,23 +216,24 @@
 
         .form-group label {
             font-size: 0.75em;
-            color: #7a8baa;
+            color: var(--text-label);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .form-group input {
-            background: #1e293b;
-            border: 1px solid #334155;
-            color: #e0e6f0;
+            background: var(--bg-input);
+            border: 1px solid var(--border-input);
+            color: var(--text);
             padding: 10px 14px;
             border-radius: 8px;
             font-size: 0.95em;
             outline: none;
+            color-scheme: var(--color-scheme);
         }
 
         .form-group input:focus {
-            border-color: #a78bfa;
+            border-color: var(--accent);
             box-shadow: 0 0 0 2px rgba(167,139,250,0.2);
         }
 
@@ -202,8 +243,8 @@
             justify-content: space-between;
             align-items: center;
             padding: 16px 20px;
-            background: #111827;
-            border: 1px solid #1e293b;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             border-radius: 10px;
             margin-bottom: 10px;
             cursor: pointer;
@@ -241,7 +282,7 @@
             align-items: center;
             gap: 12px;
             padding: 10px 14px;
-            background: #0f1623;
+            background: var(--bg-item);
             border-radius: 8px;
             margin-bottom: 6px;
         }
@@ -274,7 +315,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            background: #0f1623;
+            background: var(--bg-item);
             border: 1px dashed #334155;
             border-radius: 8px;
             padding: 12px 16px;
@@ -328,8 +369,8 @@
             align-items: center;
             gap: 12px;
             padding: 12px 16px;
-            background: #0f1623;
-            border: 1px solid #1e293b;
+            background: var(--bg-item);
+            border: 1px solid var(--border);
             border-radius: 8px;
             margin-bottom: 8px;
             position: relative;
@@ -398,8 +439,8 @@
 
         .tab-btn {
             padding: 10px 14px;
-            background: #1e293b;
-            color: #64748b;
+            background: var(--tab-bg);
+            color: var(--text-dim);
             border: none;
             border-radius: 8px;
             cursor: pointer;
@@ -409,8 +450,8 @@
             transition: all 0.15s;
         }
 
-        .tab-btn:hover { color: #e0e6f0; background: #253347; }
-        .tab-btn.active { background: #334155; color: #a78bfa; border-left: 3px solid #a78bfa; }
+        .tab-btn:hover { color: var(--text); background: var(--tab-active); }
+        .tab-btn.active { background: var(--tab-active); color: var(--accent); border-left: 3px solid var(--accent); }
 
         .tab-content {
             flex: 1;
@@ -422,8 +463,8 @@
 
         /* Events */
         .event-card {
-            background: #0f1623;
-            border: 1px solid #1e293b;
+            background: var(--bg-item);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 14px 16px;
             margin-bottom: 10px;
@@ -464,7 +505,7 @@
 
         .rsvp-btn {
             padding: 5px 12px;
-            border: 1px solid #334155;
+            border: 1px solid var(--border-input);
             border-radius: 6px;
             background: transparent;
             color: #94a3b8;
@@ -490,8 +531,8 @@
             display: flex;
             flex-direction: column;
             height: 60vh;
-            background: #0a0e17;
-            border: 1px solid #1e293b;
+            background: var(--bg);
+            border: 1px solid var(--border);
             border-radius: 8px;
             overflow: hidden;
         }
@@ -516,21 +557,21 @@
             background: #334155;
         }
         .chat-msg-body { flex: 1; min-width: 0; }
-        .chat-msg-name { font-size: 0.8em; font-weight: 600; color: #a78bfa; }
-        .chat-msg-time { font-size: 0.65em; color: #64748b; margin-left: 6px; }
+        .chat-msg-name { font-size: 0.8em; font-weight: 600; color: var(--accent); }
+        .chat-msg-time { font-size: 0.65em; color: var(--text-dim); margin-left: 6px; }
         .chat-msg-text { font-size: 0.9em; word-wrap: break-word; margin-top: 1px; }
         .chat-input-bar {
             display: flex;
             gap: 8px;
             padding: 10px 12px;
             border-top: 1px solid #1e293b;
-            background: #0f1623;
+            background: var(--bg-item);
         }
         .chat-input-bar input {
             flex: 1;
-            background: #1e293b;
-            border: 1px solid #334155;
-            color: #e0e6f0;
+            background: var(--bg-input);
+            border: 1px solid var(--border-input);
+            color: var(--text);
             padding: 10px;
             border-radius: 8px;
             font-size: 0.9em;
@@ -538,8 +579,8 @@
 
         /* Announcements */
         .announcement-card {
-            background: #0f1623;
-            border: 1px solid #1e293b;
+            background: var(--bg-item);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 14px 16px;
             margin-bottom: 10px;
@@ -557,8 +598,8 @@
 
         /* Wars */
         .war-item {
-            background: #0f1623;
-            border: 1px solid #1e293b;
+            background: var(--bg-item);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 10px 14px;
             margin-bottom: 8px;
@@ -577,7 +618,7 @@
             text-align: center;
             padding: 12px;
             border-radius: 8px;
-            background: #0f1623;
+            background: var(--bg-item);
             flex: 1;
         }
         .stat-number { font-size: 1.8em; font-weight: 700; }
@@ -585,8 +626,8 @@
 
         /* Loot & DKP */
         .loot-item {
-            background: #0f1623;
-            border: 1px solid #1e293b;
+            background: var(--bg-item);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 10px 14px;
             margin-bottom: 8px;
@@ -596,8 +637,8 @@
         }
         .loot-item-name { font-weight: 600; color: #fbbf24; }
         .dkp-row {
-            background: #0f1623;
-            border: 1px solid #1e293b;
+            background: var(--bg-item);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 10px 14px;
             margin-bottom: 6px;
@@ -617,7 +658,7 @@
             margin-top: 12px;
         }
         .avail-header { background: #1e293b; padding: 6px 4px; text-align: center; border-radius: 4px; font-weight: 600; color: #94a3b8; }
-        .avail-cell { background: #0f1623; padding: 4px; text-align: center; border-radius: 4px; min-height: 28px; }
+        .avail-cell { background: var(--bg-item); padding: 4px; text-align: center; border-radius: 4px; min-height: 28px; }
         .avail-slot { background: #065f46; color: #34d399; border-radius: 3px; padding: 2px 4px; margin: 1px 0; font-size: 0.9em; }
 
         /* Activity */
@@ -636,8 +677,8 @@
 
         /* Notes */
         .note-item {
-            background: #0f1623;
-            border: 1px solid #1e293b;
+            background: var(--bg-item);
+            border: 1px solid var(--border);
             border-radius: 6px;
             padding: 10px 12px;
             margin-bottom: 8px;
@@ -672,14 +713,17 @@
             <h1 onclick="goHome()"><img src="icon.svg" alt="" style="height:1.2em;vertical-align:middle;margin-right:6px;">Guild Manager</h1>
             <div id="headerActions" style="display:none;gap:8px;align-items:center;">
                 <button class="btn btn-primary" style="padding:6px 14px;font-size:0.85em;" onclick="showCreateTeamModal()">Create Team</button>
-                <button class="btn" style="padding:6px 14px;font-size:0.85em;background:#1e293b;color:#e0e6f0;" onclick="showJoinTeamModal()">Join Team</button>
+                <button class="btn" style="padding:6px 14px;font-size:0.85em;background:var(--bg-input);color:var(--text);" onclick="showJoinTeamModal()">Join Team</button>
             </div>
         </div>
-        <div class="user-info" id="userInfo" style="display:none">
-            <button class="btn" id="upgradeBtn" style="display:none;padding:6px 14px;font-size:0.85em;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;" onclick="showUpgradeModal()">Upgrade</button>
-            <img class="user-avatar" id="userAvatar" src="">
-            <span class="user-name" id="userName"></span>
-            <button class="btn btn-logout" onclick="logout()">Logout</button>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <button class="btn" onclick="toggleTheme()" id="themeBtn" style="padding:4px 10px;font-size:1em;background:transparent;color:var(--text-muted);border:1px solid var(--border-input);border-radius:6px" title="Toggle theme">🌙</button>
+            <div class="user-info" id="userInfo" style="display:none">
+                <button class="btn" id="upgradeBtn" style="display:none;padding:6px 14px;font-size:0.85em;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;" onclick="showUpgradeModal()">Upgrade</button>
+                <img class="user-avatar" id="userAvatar" src="">
+                <span class="user-name" id="userName"></span>
+                <button class="btn btn-logout" onclick="logout()">Logout</button>
+            </div>
         </div>
     </div>
 
@@ -691,6 +735,24 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
+        // Theme
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const next = current === 'light' ? null : 'light';
+            if (next) document.documentElement.setAttribute('data-theme', 'light');
+            else document.documentElement.removeAttribute('data-theme');
+            localStorage.setItem('gm_theme', next || 'dark');
+            document.getElementById('themeBtn').textContent = next === 'light' ? '☀️' : '🌙';
+        }
+        // Apply saved theme
+        (function() {
+            const saved = localStorage.getItem('gm_theme');
+            if (saved === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.getElementById('themeBtn').textContent = '☀️';
+            }
+        })();
+
         const API = 'https://guild-manager.xpropics.workers.dev';
         let token = localStorage.getItem('gm_token') || '';
         let currentUser = null;
@@ -787,7 +849,7 @@
                             <button class="btn btn-primary" onclick="checkout('monthly')">Monthly Plan</button>
                             <button class="btn btn-primary" onclick="checkout('lifetime')">Lifetime (one-time)</button>
                         </div>
-                        <button class="btn" style="margin-top:12px;background:#1e293b;color:#e0e6f0;" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
+                        <button class="btn" style="margin-top:12px;background:var(--bg-input);color:var(--text);" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
                     </div>
                 </div>`;
         }
@@ -803,7 +865,7 @@
                         </div>
                         <div style="display:flex;gap:8px;margin-top:12px;">
                             <button class="btn btn-primary" onclick="createTeam()">Create</button>
-                            <button class="btn" style="background:#1e293b;color:#e0e6f0;" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
+                            <button class="btn" style="background:var(--bg-input);color:var(--text);" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
                         </div>
                     </div>
                 </div>`;
@@ -820,7 +882,7 @@
                         </div>
                         <div style="display:flex;gap:8px;margin-top:12px;">
                             <button class="btn btn-primary" onclick="joinTeam()">Join</button>
-                            <button class="btn" style="background:#1e293b;color:#e0e6f0;" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
+                            <button class="btn" style="background:var(--bg-input);color:var(--text);" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
                         </div>
                     </div>
                 </div>`;
@@ -1134,7 +1196,7 @@
                             ${canManage && !isMe ? `<button class="btn btn-sm btn-secondary" onclick="openMemberNotes('${m.id}','${m.username}')" style="font-size:0.75em;padding:4px 8px">Notes</button>` : ''}
                             ${canManage && !isMe && !isMemberLeader ? `
                                 ${isLeader ? `
-                                    <select onchange="changeRole('${currentTeamId}','${m.id}',this.value)" style="background:#1e293b;color:#e0e6f0;border:1px solid #334155;border-radius:4px;padding:4px;font-size:0.75em">
+                                    <select onchange="changeRole('${currentTeamId}','${m.id}',this.value)" style="background:var(--bg-input);color:var(--text);border:1px solid #334155;border-radius:4px;padding:4px;font-size:0.75em">
                                         <option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option>
                                         <option value="officer" ${m.role === 'officer' ? 'selected' : ''}>Officer</option>
                                     </select>
@@ -2001,10 +2063,10 @@
                     </select>
                 </div>
                 <div class="form-group" style="max-width:110px">
-                    <input type="time" class="avail-start" style="color-scheme:dark">
+                    <input type="time" class="avail-start" style="color-scheme:var(--color-scheme)">
                 </div>
                 <div class="form-group" style="max-width:110px">
-                    <input type="time" class="avail-end" style="color-scheme:dark">
+                    <input type="time" class="avail-end" style="color-scheme:var(--color-scheme)">
                 </div>
                 <button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="align-self:center">X</button>
             `;
@@ -2068,7 +2130,7 @@
                         <div class="form-row" style="margin-top:8px">
                             <div class="form-group">
                                 <label>Date & Time</label>
-                                <input type="datetime-local" id="eventDateTime" style="color-scheme:dark">
+                                <input type="datetime-local" id="eventDateTime" style="color-scheme:var(--color-scheme)">
                             </div>
                             <div class="form-group" style="max-width:100px">
                                 <label>Duration (min)</label>
@@ -2390,7 +2452,7 @@
                         </div>
                         <div style="display:flex;gap:8px;">
                             <button class="btn btn-primary" onclick="addMemberNote('${userId}','${username}')">Add Note</button>
-                            <button class="btn" style="background:#1e293b;color:#e0e6f0;" onclick="document.getElementById('deathModal').innerHTML=''">Close</button>
+                            <button class="btn" style="background:var(--bg-input);color:var(--text);" onclick="document.getElementById('deathModal').innerHTML=''">Close</button>
                         </div>
                     </div>
                 </div>`;
