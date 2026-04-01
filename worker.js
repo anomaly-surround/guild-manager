@@ -345,10 +345,15 @@ async function initDB(db) {
     )`),
   ]);
 
-  // Run migrations only once (check if latest column exists)
-  const hasAccentColor = await db.prepare("SELECT accent_color FROM team_settings LIMIT 1").first().then(() => true).catch(() => false);
-  if (!hasAccentColor) {
+  // Run migrations (each one is idempotent via catch)
+  const needsMigrations = await db.prepare("SELECT premium FROM users LIMIT 1").first().then(() => false).catch(() => true)
+    || await db.prepare("SELECT accent_color FROM team_settings LIMIT 1").first().then(() => false).catch(() => true);
+  if (needsMigrations) {
     const migrations = [
+      'ALTER TABLE users ADD COLUMN premium INTEGER DEFAULT 0',
+      'ALTER TABLE users ADD COLUMN premium_type TEXT',
+      'ALTER TABLE users ADD COLUMN premium_until INTEGER',
+      'ALTER TABLE users ADD COLUMN ls_customer_id TEXT',
       'ALTER TABLE team_settings ADD COLUMN on_announcement INTEGER DEFAULT 1',
       'ALTER TABLE team_settings ADD COLUMN on_event INTEGER DEFAULT 1',
       'ALTER TABLE team_settings ADD COLUMN on_war INTEGER DEFAULT 1',
