@@ -979,67 +979,70 @@
                 </div>
             `;
 
-            // Boss list
+            html += '<div id="bossListArea">' + renderBossListOnly(canManage) + '</div>';
+            return html;
+        }
+
+        function renderBossListOnly(canManage) {
             if (teamBosses.length === 0) {
-                html += '<div class="empty-state">No boss timers yet</div>';
-            } else {
-                const sorted = [...teamBosses].sort((a, b) => {
-                    if (a.status === 'spawned' && b.status !== 'spawned') return -1;
-                    if (b.status === 'spawned' && a.status !== 'spawned') return 1;
-                    return a.next_spawn - b.next_spawn;
-                });
-
-                for (const boss of sorted) {
-                    const now = Date.now();
-                    const remaining = boss.next_spawn - now;
-                    const alertMs = boss.alert_minutes * 60000;
-                    const isSpawned = remaining <= 0 || boss.status === 'spawned';
-                    const isWarning = !isSpawned && remaining <= alertMs;
-
-                    let cls = 'boss-item';
-                    if (isSpawned) cls += ' spawning';
-                    else if (isWarning) cls += ' warning';
-
-                    let countdownCls = 'boss-countdown active';
-                    let countdownText = formatTime(remaining);
-                    if (isSpawned) { countdownCls = 'boss-countdown spawned'; countdownText = 'SPAWNED'; }
-                    else if (isWarning) { countdownCls = 'boss-countdown warning-text'; }
-
-                    const fullDayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                    let meta = '';
-                    if (boss.type === 'interval') {
-                        const totalMin = boss.interval_ms / 60000;
-                        const h = Math.floor(totalMin / 60), m = totalMin % 60;
-                        meta = 'Every ' + (h > 0 ? h + 'h ' : '') + (m > 0 ? m + 'm' : '');
-                    } else if (boss.type === 'fixed') {
-                        meta = 'Daily at ' + boss.fixed_time;
-                    } else if (boss.type === 'weekly') {
-                        meta = fullDayNames[boss.weekly_day] + ' at ' + boss.weekly_time;
-                    } else if (boss.type === 'biweekly') {
-                        try {
-                            const days = typeof boss.biweekly_days === 'string' ? JSON.parse(boss.biweekly_days) : boss.biweekly_days;
-                            meta = days.map(d => dayNames[d.day] + ' ' + d.time).join(' & ');
-                        } catch { meta = 'Twice a week'; }
-                    }
-
-                    html += `
-                        <div class="${cls}" data-boss-id="${boss.id}">
-                            <div style="flex:1">
-                                <div class="boss-name-text">${boss.name}</div>
-                                <div class="boss-meta-text">${meta} | Alert: ${boss.alert_minutes}m</div>
-                                ${boss.last_death ? `<div class="boss-death-text">Killed: ${new Date(boss.last_death).toLocaleString()}</div>` : ''}
-                            </div>
-                            <div class="${countdownCls}">${countdownText}</div>
-                            <div class="boss-actions">
-                                <button class="btn btn-sm" style="background:#065f46;color:#34d399" onclick="killBoss('${boss.id}')">Killed</button>
-                                <button class="btn btn-sm" style="background:#1e3a5f;color:#60a5fa" onclick="openDeathModal('${boss.id}','${boss.name}')">Set Death</button>
-                                ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteBoss('${boss.id}')">X</button>` : ''}
-                            </div>
-                        </div>
-                    `;
-                }
+                return '<div class="empty-state">No boss timers yet</div>';
             }
+            const fullDayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+            let html = '';
+            const sorted = [...teamBosses].sort((a, b) => {
+                if (a.status === 'spawned' && b.status !== 'spawned') return -1;
+                if (b.status === 'spawned' && a.status !== 'spawned') return 1;
+                return a.next_spawn - b.next_spawn;
+            });
 
+            for (const boss of sorted) {
+                const now = Date.now();
+                const remaining = boss.next_spawn - now;
+                const alertMs = boss.alert_minutes * 60000;
+                const isSpawned = remaining <= 0 || boss.status === 'spawned';
+                const isWarning = !isSpawned && remaining <= alertMs;
+
+                let cls = 'boss-item';
+                if (isSpawned) cls += ' spawning';
+                else if (isWarning) cls += ' warning';
+
+                let countdownCls = 'boss-countdown active';
+                let countdownText = formatTime(remaining);
+                if (isSpawned) { countdownCls = 'boss-countdown spawned'; countdownText = 'SPAWNED'; }
+                else if (isWarning) { countdownCls = 'boss-countdown warning-text'; }
+
+                let meta = '';
+                if (boss.type === 'interval') {
+                    const totalMin = boss.interval_ms / 60000;
+                    const h = Math.floor(totalMin / 60), m = totalMin % 60;
+                    meta = 'Every ' + (h > 0 ? h + 'h ' : '') + (m > 0 ? m + 'm' : '');
+                } else if (boss.type === 'fixed') {
+                    meta = 'Daily at ' + boss.fixed_time;
+                } else if (boss.type === 'weekly') {
+                    meta = fullDayNames[boss.weekly_day] + ' at ' + boss.weekly_time;
+                } else if (boss.type === 'biweekly') {
+                    try {
+                        const days = typeof boss.biweekly_days === 'string' ? JSON.parse(boss.biweekly_days) : boss.biweekly_days;
+                        meta = days.map(d => dayNames[d.day] + ' ' + d.time).join(' & ');
+                    } catch { meta = 'Twice a week'; }
+                }
+
+                html += `
+                    <div class="${cls}" data-boss-id="${boss.id}">
+                        <div style="flex:1">
+                            <div class="boss-name-text">${boss.name}</div>
+                            <div class="boss-meta-text">${meta} | Alert: ${boss.alert_minutes}m</div>
+                            ${boss.last_death ? `<div class="boss-death-text">Killed: ${new Date(boss.last_death).toLocaleString()}</div>` : ''}
+                        </div>
+                        <div class="${countdownCls}">${countdownText}</div>
+                        <div class="boss-actions">
+                            <button class="btn btn-sm" style="background:#065f46;color:#34d399" onclick="killBoss('${boss.id}')">Killed</button>
+                            <button class="btn btn-sm" style="background:#1e3a5f;color:#60a5fa" onclick="openDeathModal('${boss.id}','${boss.name}')">Set Death</button>
+                            ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteBoss('${boss.id}')">X</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
             return html;
         }
 
@@ -1419,30 +1422,35 @@
                 `;
             }
 
-            if (teamAnnouncements.length === 0) {
-                html += '<div class="empty-state">No announcements yet</div>';
-            } else {
-                for (const a of teamAnnouncements) {
-                    const date = new Date(a.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                    html += `
-                        <div class="announcement-card ${a.pinned ? 'pinned' : ''}">
-                            <div class="announcement-header">
-                                <div>
-                                    ${a.pinned ? '<span class="pin-icon">&#128204;</span>' : ''}
-                                    <span class="announcement-title">${a.title}</span>
-                                </div>
-                                <div style="display:flex;gap:4px;">
-                                    ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="togglePin('${a.id}')" style="font-size:0.7em;padding:2px 8px">${a.pinned ? 'Unpin' : 'Pin'}</button>` : ''}
-                                    ${canManage || a.created_by === currentUser?.id ? `<button class="btn btn-danger btn-sm" onclick="deleteAnnouncement('${a.id}')" style="font-size:0.7em;padding:2px 8px">X</button>` : ''}
-                                </div>
-                            </div>
-                            ${a.body ? `<div class="announcement-body">${a.body}</div>` : ''}
-                            <div class="announcement-meta">by ${a.author_name} &middot; ${date}</div>
-                        </div>
-                    `;
-                }
-            }
+            html += '<div id="announcementsListArea">' + renderAnnouncementsListOnly() + '</div>';
+            return html;
+        }
 
+        function renderAnnouncementsListOnly() {
+            const canManage = teamData.team.my_role === 'leader' || teamData.team.my_role === 'officer';
+            if (teamAnnouncements.length === 0) {
+                return '<div class="empty-state">No announcements yet</div>';
+            }
+            let html = '';
+            for (const a of teamAnnouncements) {
+                const date = new Date(a.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                html += `
+                    <div class="announcement-card ${a.pinned ? 'pinned' : ''}">
+                        <div class="announcement-header">
+                            <div>
+                                ${a.pinned ? '<span class="pin-icon">&#128204;</span>' : ''}
+                                <span class="announcement-title">${a.title}</span>
+                            </div>
+                            <div style="display:flex;gap:4px;">
+                                ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="togglePin('${a.id}')" style="font-size:0.7em;padding:2px 8px">${a.pinned ? 'Unpin' : 'Pin'}</button>` : ''}
+                                ${canManage || a.created_by === currentUser?.id ? `<button class="btn btn-danger btn-sm" onclick="deleteAnnouncement('${a.id}')" style="font-size:0.7em;padding:2px 8px">X</button>` : ''}
+                            </div>
+                        </div>
+                        ${a.body ? `<div class="announcement-body">${a.body}</div>` : ''}
+                        <div class="announcement-meta">by ${a.author_name} &middot; ${date}</div>
+                    </div>
+                `;
+            }
             return html;
         }
 
@@ -2012,7 +2020,14 @@
                 </div>
             `;
 
-            // Split into upcoming and past
+            html += '<div id="eventsListArea">' + renderEventsListOnly() + '</div>';
+            return html;
+        }
+
+        function renderEventsListOnly() {
+            const now = Date.now();
+            const canManage = teamData.team.my_role === 'leader' || teamData.team.my_role === 'officer';
+            let html = '';
             const upcoming = teamEvents.filter(e => e.event_time + (e.duration_minutes || 60) * 60000 > now);
             const past = teamEvents.filter(e => e.event_time + (e.duration_minutes || 60) * 60000 <= now);
 
@@ -2145,6 +2160,13 @@
         setInterval(async () => {
             if (!currentTeamId || teamTab !== 'timers') return;
             await loadTeamBosses(currentTeamId);
+            // Only update boss list area, not the add form
+            const bossList = document.getElementById('bossListArea');
+            if (bossList) {
+                const team = teamData.team;
+                const canManage = team.my_role === 'leader' || team.my_role === 'officer';
+                bossList.innerHTML = renderBossListOnly(canManage);
+            }
         }, 15000);
 
         // Tick — update event countdowns every second
@@ -2170,8 +2192,8 @@
             if (!currentTeamId || teamTab !== 'events') return;
             const data = await api('GET', `/api/teams/${currentTeamId}/events`);
             teamEvents = data.events || [];
-            const el = document.getElementById('eventsContent');
-            if (el) el.innerHTML = renderEventsContent();
+            const el = document.getElementById('eventsListArea');
+            if (el) el.innerHTML = renderEventsListOnly();
         }, 30000);
 
         // Refresh chat every 5 seconds
@@ -2185,8 +2207,8 @@
             if (!currentTeamId || teamTab !== 'announcements') return;
             const data = await api('GET', `/api/teams/${currentTeamId}/announcements`);
             teamAnnouncements = data.announcements || [];
-            const el = document.getElementById('announcementsContent');
-            if (el) el.innerHTML = renderAnnouncementsContent();
+            const el = document.getElementById('announcementsListArea');
+            if (el) el.innerHTML = renderAnnouncementsListOnly();
         }, 30000);
 
         // Activity heartbeat every 5 minutes
