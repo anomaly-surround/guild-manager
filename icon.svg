@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c3aed"/>
+      <stop offset="100%" style="stop-color:#4c1d95"/>
+    </linearGradient>
+    <linearGradient id="innerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa"/>
+      <stop offset="100%" style="stop-color:#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24"/>
+      <stop offset="100%" style="stop-color:#d97706"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer shield -->
+  <path d="M256 28 L460 100 C460 100 470 280 256 484 C42 280 52 100 52 100 Z"
+        fill="url(#shieldGrad)" stroke="#1e1b4b" stroke-width="8"/>
+
+  <!-- Inner shield border -->
+  <path d="M256 60 L432 122 C432 122 440 272 256 452 C72 272 80 122 80 122 Z"
+        fill="url(#innerGrad)" stroke="#4c1d95" stroke-width="4"/>
+
+  <!-- Inner dark panel -->
+  <path d="M256 90 L406 144 C406 144 412 266 256 422 C100 266 106 144 106 144 Z"
+        fill="#1e1b4b"/>
+
+  <!-- Crown -->
+  <g transform="translate(256, 175)" fill="url(#goldGrad)">
+    <!-- Crown base -->
+    <rect x="-55" y="10" width="110" height="20" rx="3"/>
+    <!-- Crown points -->
+    <polygon points="-55,10 -55,-25 -35,0"/>
+    <polygon points="-20,10 -20,-40 0,0"/>
+    <polygon points="0,0 20,-40 20,10"/>
+    <polygon points="35,0 55,-25 55,10"/>
+    <!-- Crown gems -->
+    <circle cx="-37" cy="-5" r="6" fill="#ef4444"/>
+    <circle cx="0" cy="-18" r="7" fill="#3b82f6"/>
+    <circle cx="37" cy="-5" r="6" fill="#ef4444"/>
+  </g>
+
+  <!-- People/guild members -->
+  <g fill="#e2e8f0">
+    <!-- Center person (leader) -->
+    <circle cx="256" cy="255" r="22"/>
+    <path d="M256 280 C230 280 215 300 215 320 L297 320 C297 300 282 280 256 280Z"/>
+
+    <!-- Left member -->
+    <circle cx="175" cy="275" r="18" opacity="0.8"/>
+    <path d="M175 296 C155 296 143 312 143 328 L207 328 C207 312 195 296 175 296Z" opacity="0.8"/>
+
+    <!-- Right member -->
+    <circle cx="337" cy="275" r="18" opacity="0.8"/>
+    <path d="M337 296 C317 296 305 312 305 328 L369 328 C369 312 357 296 337 296Z" opacity="0.8"/>
+  </g>
+
+  <!-- Crossed swords -->
+  <g opacity="0.85">
+    <!-- Left sword -->
+    <g transform="translate(256,460) rotate(-35)">
+      <!-- Blade -->
+      <rect x="-4" y="-220" width="8" height="170" rx="2" fill="#c0c0c0"/>
+      <polygon points="-4,-220 4,-220 0,-240" fill="#e0e0e0"/>
+      <!-- Guard -->
+      <rect x="-22" y="-50" width="44" height="8" rx="4" fill="url(#goldGrad)"/>
+      <!-- Grip -->
+      <rect x="-5" y="-42" width="10" height="35" rx="2" fill="#92400e"/>
+      <!-- Pommel -->
+      <circle cx="0" cy="-2" r="8" fill="url(#goldGrad)"/>
+    </g>
+    <!-- Right sword -->
+    <g transform="translate(256,460) rotate(35)">
+      <!-- Blade -->
+      <rect x="-4" y="-220" width="8" height="170" rx="2" fill="#c0c0c0"/>
+      <polygon points="-4,-220 4,-220 0,-240" fill="#e0e0e0"/>
+      <!-- Guard -->
+      <rect x="-22" y="-50" width="44" height="8" rx="4" fill="url(#goldGrad)"/>
+      <!-- Grip -->
+      <rect x="-5" y="-42" width="10" height="35" rx="2" fill="#92400e"/>
+      <!-- Pommel -->
+      <circle cx="0" cy="-2" r="8" fill="url(#goldGrad)"/>
+    </g>
+  </g>
+</svg>
