@@ -411,6 +411,7 @@
         <!-- Content injected by JS -->
     </div>
 
+    <div id="deathModal"></div>
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
@@ -712,6 +713,7 @@
                             <div class="${countdownCls}">${countdownText}</div>
                             <div class="boss-actions">
                                 <button class="btn btn-sm" style="background:#065f46;color:#34d399" onclick="killBoss('${boss.id}')">Killed</button>
+                                <button class="btn btn-sm" style="background:#1e3a5f;color:#60a5fa" onclick="openDeathModal('${boss.id}','${boss.name}')">Set Death</button>
                                 ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteBoss('${boss.id}')">X</button>` : ''}
                             </div>
                         </div>
@@ -847,6 +849,49 @@
 
         async function killBoss(bossId) {
             await api('POST', `/api/teams/${currentTeamId}/bosses/${bossId}/kill`, { deathTime: Date.now() });
+            await loadTeamBosses(currentTeamId);
+            renderTeamView();
+        }
+
+        function openDeathModal(bossId, bossName) {
+            const now = new Date();
+            const defaultDate = now.toISOString().slice(0, 10);
+            const defaultTime = now.toTimeString().slice(0, 5);
+            document.getElementById('deathModal').innerHTML = `
+                <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:2000" onclick="closeDeathModal(event)">
+                    <div class="card" style="min-width:320px;margin:0" onclick="event.stopPropagation()">
+                        <h3 style="color:#a78bfa;margin-bottom:16px">Set Death Time: ${bossName}</h3>
+                        <div class="form-group" style="margin-bottom:12px">
+                            <label>Date</label>
+                            <input type="date" id="deathDate" value="${defaultDate}">
+                        </div>
+                        <div class="form-group" style="margin-bottom:16px">
+                            <label>Time</label>
+                            <input type="time" id="deathTime" value="${defaultTime}" step="60">
+                        </div>
+                        <div style="display:flex;gap:8px;justify-content:flex-end">
+                            <button class="btn btn-secondary" onclick="closeDeathModal()">Cancel</button>
+                            <button class="btn btn-primary" onclick="confirmDeathTime('${bossId}')">Set Death Time</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function closeDeathModal(event) {
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('deathModal').innerHTML = '';
+        }
+
+        async function confirmDeathTime(bossId) {
+            const dateVal = document.getElementById('deathDate').value;
+            const timeVal = document.getElementById('deathTime').value;
+            if (!dateVal || !timeVal) return;
+            const deathTime = new Date(`${dateVal}T${timeVal}`).getTime();
+            if (isNaN(deathTime)) return;
+            await api('POST', `/api/teams/${currentTeamId}/bosses/${bossId}/kill`, { deathTime });
+            closeDeathModal();
+            showToast('Death time updated');
             await loadTeamBosses(currentTeamId);
             renderTeamView();
         }
