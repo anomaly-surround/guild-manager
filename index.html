@@ -1297,41 +1297,54 @@
                 else chatMessages = chatMessages.concat(newMsgs);
                 chatLastTimestamp = newMsgs[newMsgs.length - 1].created_at;
             }
-            const el = document.getElementById('chatContent');
-            if (el) el.innerHTML = renderChatContent();
-            // Scroll to bottom
-            const msgBox = document.getElementById('chatMsgBox');
-            if (msgBox) msgBox.scrollTop = msgBox.scrollHeight;
+
+            if (fullLoad) {
+                // Full render on first load
+                const el = document.getElementById('chatContent');
+                if (el) el.innerHTML = renderChatContent();
+                const msgBox = document.getElementById('chatMsgBox');
+                if (msgBox) msgBox.scrollTop = msgBox.scrollHeight;
+            } else if (newMsgs.length > 0) {
+                // Only update the messages area, preserve input
+                const msgBox = document.getElementById('chatMsgBox');
+                if (msgBox) {
+                    const wasAtBottom = msgBox.scrollHeight - msgBox.scrollTop - msgBox.clientHeight < 50;
+                    msgBox.innerHTML = renderChatMessages();
+                    if (wasAtBottom) msgBox.scrollTop = msgBox.scrollHeight;
+                }
+            }
+        }
+
+        function renderChatMessages() {
+            const canManage = teamData.team.my_role === 'leader' || teamData.team.my_role === 'officer';
+            if (chatMessages.length === 0) {
+                return '<div class="empty-state" style="margin:auto">No messages yet. Say hi!</div>';
+            }
+            let html = '';
+            for (const m of chatMessages) {
+                const avatarUrl = m.avatar ? `https://cdn.discordapp.com/avatars/${m.discord_id}/${m.avatar}.png?size=64` : '';
+                const time = new Date(m.created_at * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                const date = new Date(m.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const canDelete = m.user_id === currentUser.id || canManage;
+                html += `
+                    <div class="chat-msg">
+                        <img class="chat-msg-avatar" src="${avatarUrl}" onerror="this.style.background='#334155'">
+                        <div class="chat-msg-body">
+                            <span class="chat-msg-name">${m.username}</span>
+                            <span class="chat-msg-time">${date} ${time}</span>
+                            ${canDelete ? `<span class="chat-msg-time" style="cursor:pointer;color:#ef4444" onclick="deleteChat('${m.id}')">[x]</span>` : ''}
+                            <div class="chat-msg-text">${escapeHtml(m.message)}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            return html;
         }
 
         function renderChatContent() {
-            const canManage = teamData.team.my_role === 'leader' || teamData.team.my_role === 'officer';
-            let msgsHtml = '';
-            if (chatMessages.length === 0) {
-                msgsHtml = '<div class="empty-state" style="margin:auto">No messages yet. Say hi!</div>';
-            } else {
-                for (const m of chatMessages) {
-                    const avatarUrl = m.avatar ? `https://cdn.discordapp.com/avatars/${m.discord_id}/${m.avatar}.png?size=64` : '';
-                    const time = new Date(m.created_at * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                    const date = new Date(m.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    const canDelete = m.user_id === currentUser.id || canManage;
-                    msgsHtml += `
-                        <div class="chat-msg">
-                            <img class="chat-msg-avatar" src="${avatarUrl}" onerror="this.style.background='#334155'">
-                            <div class="chat-msg-body">
-                                <span class="chat-msg-name">${m.username}</span>
-                                <span class="chat-msg-time">${date} ${time}</span>
-                                ${canDelete ? `<span class="chat-msg-time" style="cursor:pointer;color:#ef4444" onclick="deleteChat('${m.id}')">[x]</span>` : ''}
-                                <div class="chat-msg-text">${escapeHtml(m.message)}</div>
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-
             return `
                 <div class="chat-container">
-                    <div class="chat-messages" id="chatMsgBox">${msgsHtml}</div>
+                    <div class="chat-messages" id="chatMsgBox">${renderChatMessages()}</div>
                     <div class="chat-input-bar">
                         <input type="text" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendChat()" maxlength="2000">
                         <button class="btn btn-primary" onclick="sendChat()">Send</button>
@@ -1359,8 +1372,8 @@
         async function deleteChat(id) {
             await api('DELETE', `/api/teams/${currentTeamId}/chat/${id}`);
             chatMessages = chatMessages.filter(m => m.id !== id);
-            const el = document.getElementById('chatContent');
-            if (el) el.innerHTML = renderChatContent();
+            const msgBox = document.getElementById('chatMsgBox');
+            if (msgBox) msgBox.innerHTML = renderChatMessages();
         }
 
         // --- Announcements ---
