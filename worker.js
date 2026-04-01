@@ -214,6 +214,8 @@ async function initDB(db) {
       FOREIGN KEY (team_id) REFERENCES teams(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`),
+  ]);
+  await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS member_notes (
       id TEXT PRIMARY KEY,
       team_id TEXT NOT NULL,
@@ -624,7 +626,7 @@ async function handleRequest(request, env) {
   const path = url.pathname;
 
   // Init DB on first request
-  await initDB(env.DB);
+  try { await initDB(env.DB); } catch(e) { console.error('initDB error:', e); }
 
   // --- Auth routes ---
 
