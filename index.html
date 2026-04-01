@@ -908,17 +908,12 @@
             }
 
             let html = `
-                <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
-                <div class="card">
-                    <div style="display:flex;justify-content:space-between;align-items:center">
-                        <h2>${team.name}</h2>
-                        <span class="team-role ${team.my_role}">${team.my_role}</span>
-                    </div>
-                    <div class="invite-box">
-                        <span style="color:#64748b;font-size:0.85em">Invite Code:</span>
-                        <span class="invite-code">${team.invite_code}</span>
-                        <button class="btn btn-sm btn-secondary" onclick="copyInvite('${team.invite_code}')">Copy</button>
-                    </div>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+                    <button class="btn btn-secondary btn-sm" onclick="showTeamList()">&larr; Back</button>
+                    <h2 style="font-size:1.3em;background:linear-gradient(90deg,#a78bfa,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:0">${team.name}</h2>
+                    <span class="team-role ${team.my_role}">${team.my_role}</span>
+                    <span style="color:#64748b;font-size:0.8em;margin-left:auto">Code: <span class="invite-code" style="font-size:1em">${team.invite_code}</span>
+                    <button class="btn btn-sm btn-secondary" onclick="copyInvite('${team.invite_code}')" style="padding:2px 8px;font-size:0.75em">Copy</button></span>
                 </div>
 
                 <div class="team-layout">
@@ -1184,12 +1179,10 @@
             `;
 
             let html = `
-                <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
-                <div class="card">
-                    <div style="display:flex;justify-content:space-between;align-items:center">
-                        <h2>${team.name}</h2>
-                        <span class="team-role ${team.my_role}">${team.my_role}</span>
-                    </div>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+                    <button class="btn btn-secondary btn-sm" onclick="showTeamList()">&larr; Back</button>
+                    <h2 style="font-size:1.3em;background:linear-gradient(90deg,#a78bfa,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:0">${team.name}</h2>
+                    <span class="team-role ${team.my_role}">${team.my_role}</span>
                 </div>
 
                 <div class="team-layout">
