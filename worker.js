@@ -777,7 +777,7 @@ async function handleRequest(request, env) {
     if (!user) return json({ error: 'Not logged in' }, 401);
 
     const body = await request.json();
-    const variant = body.type === 'lifetime' ? env.LS_LIFETIME_VARIANT : env.LS_MONTHLY_VARIANT;
+    const variant = body.type === 'lifetime' ? env.LS_MONTHLY_VARIANT : env.LS_LIFETIME_VARIANT;
 
     const res = await fetch('https://api.lemonsqueezy.com/v1/checkouts', {
       method: 'POST',
