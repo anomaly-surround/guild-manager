@@ -830,6 +830,17 @@
         let currentUser = null;
         let currentTeamId = null;
 
+        // Premium gate helper
+        function premiumGate(content, featureName) {
+            if (teamData?.team?.premium_team) return content;
+            return `<div style="position:relative;opacity:0.4;pointer-events:none">${content}</div>
+                <div style="text-align:center;margin:-40px 0 16px;position:relative;z-index:1">
+                    <span style="font-size:1.2em">&#128274;</span>
+                    <span style="color:var(--text-muted);font-size:0.85em"> ${featureName} — </span>
+                    <button class="btn btn-primary" style="padding:4px 12px;font-size:0.8em" onclick="showUpgradeModal()">Upgrade to Premium</button>
+                </div>`;
+        }
+
         // Double-tap guard
         const _busy = {};
         function guard(name, fn) {
@@ -1078,9 +1089,13 @@
                         <button class="tab-btn ${teamTab === 'dkp' ? 'active' : ''}" onclick="loadAndRenderDKP()">DKP</button>
                         <button class="tab-btn ${teamTab === 'wars' ? 'active' : ''}" onclick="loadAndRenderWars()">Wars</button>
                         <button class="tab-btn ${teamTab === 'availability' ? 'active' : ''}" onclick="loadAndRenderAvailability()">Availability</button>
+                        ${team.premium_team ? `<button class="tab-btn ${teamTab === 'analytics' ? 'active' : ''}" onclick="loadAndRenderAnalytics()">Analytics</button>` : ''}
                         <button class="tab-btn ${teamTab === 'settings' ? 'active' : ''}" onclick="teamTab='settings';renderTeamSettings()">Settings</button>
                     </div>
-                    <div class="tab-content">${tabContent}</div>
+                    <div class="tab-content">
+                        ${tabContent}
+                        ${!team.premium_team ? '<div style="text-align:center;margin-top:24px;padding:8px;font-size:0.75em;color:var(--text-dim)">Powered by <b>Guild Manager</b> &middot; <a href="#" onclick="showUpgradeModal();return false" style="color:var(--accent)">Upgrade to Premium</a></div>' : ''}
+                    </div>
                 </div>
             `;
 
@@ -1272,7 +1287,7 @@
                     <div class="member-item">
                         <img class="member-avatar" src="${avatarUrl}" onerror="this.style.background='#334155'">
                         <div class="member-info">
-                            <div class="member-name">${m.username}${isMe ? ' (you)' : ''}</div>
+                            <div class="member-name">${m.username}${isMe ? ' (you)' : ''}${m.premium ? ' <span style="color:#f59e0b;font-size:0.75em" title="Premium">&#11088;</span>' : ''}</div>
                             <div class="activity-text"><span class="activity-dot ${activityDot}"></span>${activityLabel}</div>
                         </div>
                         <span class="member-role-badge team-role ${m.role}">${m.role}</span>

@@ -225,6 +225,98 @@ async function initDB(db) {
       FOREIGN KEY (target_user_id) REFERENCES users(id),
       FOREIGN KEY (author_id) REFERENCES users(id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS chat_reactions (
+      message_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      emoji TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      PRIMARY KEY (message_id, user_id, emoji),
+      FOREIGN KEY (message_id) REFERENCES chat_messages(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS boss_kill_log (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      boss_id TEXT NOT NULL,
+      boss_name TEXT NOT NULL,
+      killed_at INTEGER NOT NULL,
+      killed_by TEXT,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS boss_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      game TEXT NOT NULL,
+      bosses TEXT NOT NULL,
+      is_global INTEGER DEFAULT 0,
+      created_by TEXT,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS event_templates (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      event_type TEXT DEFAULT 'other',
+      duration_minutes INTEGER DEFAULT 60,
+      recurrence TEXT,
+      created_by TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS loot_wishlist (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      item_name TEXT NOT NULL,
+      boss_name TEXT,
+      priority INTEGER DEFAULT 1,
+      fulfilled INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS dkp_auctions (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      item_name TEXT NOT NULL,
+      boss_name TEXT,
+      started_by TEXT NOT NULL,
+      status TEXT DEFAULT 'open',
+      min_bid INTEGER DEFAULT 0,
+      winner_id TEXT,
+      winning_bid INTEGER,
+      expires_at INTEGER,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS dkp_bids (
+      id TEXT PRIMARY KEY,
+      auction_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (auction_id) REFERENCES dkp_auctions(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS analytics_snapshots (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      snapshot_type TEXT NOT NULL,
+      snapshot_data TEXT NOT NULL,
+      snapshot_date INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS custom_roles (
+      team_id TEXT NOT NULL,
+      base_role TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      color TEXT,
+      PRIMARY KEY (team_id, base_role),
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS chat_messages (
       id TEXT PRIMARY KEY,
       team_id TEXT NOT NULL,
@@ -264,6 +356,18 @@ async function initDB(db) {
   await db.exec('ALTER TABLE team_settings ADD COLUMN starting_dkp INTEGER DEFAULT 0').catch(() => {});
   await db.exec('ALTER TABLE events ADD COLUMN recurrence TEXT').catch(() => {});
   await db.exec('ALTER TABLE events ADD COLUMN parent_event_id TEXT').catch(() => {});
+  // Premium feature migrations
+  await db.exec('ALTER TABLE team_settings ADD COLUMN webhook_boss TEXT').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN webhook_events TEXT').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN webhook_wars TEXT').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN webhook_announcements TEXT').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN dkp_decay_enabled INTEGER DEFAULT 0').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN dkp_decay_percent INTEGER DEFAULT 10').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN dkp_decay_inactive_days INTEGER DEFAULT 14').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN dkp_decay_interval_days INTEGER DEFAULT 7').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN dkp_decay_last_run INTEGER').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN accent_color TEXT').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN team_icon TEXT').catch(() => {});
 }
 
 // --- Boss timer helpers ---
@@ -429,6 +533,44 @@ async function handleScheduled(env) {
     const newId = crypto.randomUUID();
     await env.DB.prepare(`INSERT INTO events (id, team_id, title, description, event_type, event_time, duration_minutes, created_by, recurrence, parent_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(newId, event.team_id, event.title, event.description, event.event_type, nextTime, event.duration_minutes, event.created_by, event.recurrence, parentId).run();
+  }
+
+  // DKP decay for premium teams
+  const decayTeams = await env.DB.prepare(
+    'SELECT ts.* FROM team_settings ts JOIN teams t ON t.id = ts.team_id JOIN users u ON u.id = t.owner_id WHERE ts.dkp_decay_enabled = 1 AND u.premium = 1 AND (ts.dkp_decay_last_run IS NULL OR ts.dkp_decay_last_run < unixepoch() - ts.dkp_decay_interval_days * 86400)'
+  ).all().catch(() => ({ results: [] }));
+
+  for (const ts of decayTeams.results) {
+    const inactiveMembers = await env.DB.prepare(
+      'SELECT ma.user_id FROM member_activity ma WHERE ma.team_id = ? AND ma.last_seen < unixepoch() - ?'
+    ).bind(ts.team_id, (ts.dkp_decay_inactive_days || 14) * 86400).all();
+
+    for (const m of inactiveMembers.results) {
+      const bal = await env.DB.prepare('SELECT COALESCE(SUM(amount),0) as balance FROM dkp_ledger WHERE team_id = ? AND user_id = ?')
+        .bind(ts.team_id, m.user_id).first();
+      if (bal.balance > 0) {
+        const decay = Math.max(1, Math.floor(bal.balance * (ts.dkp_decay_percent || 10) / 100));
+        await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+          .bind(crypto.randomUUID(), ts.team_id, m.user_id, -decay, 'Inactivity decay', 'system').run();
+      }
+    }
+    await env.DB.prepare('UPDATE team_settings SET dkp_decay_last_run = unixepoch() WHERE team_id = ?').bind(ts.team_id).run();
+  }
+
+  // Auto-close expired auctions
+  const expiredAuctions = await env.DB.prepare("SELECT * FROM dkp_auctions WHERE status = 'open' AND expires_at IS NOT NULL AND expires_at < ?")
+    .bind(Math.floor(now / 1000)).all().catch(() => ({ results: [] }));
+
+  for (const auction of expiredAuctions.results) {
+    const topBid = await env.DB.prepare('SELECT * FROM dkp_bids WHERE auction_id = ? ORDER BY amount DESC LIMIT 1').bind(auction.id).first();
+    if (topBid) {
+      await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(crypto.randomUUID(), auction.team_id, topBid.user_id, -topBid.amount, `Auction: ${auction.item_name}`, 'system').run();
+      await env.DB.prepare('UPDATE dkp_auctions SET status = ?, winner_id = ?, winning_bid = ? WHERE id = ?')
+        .bind('closed', topBid.user_id, topBid.amount, auction.id).run();
+    } else {
+      await env.DB.prepare("UPDATE dkp_auctions SET status = 'closed' WHERE id = ?").bind(auction.id).run();
+    }
   }
 
   // Auto-delete old events and chat (per team settings)
@@ -719,8 +861,12 @@ async function handleRequest(request, env) {
     const team = await env.DB.prepare('SELECT * FROM teams WHERE id = ?').bind(teamId).first();
     if (!team) return json({ error: 'Team not found' }, 404);
 
+    // Check if team owner is premium
+    const owner = await env.DB.prepare('SELECT premium FROM users WHERE id = ?').bind(team.owner_id).first();
+    const premiumTeam = !!(owner?.premium);
+
     const members = await env.DB.prepare(`
-      SELECT u.id, u.username, u.avatar, u.discord_id, tm.role, tm.joined_at,
+      SELECT u.id, u.username, u.avatar, u.discord_id, u.premium, tm.role, tm.joined_at,
         ma.last_seen
       FROM team_members tm
       JOIN users u ON u.id = tm.user_id
@@ -732,7 +878,7 @@ async function handleRequest(request, env) {
     `).bind(teamId).all();
 
     return json({
-      team: { ...team, my_role: membership.role },
+      team: { ...team, my_role: membership.role, premium_team: premiumTeam },
       members: members.results,
     });
   }
@@ -882,6 +1028,18 @@ async function handleRequest(request, env) {
       .bind(teamId, userId).first();
   }
 
+  function getWebhook(settings, channel) {
+    const specific = settings?.['webhook_' + channel];
+    return specific || settings?.webhook_url || null;
+  }
+
+  async function isPremiumTeam(teamId) {
+    const team = await env.DB.prepare('SELECT owner_id FROM teams WHERE id = ?').bind(teamId).first();
+    if (!team) return false;
+    const owner = await env.DB.prepare('SELECT premium FROM users WHERE id = ?').bind(team.owner_id).first();
+    return !!(owner?.premium);
+  }
+
   // GET /api/teams/:id/bosses
   const bossListMatch = path.match(/^\/api\/teams\/([^/]+)\/bosses$/);
   if (bossListMatch && request.method === 'GET') {
@@ -956,6 +1114,10 @@ async function handleRequest(request, env) {
     await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = NULL, auto_reset_at = NULL, last_death = ?, next_spawn = ?, warned = 0, spawn_notified = 0 WHERE id = ?')
       .bind('waiting', deathTime, nextSpawn, bossId).run();
 
+    // Log kill for analytics
+    await env.DB.prepare('INSERT INTO boss_kill_log (id, team_id, boss_id, boss_name, killed_at, killed_by) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), teamId, bossId, boss.name, deathTime, user.userId).run();
+
     return json({ ok: true });
   }
 
@@ -994,6 +1156,17 @@ async function handleRequest(request, env) {
       autoDeleteChatDays: settings?.auto_delete_chat_days ?? 0,
       startingDkp: settings?.starting_dkp ?? 0,
       timezone: settings?.timezone || 'Asia/Manila',
+      // Premium settings
+      webhookBoss: settings?.webhook_boss ? '...' + settings.webhook_boss.slice(-8) : '',
+      webhookEvents: settings?.webhook_events ? '...' + settings.webhook_events.slice(-8) : '',
+      webhookWars: settings?.webhook_wars ? '...' + settings.webhook_wars.slice(-8) : '',
+      webhookAnnouncements: settings?.webhook_announcements ? '...' + settings.webhook_announcements.slice(-8) : '',
+      dkpDecayEnabled: !!(settings?.dkp_decay_enabled),
+      dkpDecayPercent: settings?.dkp_decay_percent ?? 10,
+      dkpDecayInactiveDays: settings?.dkp_decay_inactive_days ?? 14,
+      dkpDecayIntervalDays: settings?.dkp_decay_interval_days ?? 7,
+      accentColor: settings?.accent_color || '',
+      teamIcon: settings?.team_icon || '',
     });
   }
 
@@ -1026,6 +1199,17 @@ async function handleRequest(request, env) {
       if (body.autoDeleteChatDays !== undefined) { sets.push('auto_delete_chat_days = ?'); vals.push(body.autoDeleteChatDays); }
       if (body.startingDkp !== undefined) { sets.push('starting_dkp = ?'); vals.push(body.startingDkp); }
       if (body.timezone !== undefined) { sets.push('timezone = ?'); vals.push(body.timezone); }
+      // Premium fields
+      if (body.webhookBoss !== undefined) { sets.push('webhook_boss = ?'); vals.push(body.webhookBoss || null); }
+      if (body.webhookEvents !== undefined) { sets.push('webhook_events = ?'); vals.push(body.webhookEvents || null); }
+      if (body.webhookWars !== undefined) { sets.push('webhook_wars = ?'); vals.push(body.webhookWars || null); }
+      if (body.webhookAnnouncements !== undefined) { sets.push('webhook_announcements = ?'); vals.push(body.webhookAnnouncements || null); }
+      if (body.dkpDecayEnabled !== undefined) { sets.push('dkp_decay_enabled = ?'); vals.push(body.dkpDecayEnabled ? 1 : 0); }
+      if (body.dkpDecayPercent !== undefined) { sets.push('dkp_decay_percent = ?'); vals.push(body.dkpDecayPercent); }
+      if (body.dkpDecayInactiveDays !== undefined) { sets.push('dkp_decay_inactive_days = ?'); vals.push(body.dkpDecayInactiveDays); }
+      if (body.dkpDecayIntervalDays !== undefined) { sets.push('dkp_decay_interval_days = ?'); vals.push(body.dkpDecayIntervalDays); }
+      if (body.accentColor !== undefined) { sets.push('accent_color = ?'); vals.push(body.accentColor || null); }
+      if (body.teamIcon !== undefined) { sets.push('team_icon = ?'); vals.push(body.teamIcon || null); }
       if (sets.length > 0) {
         vals.push(teamId);
         await env.DB.prepare(`UPDATE team_settings SET ${sets.join(', ')} WHERE team_id = ?`).bind(...vals).run();
@@ -1624,6 +1808,410 @@ async function handleRequest(request, env) {
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
 
     await env.DB.prepare('DELETE FROM war_log WHERE id = ? AND team_id = ?').bind(warId, teamId).run();
+    return json({ ok: true });
+  }
+
+  // --- Premium: Chat Reactions ---
+
+  const reactMatch = path.match(/^\/api\/teams\/([^/]+)\/chat\/([^/]+)\/react$/);
+  if (reactMatch && request.method === 'POST') {
+    const [, teamId, msgId] = reactMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const body = await request.json();
+    if (!body.emoji) return json({ error: 'Emoji required' }, 400);
+
+    const existing = await env.DB.prepare('SELECT 1 FROM chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?')
+      .bind(msgId, user.userId, body.emoji).first();
+    if (existing) {
+      await env.DB.prepare('DELETE FROM chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?')
+        .bind(msgId, user.userId, body.emoji).run();
+    } else {
+      await env.DB.prepare('INSERT INTO chat_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)')
+        .bind(msgId, user.userId, body.emoji).run();
+    }
+    return json({ ok: true });
+  }
+
+  // --- Premium: Boss Templates ---
+
+  if (path === '/api/boss-templates' && request.method === 'GET') {
+    const templates = await env.DB.prepare('SELECT * FROM boss_templates WHERE is_global = 1 OR created_by = ? ORDER BY game, name')
+      .bind(user.userId).all();
+    return json({ templates: templates.results });
+  }
+
+  if (path === '/api/boss-templates' && request.method === 'POST') {
+    const body = await request.json();
+    if (!body.name?.trim() || !body.game?.trim() || !body.bosses) return json({ error: 'Name, game, and bosses required' }, 400);
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO boss_templates (id, name, game, bosses, created_by) VALUES (?, ?, ?, ?, ?)')
+      .bind(id, body.name.trim(), body.game.trim(), JSON.stringify(body.bosses), user.userId).run();
+    return json({ ok: true, id });
+  }
+
+  const bossTemplateDeleteMatch = path.match(/^\/api\/boss-templates\/([^/]+)$/);
+  if (bossTemplateDeleteMatch && request.method === 'DELETE') {
+    await env.DB.prepare('DELETE FROM boss_templates WHERE id = ? AND created_by = ?')
+      .bind(bossTemplateDeleteMatch[1], user.userId).run();
+    return json({ ok: true });
+  }
+
+  const importTemplateMatch = path.match(/^\/api\/teams\/([^/]+)\/bosses\/import-template$/);
+  if (importTemplateMatch && request.method === 'POST') {
+    const teamId = importTemplateMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const body = await request.json();
+    const template = await env.DB.prepare('SELECT * FROM boss_templates WHERE id = ?').bind(body.templateId).first();
+    if (!template) return json({ error: 'Template not found' }, 404);
+
+    const bosses = JSON.parse(template.bosses);
+    const settings = await env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    const tz = settings?.timezone || 'Asia/Manila';
+
+    for (const b of bosses) {
+      const id = crypto.randomUUID();
+      const nextSpawn = Date.now() + (b.intervalMs || 3600000);
+      await env.DB.prepare('INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, next_spawn) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(id, teamId, b.name, b.type || 'interval', b.intervalMs || null, b.fixedTime || null, b.weeklyDay ?? null, b.weeklyTime || null, b.biweeklyDays ? JSON.stringify(b.biweeklyDays) : null, b.alertMinutes || 5, nextSpawn).run();
+    }
+    return json({ ok: true, count: bosses.length });
+  }
+
+  // --- Premium: Boss History ---
+
+  const bossHistoryMatch = path.match(/^\/api\/teams\/([^/]+)\/bosses\/history$/);
+  if (bossHistoryMatch && request.method === 'GET') {
+    const teamId = bossHistoryMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const history = await env.DB.prepare(`
+      SELECT bkl.*, u.username as killed_by_name
+      FROM boss_kill_log bkl LEFT JOIN users u ON u.id = bkl.killed_by
+      WHERE bkl.team_id = ? ORDER BY bkl.killed_at DESC LIMIT 100
+    `).bind(teamId).all();
+
+    // Stats per boss
+    const stats = await env.DB.prepare(`
+      SELECT boss_name, COUNT(*) as kill_count, MAX(killed_at) as last_kill
+      FROM boss_kill_log WHERE team_id = ? GROUP BY boss_name ORDER BY kill_count DESC
+    `).bind(teamId).all();
+
+    return json({ history: history.results, stats: stats.results });
+  }
+
+  // --- Premium: Event Templates ---
+
+  const eventTemplateMatch = path.match(/^\/api\/teams\/([^/]+)\/event-templates$/);
+  if (eventTemplateMatch && request.method === 'GET') {
+    const teamId = eventTemplateMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const templates = await env.DB.prepare('SELECT * FROM event_templates WHERE team_id = ? ORDER BY name')
+      .bind(teamId).all();
+    return json({ templates: templates.results });
+  }
+
+  if (eventTemplateMatch && request.method === 'POST') {
+    const teamId = eventTemplateMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const body = await request.json();
+    if (!body.name?.trim() || !body.title?.trim()) return json({ error: 'Name and title required' }, 400);
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO event_templates (id, team_id, name, title, description, event_type, duration_minutes, recurrence, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, teamId, body.name.trim(), body.title.trim(), body.description || null, body.eventType || 'other', body.durationMinutes || 60, body.recurrence || null, user.userId).run();
+    return json({ ok: true, id });
+  }
+
+  const eventTemplateDeleteMatch = path.match(/^\/api\/teams\/([^/]+)\/event-templates\/([^/]+)$/);
+  if (eventTemplateDeleteMatch && request.method === 'DELETE') {
+    const [, teamId, templateId] = eventTemplateDeleteMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+    await env.DB.prepare('DELETE FROM event_templates WHERE id = ? AND team_id = ?').bind(templateId, teamId).run();
+    return json({ ok: true });
+  }
+
+  // --- Premium: Attendance Report ---
+
+  const attendReportMatch = path.match(/^\/api\/teams\/([^/]+)\/attendance-report$/);
+  if (attendReportMatch && request.method === 'GET') {
+    const teamId = attendReportMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const report = await env.DB.prepare(`
+      SELECT u.id, u.username, u.avatar,
+        (SELECT COUNT(DISTINCT ea.event_id) FROM event_attendance ea
+         JOIN events e ON e.id = ea.event_id WHERE ea.user_id = u.id AND e.team_id = ? AND ea.attended = 1) as attended,
+        (SELECT COUNT(*) FROM events WHERE team_id = ?) as total_events,
+        (SELECT COUNT(DISTINCT er.event_id) FROM event_rsvps er
+         JOIN events e ON e.id = er.event_id WHERE er.user_id = u.id AND e.team_id = ? AND er.status = 'going') as rsvp_going
+      FROM team_members tm JOIN users u ON u.id = tm.user_id
+      WHERE tm.team_id = ?
+      ORDER BY attended DESC
+    `).bind(teamId, teamId, teamId, teamId).all();
+
+    return json({ report: report.results });
+  }
+
+  // --- Premium: Loot Wishlist ---
+
+  const wishlistMatch = path.match(/^\/api\/teams\/([^/]+)\/wishlist$/);
+  if (wishlistMatch && request.method === 'GET') {
+    const teamId = wishlistMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const query = member.role === 'member'
+      ? 'SELECT lw.*, u.username FROM loot_wishlist lw JOIN users u ON u.id = lw.user_id WHERE lw.team_id = ? AND lw.user_id = ? ORDER BY lw.priority DESC'
+      : 'SELECT lw.*, u.username FROM loot_wishlist lw JOIN users u ON u.id = lw.user_id WHERE lw.team_id = ? ORDER BY lw.item_name, lw.priority DESC';
+
+    const wishes = member.role === 'member'
+      ? await env.DB.prepare(query).bind(teamId, user.userId).all()
+      : await env.DB.prepare(query).bind(teamId).all();
+
+    return json({ wishes: wishes.results });
+  }
+
+  if (wishlistMatch && request.method === 'POST') {
+    const teamId = wishlistMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const body = await request.json();
+    if (!body.itemName?.trim()) return json({ error: 'Item name required' }, 400);
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO loot_wishlist (id, team_id, user_id, item_name, boss_name, priority) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(id, teamId, user.userId, body.itemName.trim(), body.bossName || null, body.priority || 1).run();
+    return json({ ok: true, id });
+  }
+
+  const wishlistDeleteMatch = path.match(/^\/api\/teams\/([^/]+)\/wishlist\/([^/]+)$/);
+  if (wishlistDeleteMatch && request.method === 'DELETE') {
+    const [, teamId, wishId] = wishlistDeleteMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    await env.DB.prepare('DELETE FROM loot_wishlist WHERE id = ? AND (user_id = ? OR ? IN ("leader","officer"))')
+      .bind(wishId, user.userId, member.role).run();
+    return json({ ok: true });
+  }
+
+  // --- Premium: DKP Auctions ---
+
+  const auctionMatch = path.match(/^\/api\/teams\/([^/]+)\/auctions$/);
+  if (auctionMatch && request.method === 'GET') {
+    const teamId = auctionMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const auctions = await env.DB.prepare(`
+      SELECT da.*, u.username as started_by_name, w.username as winner_name,
+        (SELECT MAX(amount) FROM dkp_bids WHERE auction_id = da.id) as top_bid,
+        (SELECT COUNT(*) FROM dkp_bids WHERE auction_id = da.id) as bid_count
+      FROM dkp_auctions da
+      JOIN users u ON u.id = da.started_by
+      LEFT JOIN users w ON w.id = da.winner_id
+      WHERE da.team_id = ? ORDER BY da.status ASC, da.created_at DESC LIMIT 50
+    `).bind(teamId).all();
+    return json({ auctions: auctions.results });
+  }
+
+  if (auctionMatch && request.method === 'POST') {
+    const teamId = auctionMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const body = await request.json();
+    if (!body.itemName?.trim()) return json({ error: 'Item name required' }, 400);
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO dkp_auctions (id, team_id, item_name, boss_name, started_by, min_bid, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, teamId, body.itemName.trim(), body.bossName || null, user.userId, body.minBid || 0, body.expiresAt || null).run();
+    return json({ ok: true, id });
+  }
+
+  const auctionBidMatch = path.match(/^\/api\/teams\/([^/]+)\/auctions\/([^/]+)\/bid$/);
+  if (auctionBidMatch && request.method === 'POST') {
+    const [, teamId, auctionId] = auctionBidMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const auction = await env.DB.prepare('SELECT * FROM dkp_auctions WHERE id = ? AND team_id = ? AND status = ?')
+      .bind(auctionId, teamId, 'open').first();
+    if (!auction) return json({ error: 'Auction not found or closed' }, 404);
+
+    const body = await request.json();
+    if (!body.amount || body.amount <= 0) return json({ error: 'Invalid bid' }, 400);
+    if (body.amount < (auction.min_bid || 0)) return json({ error: `Minimum bid is ${auction.min_bid}` }, 400);
+
+    // Check DKP balance
+    const bal = await env.DB.prepare('SELECT COALESCE(SUM(amount),0) as balance FROM dkp_ledger WHERE team_id = ? AND user_id = ?')
+      .bind(teamId, user.userId).first();
+    if (bal.balance < body.amount) return json({ error: 'Not enough DKP' }, 400);
+
+    // Check higher bid exists
+    const topBid = await env.DB.prepare('SELECT MAX(amount) as top FROM dkp_bids WHERE auction_id = ?').bind(auctionId).first();
+    if (topBid.top && body.amount <= topBid.top) return json({ error: `Must bid higher than ${topBid.top}` }, 400);
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO dkp_bids (id, auction_id, user_id, amount) VALUES (?, ?, ?, ?)')
+      .bind(id, auctionId, user.userId, body.amount).run();
+    return json({ ok: true });
+  }
+
+  const auctionCloseMatch = path.match(/^\/api\/teams\/([^/]+)\/auctions\/([^/]+)\/close$/);
+  if (auctionCloseMatch && request.method === 'POST') {
+    const [, teamId, auctionId] = auctionCloseMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const auction = await env.DB.prepare('SELECT * FROM dkp_auctions WHERE id = ? AND team_id = ? AND status = ?')
+      .bind(auctionId, teamId, 'open').first();
+    if (!auction) return json({ error: 'Auction not found or already closed' }, 404);
+
+    const topBid = await env.DB.prepare('SELECT * FROM dkp_bids WHERE auction_id = ? ORDER BY amount DESC LIMIT 1')
+      .bind(auctionId).first();
+
+    if (topBid) {
+      // Deduct DKP from winner
+      const dkpId = crypto.randomUUID();
+      await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(dkpId, teamId, topBid.user_id, -topBid.amount, `Auction: ${auction.item_name}`, user.userId).run();
+      await env.DB.prepare('UPDATE dkp_auctions SET status = ?, winner_id = ?, winning_bid = ? WHERE id = ?')
+        .bind('closed', topBid.user_id, topBid.amount, auctionId).run();
+    } else {
+      await env.DB.prepare('UPDATE dkp_auctions SET status = ? WHERE id = ?').bind('closed', auctionId).run();
+    }
+    return json({ ok: true, winner: topBid?.user_id || null });
+  }
+
+  // --- Premium: Analytics ---
+
+  const analyticsMatch = path.match(/^\/api\/teams\/([^/]+)\/analytics$/);
+  if (analyticsMatch && request.method === 'GET') {
+    const teamId = analyticsMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const url = new URL(request.url);
+    const type = url.searchParams.get('type') || 'activity';
+
+    if (type === 'activity') {
+      const activity = await env.DB.prepare(`
+        SELECT u.username, ma.last_seen FROM member_activity ma
+        JOIN users u ON u.id = ma.user_id WHERE ma.team_id = ?
+      `).bind(teamId).all();
+      return json({ data: activity.results });
+    } else if (type === 'wars') {
+      const wars = await env.DB.prepare(`
+        SELECT result, war_date, opponent FROM war_log WHERE team_id = ? ORDER BY war_date ASC
+      `).bind(teamId).all();
+      return json({ data: wars.results });
+    } else if (type === 'dkp') {
+      const dkp = await env.DB.prepare(`
+        SELECT dl.user_id, u.username, dl.amount, dl.reason, dl.created_at
+        FROM dkp_ledger dl JOIN users u ON u.id = dl.user_id
+        WHERE dl.team_id = ? ORDER BY dl.created_at ASC
+      `).bind(teamId).all();
+      return json({ data: dkp.results });
+    } else if (type === 'attendance') {
+      const att = await env.DB.prepare(`
+        SELECT u.username, COUNT(CASE WHEN ea.attended = 1 THEN 1 END) as attended,
+          COUNT(e.id) as total
+        FROM team_members tm
+        JOIN users u ON u.id = tm.user_id
+        LEFT JOIN events e ON e.team_id = tm.team_id
+        LEFT JOIN event_attendance ea ON ea.event_id = e.id AND ea.user_id = tm.user_id
+        WHERE tm.team_id = ? GROUP BY u.id ORDER BY attended DESC
+      `).bind(teamId).all();
+      return json({ data: att.results });
+    }
+    return json({ data: [] });
+  }
+
+  // --- Premium: CSV Export ---
+
+  const exportMatch = path.match(/^\/api\/teams\/([^/]+)\/export$/);
+  if (exportMatch && request.method === 'GET') {
+    const teamId = exportMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const url = new URL(request.url);
+    const type = url.searchParams.get('type') || 'members';
+    let csv = '';
+
+    if (type === 'members') {
+      csv = 'Username,Role,Joined\n';
+      const rows = await env.DB.prepare('SELECT u.username, tm.role, tm.joined_at FROM team_members tm JOIN users u ON u.id = tm.user_id WHERE tm.team_id = ?').bind(teamId).all();
+      for (const r of rows.results) csv += `${r.username},${r.role},${new Date(r.joined_at * 1000).toISOString()}\n`;
+    } else if (type === 'dkp') {
+      csv = 'Username,Amount,Reason,Date\n';
+      const rows = await env.DB.prepare('SELECT u.username, dl.amount, dl.reason, dl.created_at FROM dkp_ledger dl JOIN users u ON u.id = dl.user_id WHERE dl.team_id = ? ORDER BY dl.created_at DESC').bind(teamId).all();
+      for (const r of rows.results) csv += `"${r.username}",${r.amount},"${r.reason}",${new Date(r.created_at * 1000).toISOString()}\n`;
+    } else if (type === 'wars') {
+      csv = 'Opponent,Result,Score,Date\n';
+      const rows = await env.DB.prepare('SELECT * FROM war_log WHERE team_id = ? ORDER BY war_date DESC').bind(teamId).all();
+      for (const r of rows.results) csv += `"${r.opponent}",${r.result},${r.score_us ?? ''}-${r.score_them ?? ''},${new Date(r.war_date * 1000).toISOString()}\n`;
+    } else if (type === 'loot') {
+      csv = 'Item,Boss,Recipient,DKP Cost,Date\n';
+      const rows = await env.DB.prepare('SELECT bl.*, u.username FROM boss_loot bl JOIN users u ON u.id = bl.recipient_id WHERE bl.team_id = ? ORDER BY bl.created_at DESC').bind(teamId).all();
+      for (const r of rows.results) csv += `"${r.item_name}","${r.boss_name}","${r.username}",${r.dkp_cost},${new Date(r.created_at * 1000).toISOString()}\n`;
+    }
+
+    return new Response(csv, {
+      headers: { 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename="${type}-export.csv"`, ...corsHeaders() },
+    });
+  }
+
+  // --- Premium: Custom Roles ---
+
+  const rolesMatch = path.match(/^\/api\/teams\/([^/]+)\/roles$/);
+  if (rolesMatch && request.method === 'GET') {
+    const teamId = rolesMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const roles = await env.DB.prepare('SELECT * FROM custom_roles WHERE team_id = ?').bind(teamId).all();
+    const roleMap = {};
+    for (const r of roles.results) roleMap[r.base_role] = { displayName: r.display_name, color: r.color };
+    return json({ roles: roleMap });
+  }
+
+  if (rolesMatch && request.method === 'PUT') {
+    const teamId = rolesMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role !== 'leader') return json({ error: 'Leader only' }, 403);
+    if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+
+    const body = await request.json();
+    // body.roles = { leader: {displayName, color}, officer: {...}, member: {...} }
+    await env.DB.prepare('DELETE FROM custom_roles WHERE team_id = ?').bind(teamId).run();
+    for (const [role, data] of Object.entries(body.roles || {})) {
+      if (['leader', 'officer', 'member'].includes(role) && data.displayName?.trim()) {
+        await env.DB.prepare('INSERT INTO custom_roles (team_id, base_role, display_name, color) VALUES (?, ?, ?, ?)')
+          .bind(teamId, role, data.displayName.trim(), data.color || null).run();
+      }
+    }
     return json({ ok: true });
   }
 
