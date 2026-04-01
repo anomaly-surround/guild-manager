@@ -178,6 +178,16 @@ async function initDB(db) {
       FOREIGN KEY (team_id) REFERENCES teams(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS member_availability (
+      team_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      day INTEGER NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      PRIMARY KEY (team_id, user_id, day, start_time),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS member_notes (
       id TEXT PRIMARY KEY,
       team_id TEXT NOT NULL,
@@ -190,8 +200,10 @@ async function initDB(db) {
       FOREIGN KEY (author_id) REFERENCES users(id)
     )`),
   ]);
-  // Migrate existing team_settings
+  // Migrations
   await db.exec('ALTER TABLE team_settings ADD COLUMN on_announcement INTEGER DEFAULT 1').catch(() => {});
+  await db.exec('ALTER TABLE events ADD COLUMN recurrence TEXT').catch(() => {});
+  await db.exec('ALTER TABLE events ADD COLUMN parent_event_id TEXT').catch(() => {});
 }
 
 // --- Boss timer helpers ---
@@ -327,6 +339,36 @@ async function handleScheduled(env) {
         `**${event.title}** has ended. Thanks to everyone who participated!`, 5763719);
     }
     await env.DB.prepare('UPDATE events SET end_notified = 1 WHERE id = ?').bind(event.id).run();
+  }
+
+  // Auto-create next recurring event after one ends
+  const recurringEnded = await env.DB.prepare(
+    "SELECT * FROM events WHERE recurrence IS NOT NULL AND recurrence != 'none' AND event_time + duration_minutes * 60000 <= ? AND end_notified = 1"
+  ).bind(now).all().catch(() => ({ results: [] }));
+
+  for (const event of recurringEnded.results) {
+    // Check if next occurrence already exists
+    const parentId = event.parent_event_id || event.id;
+    const existing = await env.DB.prepare(
+      'SELECT 1 FROM events WHERE parent_event_id = ? AND event_time > ?'
+    ).bind(parentId, event.event_time).first();
+    if (existing) continue;
+
+    let nextTime = event.event_time;
+    if (event.recurrence === 'daily') nextTime += 86400000;
+    else if (event.recurrence === 'weekly') nextTime += 7 * 86400000;
+    else if (event.recurrence === 'biweekly') nextTime += 14 * 86400000;
+    else if (event.recurrence === 'monthly') {
+      const d = new Date(event.event_time);
+      d.setMonth(d.getMonth() + 1);
+      nextTime = d.getTime();
+    }
+    // Skip if next time is too far past (stale)
+    if (nextTime < now - 86400000) continue;
+
+    const newId = crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO events (id, team_id, title, description, event_type, event_time, duration_minutes, created_by, recurrence, parent_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(newId, event.team_id, event.title, event.description, event.event_type, nextTime, event.duration_minutes, event.created_by, event.recurrence, parentId).run();
   }
 
   // Auto-reset spawned bosses
@@ -623,6 +665,7 @@ async function handleRequest(request, env) {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM member_notes WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM member_activity WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM member_availability WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM announcements WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM team_members WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM teams WHERE id = ?').bind(teamId),
@@ -678,6 +721,7 @@ async function handleRequest(request, env) {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM member_notes WHERE team_id = ? AND target_user_id = ?').bind(teamId, body.userId),
       env.DB.prepare('DELETE FROM member_activity WHERE team_id = ? AND user_id = ?').bind(teamId, body.userId),
+      env.DB.prepare('DELETE FROM member_availability WHERE team_id = ? AND user_id = ?').bind(teamId, body.userId),
       env.DB.prepare('DELETE FROM team_members WHERE team_id = ? AND user_id = ?').bind(teamId, body.userId),
     ]);
     return json({ ok: true });
@@ -696,6 +740,7 @@ async function handleRequest(request, env) {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM member_notes WHERE team_id = ? AND target_user_id = ?').bind(teamId, user.userId),
       env.DB.prepare('DELETE FROM member_activity WHERE team_id = ? AND user_id = ?').bind(teamId, user.userId),
+      env.DB.prepare('DELETE FROM member_availability WHERE team_id = ? AND user_id = ?').bind(teamId, user.userId),
       env.DB.prepare('DELETE FROM team_members WHERE team_id = ? AND user_id = ?').bind(teamId, user.userId),
     ]);
     return json({ ok: true });
@@ -930,9 +975,10 @@ async function handleRequest(request, env) {
     if (!body.title?.trim() || !body.eventTime) return json({ error: 'Title and time required' }, 400);
 
     const id = crypto.randomUUID();
-    await env.DB.prepare(`INSERT INTO events (id, team_id, title, description, event_type, event_time, duration_minutes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+    const recurrence = ['daily', 'weekly', 'biweekly', 'monthly'].includes(body.recurrence) ? body.recurrence : null;
+    await env.DB.prepare(`INSERT INTO events (id, team_id, title, description, event_type, event_time, duration_minutes, created_by, recurrence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(id, teamId, body.title.trim(), body.description || null, body.eventType || 'other',
-        body.eventTime, body.durationMinutes || 60, user.userId).run();
+        body.eventTime, body.durationMinutes || 60, user.userId, recurrence).run();
 
     // Auto-RSVP creator as going
     await env.DB.prepare('INSERT INTO event_rsvps (event_id, user_id, status) VALUES (?, ?, ?)')
@@ -1189,6 +1235,45 @@ async function handleRequest(request, env) {
 
     await env.DB.prepare('INSERT OR REPLACE INTO member_activity (team_id, user_id, last_seen) VALUES (?, ?, unixepoch())')
       .bind(teamId, user.userId).run();
+    return json({ ok: true });
+  }
+
+  // --- Availability ---
+
+  // GET /api/teams/:id/availability — get all members' availability
+  const availMatch = path.match(/^\/api\/teams\/([^/]+)\/availability$/);
+  if (availMatch && request.method === 'GET') {
+    const teamId = availMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const slots = await env.DB.prepare(`
+      SELECT ma.*, u.username
+      FROM member_availability ma JOIN users u ON u.id = ma.user_id
+      WHERE ma.team_id = ?
+      ORDER BY ma.day, ma.start_time
+    `).bind(teamId).all();
+
+    return json({ slots: slots.results });
+  }
+
+  // PUT /api/teams/:id/availability — set my availability (replaces all my slots)
+  if (availMatch && request.method === 'PUT') {
+    const teamId = availMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const body = await request.json();
+    // body.slots = [{day: 0-6, startTime: "HH:MM", endTime: "HH:MM"}, ...]
+    await env.DB.prepare('DELETE FROM member_availability WHERE team_id = ? AND user_id = ?')
+      .bind(teamId, user.userId).run();
+
+    for (const slot of (body.slots || [])) {
+      if (slot.day === undefined || !slot.startTime || !slot.endTime) continue;
+      await env.DB.prepare('INSERT INTO member_availability (team_id, user_id, day, start_time, end_time) VALUES (?, ?, ?, ?, ?)')
+        .bind(teamId, user.userId, slot.day, slot.startTime, slot.endTime).run();
+    }
+
     return json({ ok: true });
   }
 
