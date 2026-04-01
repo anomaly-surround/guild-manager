@@ -704,7 +704,7 @@
                     }
 
                     html += `
-                        <div class="${cls}">
+                        <div class="${cls}" data-boss-id="${boss.id}">
                             <div style="flex:1">
                                 <div class="boss-name-text">${boss.name}</div>
                                 <div class="boss-meta-text">${meta} | Alert: ${boss.alert_minutes}m</div>
@@ -931,13 +931,23 @@
             return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
         }
 
-        // Tick — update countdowns every second
+        // Tick — update countdown text only, don't re-render
         setInterval(() => {
             if (!currentTeamId || teamTab !== 'timers') return;
-            document.querySelectorAll('.boss-countdown').forEach(el => {
-                // Re-render timers tab without API call
-                renderTeamView();
-            });
+            for (const boss of teamBosses) {
+                const el = document.querySelector(`[data-boss-id="${boss.id}"] .boss-countdown`);
+                if (!el) continue;
+                const remaining = boss.next_spawn - Date.now();
+                const isSpawned = remaining <= 0 || boss.status === 'spawned';
+                if (isSpawned) {
+                    el.textContent = 'SPAWNED';
+                    el.className = 'boss-countdown spawned';
+                } else {
+                    el.textContent = formatTime(remaining);
+                    const alertMs = boss.alert_minutes * 60000;
+                    el.className = remaining <= alertMs ? 'boss-countdown warning-text' : 'boss-countdown active';
+                }
+            }
         }, 1000);
 
         // Refresh boss data from server every 15 seconds
