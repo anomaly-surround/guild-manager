@@ -252,6 +252,16 @@ async function initDB(db) {
   ]);
   // Migrations
   await db.exec('ALTER TABLE team_settings ADD COLUMN on_announcement INTEGER DEFAULT 1').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN on_event INTEGER DEFAULT 1').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN on_war INTEGER DEFAULT 1').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN event_reminder_minutes INTEGER DEFAULT 15').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN inactive_days INTEGER DEFAULT 7').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN default_event_duration INTEGER DEFAULT 60').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN team_description TEXT').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN members_create_events INTEGER DEFAULT 1').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN auto_delete_events_days INTEGER DEFAULT 0').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN auto_delete_chat_days INTEGER DEFAULT 0').catch(() => {});
+  await db.exec('ALTER TABLE team_settings ADD COLUMN starting_dkp INTEGER DEFAULT 0').catch(() => {});
   await db.exec('ALTER TABLE events ADD COLUMN recurrence TEXT').catch(() => {});
   await db.exec('ALTER TABLE events ADD COLUMN parent_event_id TEXT').catch(() => {});
 }
@@ -346,14 +356,14 @@ async function handleScheduled(env) {
     }
   }
 
-  // Event reminders (15 min before)
+  // Event reminders (configurable minutes before)
   const upcomingEvents = await env.DB.prepare(
-    'SELECT * FROM events WHERE event_time > ? AND event_time <= ? AND reminder_sent = 0'
-  ).bind(now, now + 15 * 60000).all();
+    'SELECT e.*, ts.event_reminder_minutes FROM events e LEFT JOIN team_settings ts ON ts.team_id = e.team_id WHERE e.event_time > ? AND e.event_time <= ? + COALESCE(ts.event_reminder_minutes, 15) * 60000 AND e.reminder_sent = 0'
+  ).bind(now, now).all().catch(() => ({ results: [] }));
 
   for (const event of upcomingEvents.results) {
     const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
-    if (settings?.webhook_url) {
+    if (settings?.webhook_url && settings?.on_event !== 0) {
       const minLeft = Math.max(1, Math.round((event.event_time - now) / 60000));
       const rsvps = await env.DB.prepare("SELECT COUNT(*) as count FROM event_rsvps WHERE event_id = ? AND status = 'going'").bind(event.id).first();
       await sendDiscord(settings.webhook_url, `${event.title} - Starting Soon!`,
@@ -419,6 +429,26 @@ async function handleScheduled(env) {
     const newId = crypto.randomUUID();
     await env.DB.prepare(`INSERT INTO events (id, team_id, title, description, event_type, event_time, duration_minutes, created_by, recurrence, parent_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(newId, event.team_id, event.title, event.description, event.event_type, nextTime, event.duration_minutes, event.created_by, event.recurrence, parentId).run();
+  }
+
+  // Auto-delete old events and chat (per team settings)
+  const allSettings = await env.DB.prepare('SELECT * FROM team_settings WHERE auto_delete_events_days > 0 OR auto_delete_chat_days > 0').all().catch(() => ({ results: [] }));
+  for (const s of allSettings.results) {
+    if (s.auto_delete_events_days > 0) {
+      const cutoff = Math.floor(now / 1000) - s.auto_delete_events_days * 86400;
+      const oldEvents = await env.DB.prepare('SELECT id FROM events WHERE team_id = ? AND event_time / 1000 < ? AND recurrence IS NULL').bind(s.team_id, cutoff).all();
+      for (const e of oldEvents.results) {
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM event_rsvps WHERE event_id = ?').bind(e.id),
+          env.DB.prepare('DELETE FROM event_attendance WHERE event_id = ?').bind(e.id),
+          env.DB.prepare('DELETE FROM events WHERE id = ?').bind(e.id),
+        ]);
+      }
+    }
+    if (s.auto_delete_chat_days > 0) {
+      const cutoff = Math.floor(now / 1000) - s.auto_delete_chat_days * 86400;
+      await env.DB.prepare('DELETE FROM chat_messages WHERE team_id = ? AND created_at < ?').bind(s.team_id, cutoff).run();
+    }
   }
 
   // Auto-reset spawned bosses
@@ -950,6 +980,16 @@ async function handleRequest(request, env) {
       onWarning: settings?.on_warning ?? true,
       onSpawn: settings?.on_spawn ?? true,
       onAnnouncement: settings?.on_announcement ?? true,
+      onEvent: settings?.on_event ?? true,
+      onWar: settings?.on_war ?? true,
+      eventReminderMinutes: settings?.event_reminder_minutes ?? 15,
+      inactiveDays: settings?.inactive_days ?? 7,
+      defaultEventDuration: settings?.default_event_duration ?? 60,
+      teamDescription: settings?.team_description || '',
+      membersCreateEvents: settings?.members_create_events ?? true,
+      autoDeleteEventsDays: settings?.auto_delete_events_days ?? 0,
+      autoDeleteChatDays: settings?.auto_delete_chat_days ?? 0,
+      startingDkp: settings?.starting_dkp ?? 0,
       timezone: settings?.timezone || 'Asia/Manila',
     });
   }
@@ -972,6 +1012,16 @@ async function handleRequest(request, env) {
       if (body.onWarning !== undefined) { sets.push('on_warning = ?'); vals.push(body.onWarning ? 1 : 0); }
       if (body.onSpawn !== undefined) { sets.push('on_spawn = ?'); vals.push(body.onSpawn ? 1 : 0); }
       if (body.onAnnouncement !== undefined) { sets.push('on_announcement = ?'); vals.push(body.onAnnouncement ? 1 : 0); }
+      if (body.onEvent !== undefined) { sets.push('on_event = ?'); vals.push(body.onEvent ? 1 : 0); }
+      if (body.onWar !== undefined) { sets.push('on_war = ?'); vals.push(body.onWar ? 1 : 0); }
+      if (body.eventReminderMinutes !== undefined) { sets.push('event_reminder_minutes = ?'); vals.push(body.eventReminderMinutes); }
+      if (body.inactiveDays !== undefined) { sets.push('inactive_days = ?'); vals.push(body.inactiveDays); }
+      if (body.defaultEventDuration !== undefined) { sets.push('default_event_duration = ?'); vals.push(body.defaultEventDuration); }
+      if (body.teamDescription !== undefined) { sets.push('team_description = ?'); vals.push(body.teamDescription || null); }
+      if (body.membersCreateEvents !== undefined) { sets.push('members_create_events = ?'); vals.push(body.membersCreateEvents ? 1 : 0); }
+      if (body.autoDeleteEventsDays !== undefined) { sets.push('auto_delete_events_days = ?'); vals.push(body.autoDeleteEventsDays); }
+      if (body.autoDeleteChatDays !== undefined) { sets.push('auto_delete_chat_days = ?'); vals.push(body.autoDeleteChatDays); }
+      if (body.startingDkp !== undefined) { sets.push('starting_dkp = ?'); vals.push(body.startingDkp); }
       if (body.timezone !== undefined) { sets.push('timezone = ?'); vals.push(body.timezone); }
       if (sets.length > 0) {
         vals.push(teamId);
@@ -982,6 +1032,29 @@ async function handleRequest(request, env) {
         .bind(teamId, body.webhookUrl || null, body.onWarning !== false ? 1 : 0, body.onSpawn !== false ? 1 : 0, body.onAnnouncement !== false ? 1 : 0, body.timezone || 'Asia/Manila').run();
     }
 
+    return json({ ok: true });
+  }
+
+  // POST /api/teams/:id/transfer — transfer ownership (leader only)
+  const transferMatch = path.match(/^\/api\/teams\/([^/]+)\/transfer$/);
+  if (transferMatch && request.method === 'POST') {
+    const teamId = transferMatch[1];
+    const team = await env.DB.prepare('SELECT * FROM teams WHERE id = ? AND owner_id = ?')
+      .bind(teamId, user.userId).first();
+    if (!team) return json({ error: 'Not the owner' }, 403);
+
+    const body = await request.json();
+    if (!body.userId) return json({ error: 'User required' }, 400);
+
+    const target = await env.DB.prepare('SELECT * FROM team_members WHERE team_id = ? AND user_id = ?')
+      .bind(teamId, body.userId).first();
+    if (!target) return json({ error: 'User not in team' }, 400);
+
+    await env.DB.batch([
+      env.DB.prepare('UPDATE teams SET owner_id = ? WHERE id = ?').bind(body.userId, teamId),
+      env.DB.prepare('UPDATE team_members SET role = ? WHERE team_id = ? AND user_id = ?').bind('leader', teamId, body.userId),
+      env.DB.prepare('UPDATE team_members SET role = ? WHERE team_id = ? AND user_id = ?').bind('officer', teamId, user.userId),
+    ]);
     return json({ ok: true });
   }
 
@@ -1024,6 +1097,12 @@ async function handleRequest(request, env) {
     const teamId = eventListMatch[1];
     const member = await requireTeamMember(teamId, user.userId);
     if (!member) return json({ error: 'Not a member' }, 403);
+
+    // Check if members can create events
+    if (member.role === 'member') {
+      const ts = await env.DB.prepare('SELECT members_create_events FROM team_settings WHERE team_id = ?').bind(teamId).first();
+      if (ts && !ts.members_create_events) return json({ error: 'Only officers+ can create events' }, 403);
+    }
 
     const body = await request.json();
     if (!body.title?.trim() || !body.eventTime) return json({ error: 'Title and time required' }, 400);
@@ -1524,7 +1603,7 @@ async function handleRequest(request, env) {
 
     // Discord notification
     const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(teamId).first();
-    if (settings?.webhook_url) {
+    if (settings?.webhook_url && settings?.on_war !== 0) {
       const emoji = body.result === 'win' ? '🏆' : body.result === 'loss' ? '❌' : '🤝';
       const scoreText = body.scoreUs !== undefined && body.scoreThem !== undefined ? ` (${body.scoreUs}-${body.scoreThem})` : '';
       await sendDiscord(settings.webhook_url, `War Result: ${body.result.toUpperCase()}`,

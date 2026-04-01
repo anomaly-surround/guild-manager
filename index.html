@@ -1247,8 +1247,6 @@
             }
 
             html += '</div>';
-            if (isLeader) html += `<button class="btn btn-danger" onclick="deleteTeam('${currentTeamId}')" style="margin-top:12px">Delete Team</button>`;
-            else html += `<button class="btn btn-danger" onclick="leaveTeam('${currentTeamId}')" style="margin-top:12px">Leave Team</button>`;
             return html;
         }
 
@@ -1262,26 +1260,130 @@
 
             const members = teamData.members;
 
-            let settingsContent = `
+            const isLeader = team.my_role === 'leader';
+            const otherMembers = members.filter(m => m.id !== currentUser.id);
+
+            let settingsContent = '';
+
+            if (!canManage) {
+                settingsContent = '<div class="card"><p style="color:var(--text-dim);font-size:0.85em">Only officers and leaders can manage settings.</p></div>';
+            } else {
+                settingsContent = `
+                <!-- Team Info -->
                 <div class="card">
-                    <h3>Discord Webhook</h3>
-                    ${canManage ? `
-                        <div class="form-row" style="margin-top:8px">
-                            <div class="form-group">
-                                <label>Webhook URL</label>
-                                <input type="text" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookUrl || ''}">
-                            </div>
-                            <div><button class="btn btn-primary btn-sm" onclick="saveWebhook()">Save</button></div>
-                            <div><button class="btn btn-secondary btn-sm" onclick="testWebhook()">Test</button></div>
+                    <h3>Team Info</h3>
+                    <div class="form-group" style="margin-top:8px">
+                        <label>Description</label>
+                        <textarea id="teamDesc" rows="2" placeholder="What's your team about?" style="background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:10px;border-radius:8px;width:100%;resize:vertical;font-family:inherit">${settings.teamDescription || ''}</textarea>
+                    </div>
+                    <div class="form-row" style="margin-top:8px">
+                        <div class="form-group" style="max-width:200px">
+                            <label>Timezone</label>
+                            <select id="teamTimezone" style="background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:10px;border-radius:8px">
+                                ${['Asia/Manila','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Europe/London','Europe/Paris','Europe/Berlin','Asia/Tokyo','Asia/Seoul','Asia/Singapore','Australia/Sydney','Pacific/Auckland']
+                                    .map(tz => `<option value="${tz}" ${settings.timezone === tz ? 'selected' : ''}>${tz}</option>`).join('')}
+                            </select>
                         </div>
-                        <div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.85em;color:#94a3b8">
-                            <label><input type="checkbox" id="onWarning" ${settings.onWarning ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Warning before spawn</label>
-                            <label><input type="checkbox" id="onSpawn" ${settings.onSpawn ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Spawn notification</label>
-                            <label><input type="checkbox" id="onAnnouncement" ${settings.onAnnouncement !== false ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Announcements</label>
-                        </div>
-                    ` : `<p style="color:#64748b;font-size:0.85em">Only officers and leaders can manage settings.</p>`}
+                        <div style="align-self:flex-end"><button class="btn btn-primary btn-sm" onclick="saveTeamInfo()">Save</button></div>
+                    </div>
                 </div>
+
+                <!-- Discord Notifications -->
+                <div class="card">
+                    <h3>Discord Notifications</h3>
+                    <div class="form-row" style="margin-top:8px">
+                        <div class="form-group">
+                            <label>Webhook URL</label>
+                            <input type="text" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookUrl || ''}">
+                        </div>
+                        <div><button class="btn btn-primary btn-sm" onclick="saveWebhook()">Save</button></div>
+                        <div><button class="btn btn-secondary btn-sm" onclick="testWebhook()">Test</button></div>
+                    </div>
+                    <div style="margin-top:12px;display:flex;gap:12px 20px;flex-wrap:wrap;font-size:0.85em;color:var(--text-muted)">
+                        <label><input type="checkbox" id="onWarning" ${settings.onWarning ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Boss warning</label>
+                        <label><input type="checkbox" id="onSpawn" ${settings.onSpawn ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Boss spawn</label>
+                        <label><input type="checkbox" id="onAnnouncement" ${settings.onAnnouncement !== false ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Announcements</label>
+                        <label><input type="checkbox" id="onEvent" ${settings.onEvent !== false ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Events</label>
+                        <label><input type="checkbox" id="onWar" ${settings.onWar !== false ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> War results</label>
+                    </div>
+                    <div class="form-row" style="margin-top:10px">
+                        <div class="form-group" style="max-width:180px">
+                            <label>Event reminder (minutes before)</label>
+                            <input type="number" id="eventReminderMin" value="${settings.eventReminderMinutes || 15}" min="1" max="120">
+                        </div>
+                        <div style="align-self:flex-end"><button class="btn btn-secondary btn-sm" onclick="saveNotifSettings()">Save</button></div>
+                    </div>
+                </div>
+
+                <!-- Team Rules -->
+                <div class="card">
+                    <h3>Permissions & Defaults</h3>
+                    <div style="display:flex;gap:12px 20px;flex-wrap:wrap;font-size:0.85em;color:var(--text-muted);margin-top:8px">
+                        <label><input type="checkbox" id="membersCreateEvents" ${settings.membersCreateEvents !== false ? 'checked' : ''} onchange="saveTeamRules()" style="accent-color:#5865F2"> Members can create events</label>
+                    </div>
+                    <div class="form-row" style="margin-top:12px">
+                        <div class="form-group" style="max-width:160px">
+                            <label>Default event duration (min)</label>
+                            <input type="number" id="defaultEventDuration" value="${settings.defaultEventDuration || 60}" min="15" max="480">
+                        </div>
+                        <div class="form-group" style="max-width:160px">
+                            <label>Inactive threshold (days)</label>
+                            <input type="number" id="inactiveDays" value="${settings.inactiveDays || 7}" min="1" max="90">
+                        </div>
+                        <div class="form-group" style="max-width:160px">
+                            <label>Starting DKP</label>
+                            <input type="number" id="startingDkp" value="${settings.startingDkp || 0}" min="0">
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="saveTeamRules()" style="margin-top:8px">Save</button>
+                </div>
+
+                <!-- Auto Cleanup -->
+                <div class="card">
+                    <h3>Auto Cleanup</h3>
+                    <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">Set to 0 to disable auto-deletion.</p>
+                    <div class="form-row">
+                        <div class="form-group" style="max-width:200px">
+                            <label>Delete old events after (days)</label>
+                            <input type="number" id="autoDeleteEvents" value="${settings.autoDeleteEventsDays || 0}" min="0">
+                        </div>
+                        <div class="form-group" style="max-width:200px">
+                            <label>Delete old chat after (days)</label>
+                            <input type="number" id="autoDeleteChat" value="${settings.autoDeleteChatDays || 0}" min="0">
+                        </div>
+                        <div style="align-self:flex-end"><button class="btn btn-secondary btn-sm" onclick="saveCleanup()">Save</button></div>
+                    </div>
+                </div>
+
+                ${isLeader ? `
+                <!-- Transfer Ownership -->
+                <div class="card" style="border-color:#f59e0b">
+                    <h3 style="color:#f59e0b">Transfer Ownership</h3>
+                    <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">Transfer leader role to another member. You'll become an officer.</p>
+                    <div class="form-row">
+                        <div class="form-group" style="max-width:200px">
+                            <select id="transferTarget" style="background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:10px;border-radius:8px">
+                                ${otherMembers.map(m => `<option value="${m.id}">${m.username}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div><button class="btn" style="background:#78350f;color:#fcd34d;padding:8px 16px;font-size:0.85em" onclick="transferOwnership()">Transfer</button></div>
+                    </div>
+                </div>
+
+                <!-- Danger Zone -->
+                <div class="card" style="border-color:#ef4444">
+                    <h3 style="color:#ef4444">Danger Zone</h3>
+                    <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">This cannot be undone. All team data will be permanently deleted.</p>
+                    <button class="btn btn-danger" onclick="deleteTeam('${currentTeamId}')">Delete Team</button>
+                </div>
+                ` : `
+                <div class="card" style="border-color:#ef4444">
+                    <h3 style="color:#ef4444">Leave Team</h3>
+                    <button class="btn btn-danger" onclick="leaveTeam('${currentTeamId}')">Leave Team</button>
+                </div>
+                `}
             `;
+            }
 
             let html = `
                 <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
@@ -1437,8 +1539,48 @@
                 onWarning: document.getElementById('onWarning').checked,
                 onSpawn: document.getElementById('onSpawn').checked,
                 onAnnouncement: document.getElementById('onAnnouncement').checked,
+                onEvent: document.getElementById('onEvent').checked,
+                onWar: document.getElementById('onWar').checked,
+                eventReminderMinutes: parseInt(document.getElementById('eventReminderMin').value) || 15,
             });
+            showToast('Notification settings saved');
         }
+
+        const saveTeamInfo = guard('saveTeamInfo', async function() {
+            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
+                teamDescription: document.getElementById('teamDesc').value.trim(),
+                timezone: document.getElementById('teamTimezone').value,
+            });
+            showToast('Team info saved');
+        });
+
+        const saveTeamRules = guard('saveTeamRules', async function() {
+            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
+                membersCreateEvents: document.getElementById('membersCreateEvents').checked,
+                defaultEventDuration: parseInt(document.getElementById('defaultEventDuration').value) || 60,
+                inactiveDays: parseInt(document.getElementById('inactiveDays').value) || 7,
+                startingDkp: parseInt(document.getElementById('startingDkp').value) || 0,
+            });
+            showToast('Rules saved');
+        });
+
+        const saveCleanup = guard('saveCleanup', async function() {
+            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
+                autoDeleteEventsDays: parseInt(document.getElementById('autoDeleteEvents').value) || 0,
+                autoDeleteChatDays: parseInt(document.getElementById('autoDeleteChat').value) || 0,
+            });
+            showToast('Cleanup settings saved');
+        });
+
+        const transferOwnership = guard('transferOwnership', async function() {
+            const targetId = document.getElementById('transferTarget').value;
+            const targetName = document.getElementById('transferTarget').selectedOptions[0]?.text;
+            if (!confirm(`Transfer ownership to ${targetName}? You'll become an officer.`)) return;
+            const data = await api('POST', `/api/teams/${currentTeamId}/transfer`, { userId: targetId });
+            if (data.error) { showToast(data.error); return; }
+            showToast('Ownership transferred!');
+            openTeam(currentTeamId);
+        });
 
         // --- Dashboard ---
 
