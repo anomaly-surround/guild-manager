@@ -824,6 +824,7 @@ async function handleRequest(request, env) {
         (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count,
         (SELECT COUNT(*) FROM member_activity WHERE team_id = t.id AND last_seen > unixepoch() - 300) as online_count,
         (SELECT team_description FROM team_settings WHERE team_id = t.id) as description,
+        (SELECT team_icon FROM team_settings WHERE team_id = t.id) as team_icon,
         (SELECT COUNT(*) FROM events WHERE team_id = t.id AND event_time > ? AND event_time <= ? + 86400000) as upcoming_events_24h
       FROM teams t
       JOIN team_members tm ON tm.team_id = t.id AND tm.user_id = ?

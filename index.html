@@ -1024,7 +1024,7 @@
                     const initials = t.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
                     html += `
                         <div class="team-card" onclick="openTeam('${t.id}')">
-                            <div class="team-icon">${initials}</div>
+                            ${t.team_icon ? `<img class="team-icon" src="${t.team_icon}" style="object-fit:cover">` : `<div class="team-icon">${initials}</div>`}
                             <div class="team-info">
                                 <div class="team-name">${t.name}</div>
                                 ${t.description ? `<div class="team-desc">${t.description}</div>` : ''}
@@ -1822,8 +1822,9 @@
         const saveCustomization = guard('saveCustomization', async function() {
             const accentColor = document.getElementById('accentColor').value;
             const iconImg = document.getElementById('teamIconPreview');
-            const teamIcon = iconImg.style.display !== 'none' ? iconImg.src : '';
-            await api('PUT', `/api/teams/${currentTeamId}/settings`, { accentColor, teamIcon });
+            const teamIcon = iconImg.src && iconImg.src.startsWith('data:') ? iconImg.src : '';
+            const data = await api('PUT', `/api/teams/${currentTeamId}/settings`, { accentColor, teamIcon });
+            if (data.error) { showToast(data.error); return; }
             showToast('Customization saved');
             if (accentColor) document.documentElement.style.setProperty('--accent', accentColor);
         });
