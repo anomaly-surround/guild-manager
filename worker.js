@@ -178,6 +178,32 @@ async function initDB(db) {
       FOREIGN KEY (team_id) REFERENCES teams(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS boss_loot (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      boss_id TEXT,
+      boss_name TEXT NOT NULL,
+      item_name TEXT NOT NULL,
+      recipient_id TEXT NOT NULL,
+      dkp_cost INTEGER DEFAULT 0,
+      noted_by TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (recipient_id) REFERENCES users(id),
+      FOREIGN KEY (noted_by) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS dkp_ledger (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS member_availability (
       team_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
@@ -666,6 +692,8 @@ async function handleRequest(request, env) {
       env.DB.prepare('DELETE FROM member_notes WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM member_activity WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM member_availability WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM boss_loot WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM dkp_ledger WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM announcements WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM team_members WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM teams WHERE id = ?').bind(teamId),
@@ -1235,6 +1263,134 @@ async function handleRequest(request, env) {
 
     await env.DB.prepare('INSERT OR REPLACE INTO member_activity (team_id, user_id, last_seen) VALUES (?, ?, unixepoch())')
       .bind(teamId, user.userId).run();
+    return json({ ok: true });
+  }
+
+  // --- Boss Loot ---
+
+  const lootListMatch = path.match(/^\/api\/teams\/([^/]+)\/loot$/);
+  if (lootListMatch && request.method === 'GET') {
+    const teamId = lootListMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const loot = await env.DB.prepare(`
+      SELECT bl.*, u.username as recipient_name, u2.username as noted_by_name
+      FROM boss_loot bl
+      JOIN users u ON u.id = bl.recipient_id
+      JOIN users u2 ON u2.id = bl.noted_by
+      WHERE bl.team_id = ?
+      ORDER BY bl.created_at DESC
+      LIMIT 100
+    `).bind(teamId).all();
+
+    return json({ loot: loot.results });
+  }
+
+  if (lootListMatch && request.method === 'POST') {
+    const teamId = lootListMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const body = await request.json();
+    if (!body.itemName?.trim() || !body.recipientId) return json({ error: 'Item and recipient required' }, 400);
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO boss_loot (id, team_id, boss_id, boss_name, item_name, recipient_id, dkp_cost, noted_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, teamId, body.bossId || null, body.bossName || 'Unknown', body.itemName.trim(), body.recipientId, body.dkpCost || 0, user.userId).run();
+
+    // Deduct DKP if cost > 0
+    if (body.dkpCost && body.dkpCost > 0) {
+      const dkpId = crypto.randomUUID();
+      await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(dkpId, teamId, body.recipientId, -body.dkpCost, `Loot: ${body.itemName.trim()}`, user.userId).run();
+    }
+
+    return json({ ok: true, id });
+  }
+
+  const lootDeleteMatch = path.match(/^\/api\/teams\/([^/]+)\/loot\/([^/]+)$/);
+  if (lootDeleteMatch && request.method === 'DELETE') {
+    const [, teamId, lootId] = lootDeleteMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    await env.DB.prepare('DELETE FROM boss_loot WHERE id = ? AND team_id = ?').bind(lootId, teamId).run();
+    return json({ ok: true });
+  }
+
+  // --- DKP ---
+
+  const dkpMatch = path.match(/^\/api\/teams\/([^/]+)\/dkp$/);
+  if (dkpMatch && request.method === 'GET') {
+    const teamId = dkpMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    // Get balances (sum of ledger per user)
+    const balances = await env.DB.prepare(`
+      SELECT dl.user_id, u.username, u.avatar, u.discord_id, SUM(dl.amount) as balance
+      FROM dkp_ledger dl JOIN users u ON u.id = dl.user_id
+      WHERE dl.team_id = ?
+      GROUP BY dl.user_id
+      ORDER BY balance DESC
+    `).bind(teamId).all();
+
+    return json({ balances: balances.results });
+  }
+
+  if (dkpMatch && request.method === 'POST') {
+    const teamId = dkpMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const body = await request.json();
+    if (!body.userId || !body.amount || !body.reason?.trim()) return json({ error: 'User, amount, and reason required' }, 400);
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(id, teamId, body.userId, body.amount, body.reason.trim(), user.userId).run();
+
+    return json({ ok: true, id });
+  }
+
+  // GET /api/teams/:id/dkp/history — full ledger
+  const dkpHistoryMatch = path.match(/^\/api\/teams\/([^/]+)\/dkp\/history$/);
+  if (dkpHistoryMatch && request.method === 'GET') {
+    const teamId = dkpHistoryMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const history = await env.DB.prepare(`
+      SELECT dl.*, u.username, u2.username as created_by_name
+      FROM dkp_ledger dl
+      JOIN users u ON u.id = dl.user_id
+      JOIN users u2 ON u2.id = dl.created_by
+      WHERE dl.team_id = ?
+      ORDER BY dl.created_at DESC
+      LIMIT 100
+    `).bind(teamId).all();
+
+    return json({ history: history.results });
+  }
+
+  // POST /api/teams/:id/dkp/bulk — award DKP to multiple members
+  const dkpBulkMatch = path.match(/^\/api\/teams\/([^/]+)\/dkp\/bulk$/);
+  if (dkpBulkMatch && request.method === 'POST') {
+    const teamId = dkpBulkMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const body = await request.json();
+    // body.userIds = [...], body.amount, body.reason
+    if (!body.userIds?.length || !body.amount || !body.reason?.trim()) return json({ error: 'Users, amount, and reason required' }, 400);
+
+    for (const userId of body.userIds) {
+      const id = crypto.randomUUID();
+      await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(id, teamId, userId, body.amount, body.reason.trim(), user.userId).run();
+    }
+
     return json({ ok: true });
   }
 

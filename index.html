@@ -479,6 +479,31 @@
         .announcement-meta { font-size: 0.7em; color: #64748b; margin-top: 6px; }
         .pin-icon { color: #f59e0b; font-size: 0.85em; margin-right: 4px; }
 
+        /* Loot & DKP */
+        .loot-item {
+            background: #0f1623;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .loot-item-name { font-weight: 600; color: #fbbf24; }
+        .dkp-row {
+            background: #0f1623;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .dkp-positive { color: #34d399; font-weight: 600; }
+        .dkp-negative { color: #ef4444; font-weight: 600; }
+
         /* Availability */
         .avail-grid {
             display: grid;
@@ -751,6 +776,8 @@
                     <button class="tab-btn ${teamTab === 'timers' ? 'active' : ''}" onclick="teamTab='timers';renderTeamView()">Boss Timers</button>
                     <button class="tab-btn ${teamTab === 'events' ? 'active' : ''}" onclick="teamTab='events';loadAndRenderEvents()">Events</button>
                     <button class="tab-btn ${teamTab === 'members' ? 'active' : ''}" onclick="teamTab='members';renderTeamView()">Members (${members.length})</button>
+                    <button class="tab-btn ${teamTab === 'loot' ? 'active' : ''}" onclick="loadAndRenderLoot()">Loot</button>
+                    <button class="tab-btn ${teamTab === 'dkp' ? 'active' : ''}" onclick="loadAndRenderDKP()">DKP</button>
                     <button class="tab-btn ${teamTab === 'availability' ? 'active' : ''}" onclick="loadAndRenderAvailability()">Availability</button>
                     <button class="tab-btn ${teamTab === 'settings' ? 'active' : ''}" onclick="teamTab='settings';renderTeamSettings()">Settings</button>
                 </div>
@@ -764,6 +791,10 @@
                 html += '<div id="eventsContent"><div class="empty-state">Loading...</div></div>';
             } else if (teamTab === 'announcements') {
                 html += '<div id="announcementsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'loot') {
+                html += '<div id="lootContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'dkp') {
+                html += '<div id="dkpContent"><div class="empty-state"><div class="spinner"></div></div></div>';
             } else if (teamTab === 'availability') {
                 html += '<div id="availabilityContent"><div class="empty-state"><div class="spinner"></div></div></div>';
             }
@@ -1001,6 +1032,8 @@
                     <button class="tab-btn" onclick="teamTab='timers';loadTeamBosses(currentTeamId).then(()=>renderTeamView())">Boss Timers</button>
                     <button class="tab-btn" onclick="loadAndRenderEvents()">Events</button>
                     <button class="tab-btn" onclick="teamTab='members';renderTeamView()">Members</button>
+                    <button class="tab-btn" onclick="loadAndRenderLoot()">Loot</button>
+                    <button class="tab-btn" onclick="loadAndRenderDKP()">DKP</button>
                     <button class="tab-btn" onclick="loadAndRenderAvailability()">Availability</button>
                     <button class="tab-btn active">Settings</button>
                 </div>
@@ -1245,6 +1278,213 @@
         async function togglePin(id) {
             await api('POST', `/api/teams/${currentTeamId}/announcements/${id}/pin`);
             loadAndRenderAnnouncements();
+        }
+
+        // --- Loot Tracker ---
+
+        async function loadAndRenderLoot() {
+            teamTab = 'loot';
+            renderTeamView();
+            const data = await api('GET', `/api/teams/${currentTeamId}/loot`);
+            const el = document.getElementById('lootContent');
+            if (el) el.innerHTML = renderLootContent(data.loot || []);
+        }
+
+        function renderLootContent(loot) {
+            const team = teamData.team;
+            const canManage = team.my_role === 'leader' || team.my_role === 'officer';
+            const members = teamData.members || [];
+            let html = '';
+
+            if (canManage) {
+                html += `
+                    <div class="card">
+                        <div class="collapsible-header" onclick="toggleSection('addLootForm', this)">
+                            <h3>+ Log Loot Drop</h3>
+                            <span class="toggle-arrow">&#9660;</span>
+                        </div>
+                        <div class="collapsible-body" id="addLootForm">
+                            <div class="form-row" style="margin-top:12px">
+                                <div class="form-group">
+                                    <label>Item Name</label>
+                                    <input type="text" id="lootItemName" placeholder="e.g. Dragon Sword">
+                                </div>
+                                <div class="form-group">
+                                    <label>Boss Name</label>
+                                    <input type="text" id="lootBossName" placeholder="e.g. Dragon Lord">
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top:8px">
+                                <div class="form-group">
+                                    <label>Received By</label>
+                                    <select id="lootRecipient" style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px">
+                                        ${members.map(m => `<option value="${m.id}">${m.username}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="form-group" style="max-width:100px">
+                                    <label>DKP Cost</label>
+                                    <input type="number" id="lootDkpCost" value="0" min="0">
+                                </div>
+                                <div style="align-self:flex-end"><button class="btn btn-primary" onclick="addLoot()">Log</button></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (loot.length === 0) {
+                html += '<div class="empty-state">No loot logged yet</div>';
+            } else {
+                for (const l of loot) {
+                    const date = new Date(l.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    html += `
+                        <div class="loot-item">
+                            <div>
+                                <span class="loot-item-name">${l.item_name}</span>
+                                <span style="color:#64748b;font-size:0.8em"> from ${l.boss_name}</span>
+                                <div style="font-size:0.8em;color:#94a3b8">${l.recipient_name} ${l.dkp_cost ? `(-${l.dkp_cost} DKP)` : ''} &middot; ${date}</div>
+                            </div>
+                            ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteLoot('${l.id}')" style="font-size:0.7em;padding:2px 8px">X</button>` : ''}
+                        </div>
+                    `;
+                }
+            }
+            return html;
+        }
+
+        async function addLoot() {
+            const itemName = document.getElementById('lootItemName').value.trim();
+            const bossName = document.getElementById('lootBossName').value.trim();
+            const recipientId = document.getElementById('lootRecipient').value;
+            const dkpCost = parseInt(document.getElementById('lootDkpCost').value) || 0;
+            if (!itemName) return showToast('Item name required');
+            const data = await api('POST', `/api/teams/${currentTeamId}/loot`, { itemName, bossName: bossName || 'Unknown', recipientId, dkpCost });
+            if (data.error) { showToast(data.error); return; }
+            showToast('Loot logged!');
+            loadAndRenderLoot();
+        }
+
+        async function deleteLoot(id) {
+            await api('DELETE', `/api/teams/${currentTeamId}/loot/${id}`);
+            loadAndRenderLoot();
+        }
+
+        // --- DKP Points ---
+
+        let dkpShowHistory = false;
+
+        async function loadAndRenderDKP() {
+            teamTab = 'dkp';
+            renderTeamView();
+            const [balData, histData] = await Promise.all([
+                api('GET', `/api/teams/${currentTeamId}/dkp`),
+                api('GET', `/api/teams/${currentTeamId}/dkp/history`),
+            ]);
+            const el = document.getElementById('dkpContent');
+            if (el) el.innerHTML = renderDKPContent(balData.balances || [], histData.history || []);
+        }
+
+        function renderDKPContent(balances, history) {
+            const team = teamData.team;
+            const canManage = team.my_role === 'leader' || team.my_role === 'officer';
+            const members = teamData.members || [];
+            let html = '';
+
+            if (canManage) {
+                html += `
+                    <div class="card">
+                        <div class="collapsible-header" onclick="toggleSection('addDkpForm', this)">
+                            <h3>+ Award / Deduct DKP</h3>
+                            <span class="toggle-arrow">&#9660;</span>
+                        </div>
+                        <div class="collapsible-body" id="addDkpForm">
+                            <div class="form-row" style="margin-top:12px">
+                                <div class="form-group">
+                                    <label>Member</label>
+                                    <select id="dkpMember" style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px">
+                                        <option value="__all__">All Members</option>
+                                        ${members.map(m => `<option value="${m.id}">${m.username}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="form-group" style="max-width:100px">
+                                    <label>Amount</label>
+                                    <input type="number" id="dkpAmount" placeholder="e.g. 10">
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top:8px">
+                                <label>Reason</label>
+                                <input type="text" id="dkpReason" placeholder="e.g. Raid attendance, boss kill">
+                            </div>
+                            <div style="margin-top:10px">
+                                <button class="btn btn-primary" onclick="awardDKP()">Submit</button>
+                                <span style="font-size:0.8em;color:#64748b;margin-left:8px">Use negative for deductions</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Leaderboard
+            html += '<div class="card"><h3>DKP Standings</h3>';
+            if (balances.length === 0) {
+                html += '<div class="empty-state">No DKP recorded yet</div>';
+            } else {
+                for (let i = 0; i < balances.length; i++) {
+                    const b = balances[i];
+                    const medal = i === 0 ? '&#129351; ' : i === 1 ? '&#129352; ' : i === 2 ? '&#129353; ' : '';
+                    html += `
+                        <div class="dkp-row">
+                            <div>
+                                <span>${medal}${b.username}</span>
+                            </div>
+                            <span class="${b.balance >= 0 ? 'dkp-positive' : 'dkp-negative'}">${b.balance >= 0 ? '+' : ''}${b.balance} DKP</span>
+                        </div>
+                    `;
+                }
+            }
+            html += '</div>';
+
+            // History toggle
+            html += `<div class="card"><h3 style="cursor:pointer" onclick="document.getElementById('dkpHistoryList').style.display=document.getElementById('dkpHistoryList').style.display==='none'?'block':'none'">History &#9660;</h3>`;
+            html += '<div id="dkpHistoryList" style="display:none">';
+            if (history.length === 0) {
+                html += '<div class="empty-state">No history</div>';
+            } else {
+                for (const h of history) {
+                    const date = new Date(h.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    html += `
+                        <div class="dkp-row">
+                            <div>
+                                <span style="font-weight:600">${h.username}</span>
+                                <span style="font-size:0.8em;color:#64748b"> &middot; ${h.reason} &middot; by ${h.created_by_name} &middot; ${date}</span>
+                            </div>
+                            <span class="${h.amount >= 0 ? 'dkp-positive' : 'dkp-negative'}">${h.amount >= 0 ? '+' : ''}${h.amount}</span>
+                        </div>
+                    `;
+                }
+            }
+            html += '</div></div>';
+
+            return html;
+        }
+
+        async function awardDKP() {
+            const memberId = document.getElementById('dkpMember').value;
+            const amount = parseInt(document.getElementById('dkpAmount').value);
+            const reason = document.getElementById('dkpReason').value.trim();
+            if (!amount || !reason) return showToast('Amount and reason required');
+
+            if (memberId === '__all__') {
+                const userIds = teamData.members.map(m => m.id);
+                const data = await api('POST', `/api/teams/${currentTeamId}/dkp/bulk`, { userIds, amount, reason });
+                if (data.error) { showToast(data.error); return; }
+                showToast(`DKP awarded to all members!`);
+            } else {
+                const data = await api('POST', `/api/teams/${currentTeamId}/dkp`, { userId: memberId, amount, reason });
+                if (data.error) { showToast(data.error); return; }
+                showToast('DKP updated!');
+            }
+            loadAndRenderDKP();
         }
 
         // --- Availability ---
