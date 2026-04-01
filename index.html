@@ -1061,6 +1061,8 @@
                 tabContent = '<div id="dkpContent"><div class="empty-state"><div class="spinner"></div></div></div>';
             } else if (teamTab === 'availability') {
                 tabContent = '<div id="availabilityContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'analytics') {
+                tabContent = '<div id="analyticsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
             }
 
             let html = `
@@ -1194,6 +1196,13 @@
                 </div>
             `;
 
+            // Premium boss features
+            if (teamData?.team?.premium_team) {
+                html += `<div style="display:flex;gap:8px;margin-bottom:12px">
+                    <button class="btn btn-secondary btn-sm" onclick="showBossHistory()">Kill History</button>
+                    <button class="btn btn-secondary btn-sm" onclick="showBossTemplates()">Templates</button>
+                </div>`;
+            }
             html += '<div id="bossListArea">' + renderBossListOnly(canManage) + '</div>';
             return html;
         }
@@ -1317,7 +1326,14 @@
             const team = teamData.team;
             const canManage = team.my_role === 'leader' || team.my_role === 'officer';
 
-            const settings = await api('GET', `/api/teams/${currentTeamId}/settings`);
+            const [settings, rolesData] = await Promise.all([
+                api('GET', `/api/teams/${currentTeamId}/settings`),
+                api('GET', `/api/teams/${currentTeamId}/roles`),
+            ]);
+            const roles = rolesData.roles || {};
+            settings._roleLeader = roles.leader?.displayName || '';
+            settings._roleOfficer = roles.officer?.displayName || '';
+            settings._roleMember = roles.member?.displayName || '';
 
             const members = teamData.members;
 
@@ -1415,6 +1431,97 @@
                         <div style="align-self:flex-end"><button class="btn btn-secondary btn-sm" onclick="saveCleanup()">Save</button></div>
                     </div>
                 </div>
+
+                <!-- Premium: Channel Webhooks -->
+                ${premiumGate(`
+                <div class="card">
+                    <h3>Channel-Specific Webhooks</h3>
+                    <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">Override the default webhook for specific notification types.</p>
+                    <div class="form-group" style="margin-top:8px">
+                        <label>Boss Alerts Webhook</label>
+                        <input type="text" id="webhookBoss" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookBoss || ''}">
+                    </div>
+                    <div class="form-group" style="margin-top:6px">
+                        <label>Events Webhook</label>
+                        <input type="text" id="webhookEvents" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookEvents || ''}">
+                    </div>
+                    <div class="form-group" style="margin-top:6px">
+                        <label>War Results Webhook</label>
+                        <input type="text" id="webhookWars" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookWars || ''}">
+                    </div>
+                    <div class="form-group" style="margin-top:6px">
+                        <label>Announcements Webhook</label>
+                        <input type="text" id="webhookAnnouncements" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookAnnouncements || ''}">
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="saveChannelWebhooks()" style="margin-top:8px">Save</button>
+                </div>
+                `, 'Channel Webhooks')}
+
+                <!-- Premium: Customization -->
+                ${premiumGate(`
+                <div class="card">
+                    <h3>Customization</h3>
+                    <div class="form-row" style="margin-top:8px">
+                        <div class="form-group" style="max-width:180px">
+                            <label>Accent Color</label>
+                            <input type="color" id="accentColor" value="${settings.accentColor || '#7c3aed'}" style="height:40px;padding:2px;background:var(--bg-input);border:1px solid var(--border-input);border-radius:8px;cursor:pointer">
+                        </div>
+                        <div class="form-group">
+                            <label>Team Icon (small image)</label>
+                            <input type="file" id="teamIconFile" accept="image/*" style="font-size:0.85em;color:var(--text-muted)" onchange="previewTeamIcon(this)">
+                        </div>
+                    </div>
+                    ${settings.teamIcon ? '<img id="teamIconPreview" src="' + settings.teamIcon + '" style="width:48px;height:48px;border-radius:10px;margin-top:8px;object-fit:cover">' : '<img id="teamIconPreview" style="display:none;width:48px;height:48px;border-radius:10px;margin-top:8px;object-fit:cover">'}
+                    <button class="btn btn-primary btn-sm" onclick="saveCustomization()" style="margin-top:8px">Save</button>
+                </div>
+                `, 'Customization')}
+
+                <!-- Premium: Custom Roles -->
+                ${premiumGate(`
+                <div class="card">
+                    <h3>Custom Role Names</h3>
+                    <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">Rename the display names for roles (permissions stay the same).</p>
+                    <div class="form-row" style="margin-top:8px">
+                        <div class="form-group">
+                            <label>Leader Name</label>
+                            <input type="text" id="roleLeader" placeholder="Leader" value="${settings._roleLeader || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Officer Name</label>
+                            <input type="text" id="roleOfficer" placeholder="Officer" value="${settings._roleOfficer || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Member Name</label>
+                            <input type="text" id="roleMember" placeholder="Member" value="${settings._roleMember || ''}">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="saveCustomRoles()" style="margin-top:8px">Save</button>
+                </div>
+                `, 'Custom Roles')}
+
+                <!-- Premium: DKP Decay -->
+                ${premiumGate(`
+                <div class="card">
+                    <h3>DKP Decay</h3>
+                    <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">Automatically reduce DKP for inactive members.</p>
+                    <label style="font-size:0.85em;color:var(--text-muted)"><input type="checkbox" id="dkpDecayEnabled" ${settings.dkpDecayEnabled ? 'checked' : ''} style="accent-color:#5865F2"> Enable DKP Decay</label>
+                    <div class="form-row" style="margin-top:8px">
+                        <div class="form-group" style="max-width:120px">
+                            <label>Decay % per cycle</label>
+                            <input type="number" id="dkpDecayPercent" value="${settings.dkpDecayPercent || 10}" min="1" max="50">
+                        </div>
+                        <div class="form-group" style="max-width:150px">
+                            <label>Inactive after (days)</label>
+                            <input type="number" id="dkpDecayInactiveDays" value="${settings.dkpDecayInactiveDays || 14}" min="1">
+                        </div>
+                        <div class="form-group" style="max-width:150px">
+                            <label>Decay every (days)</label>
+                            <input type="number" id="dkpDecayIntervalDays" value="${settings.dkpDecayIntervalDays || 7}" min="1">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="saveDkpDecay()" style="margin-top:8px">Save</button>
+                </div>
+                `, 'DKP Decay')}
 
                 ${isLeader ? `
                 <!-- Transfer Ownership -->
@@ -1643,6 +1750,60 @@
             openTeam(currentTeamId);
         });
 
+        // Premium settings save functions
+        const saveChannelWebhooks = guard('saveChannelWebhooks', async function() {
+            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
+                webhookBoss: document.getElementById('webhookBoss').value.trim(),
+                webhookEvents: document.getElementById('webhookEvents').value.trim(),
+                webhookWars: document.getElementById('webhookWars').value.trim(),
+                webhookAnnouncements: document.getElementById('webhookAnnouncements').value.trim(),
+            });
+            showToast('Channel webhooks saved');
+        });
+
+        function previewTeamIcon(input) {
+            const file = input.files[0];
+            if (!file) return;
+            if (file.size > 50000) { showToast('Image must be under 50KB'); input.value = ''; return; }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById('teamIconPreview');
+                img.src = e.target.result;
+                img.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        const saveCustomization = guard('saveCustomization', async function() {
+            const accentColor = document.getElementById('accentColor').value;
+            const iconImg = document.getElementById('teamIconPreview');
+            const teamIcon = iconImg.style.display !== 'none' ? iconImg.src : '';
+            await api('PUT', `/api/teams/${currentTeamId}/settings`, { accentColor, teamIcon });
+            showToast('Customization saved');
+            if (accentColor) document.documentElement.style.setProperty('--accent', accentColor);
+        });
+
+        const saveCustomRoles = guard('saveCustomRoles', async function() {
+            await api('PUT', `/api/teams/${currentTeamId}/roles`, {
+                roles: {
+                    leader: { displayName: document.getElementById('roleLeader').value.trim() },
+                    officer: { displayName: document.getElementById('roleOfficer').value.trim() },
+                    member: { displayName: document.getElementById('roleMember').value.trim() },
+                }
+            });
+            showToast('Custom roles saved');
+        });
+
+        const saveDkpDecay = guard('saveDkpDecay', async function() {
+            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
+                dkpDecayEnabled: document.getElementById('dkpDecayEnabled').checked,
+                dkpDecayPercent: parseInt(document.getElementById('dkpDecayPercent').value) || 10,
+                dkpDecayInactiveDays: parseInt(document.getElementById('dkpDecayInactiveDays').value) || 14,
+                dkpDecayIntervalDays: parseInt(document.getElementById('dkpDecayIntervalDays').value) || 7,
+            });
+            showToast('DKP decay settings saved');
+        });
+
         // --- Dashboard ---
 
         async function loadAndRenderDashboard() {
@@ -1835,6 +1996,7 @@
                             <span class="chat-msg-time">${date} ${time}</span>
                             ${canDelete ? `<span class="chat-msg-time" style="cursor:pointer;color:#ef4444" onclick="deleteChat('${m.id}')">[x]</span>` : ''}
                             <div class="chat-msg-text">${escapeHtml(m.message)}</div>
+                            ${renderReactions(m.id, m.reactions)}
                         </div>
                     </div>
                 `;
@@ -1886,6 +2048,181 @@
             const msgBox = document.getElementById('chatMsgBox');
             if (msgBox) msgBox.innerHTML = renderChatMessages();
         }
+
+        // --- Premium: Chat Reactions ---
+
+        const commonEmoji = ['👍','👎','❤️','😂','😮','🔥','🎉','💀','⚔️','🛡️'];
+
+        function renderReactions(msgId, reactions) {
+            if (!teamData?.team?.premium_team) return '';
+            const grouped = {};
+            for (const r of (reactions || [])) {
+                if (!grouped[r.emoji]) grouped[r.emoji] = { count: 0, mine: false };
+                grouped[r.emoji].count++;
+                if (r.user_id === currentUser.id) grouped[r.emoji].mine = true;
+            }
+            let html = '<div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap">';
+            for (const [emoji, data] of Object.entries(grouped)) {
+                html += `<span onclick="reactToMsg('${msgId}','${emoji}')" style="cursor:pointer;font-size:0.75em;padding:1px 5px;border-radius:10px;background:${data.mine ? 'var(--accent)' : 'var(--bg-input)'};border:1px solid var(--border)">${emoji} ${data.count}</span>`;
+            }
+            html += `<span onclick="showEmojiPicker('${msgId}')" style="cursor:pointer;font-size:0.75em;padding:1px 5px;border-radius:10px;background:var(--bg-input);border:1px solid var(--border)">+</span>`;
+            html += '</div>';
+            return html;
+        }
+
+        function showEmojiPicker(msgId) {
+            const existing = document.getElementById('emojiPicker');
+            if (existing) existing.remove();
+            const el = document.createElement('div');
+            el.id = 'emojiPicker';
+            el.style.cssText = 'position:fixed;bottom:80px;right:20px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:8px;display:flex;flex-wrap:wrap;gap:4px;max-width:200px;z-index:200';
+            el.innerHTML = commonEmoji.map(e => `<span onclick="reactToMsg('${msgId}','${e}');document.getElementById('emojiPicker').remove()" style="cursor:pointer;font-size:1.2em;padding:4px">${e}</span>`).join('');
+            el.innerHTML += `<span onclick="this.parentElement.remove()" style="cursor:pointer;font-size:0.8em;padding:4px;color:var(--text-dim)">Close</span>`;
+            document.body.appendChild(el);
+        }
+
+        const reactToMsg = guard('reactToMsg', async function(msgId, emoji) {
+            await api('POST', `/api/teams/${currentTeamId}/chat/${msgId}/react`, { emoji });
+            await fetchChatMessages(true);
+        });
+
+        // --- Premium: Analytics Tab ---
+
+        async function loadAndRenderAnalytics() {
+            teamTab = 'analytics';
+            renderTeamView();
+            const el = document.getElementById('analyticsContent');
+            if (!el) return;
+
+            const [actData, warData, dkpData, attData] = await Promise.all([
+                api('GET', `/api/teams/${currentTeamId}/analytics?type=activity`),
+                api('GET', `/api/teams/${currentTeamId}/analytics?type=wars`),
+                api('GET', `/api/teams/${currentTeamId}/analytics?type=dkp`),
+                api('GET', `/api/teams/${currentTeamId}/analytics?type=attendance`),
+            ]);
+
+            let html = '';
+
+            // Activity overview
+            html += '<div class="card"><h3>Member Activity</h3>';
+            const activity = actData.data || [];
+            if (activity.length === 0) {
+                html += '<div class="empty-state">No activity data</div>';
+            } else {
+                const now = Math.floor(Date.now() / 1000);
+                const online = activity.filter(a => a.last_seen && now - a.last_seen < 300).length;
+                const today = activity.filter(a => a.last_seen && now - a.last_seen < 86400).length;
+                const week = activity.filter(a => a.last_seen && now - a.last_seen < 604800).length;
+                html += `<div style="display:flex;gap:12px;margin-top:8px">
+                    <div class="stat-box"><div class="stat-number" style="color:#34d399">${online}</div><div class="stat-label">Online Now</div></div>
+                    <div class="stat-box"><div class="stat-number" style="color:var(--accent2)">${today}</div><div class="stat-label">Active Today</div></div>
+                    <div class="stat-box"><div class="stat-number" style="color:var(--accent)">${week}</div><div class="stat-label">Active This Week</div></div>
+                </div>`;
+            }
+            html += '</div>';
+
+            // War trends
+            html += '<div class="card"><h3>War Trends</h3>';
+            const wars = warData.data || [];
+            if (wars.length === 0) {
+                html += '<div class="empty-state">No war data</div>';
+            } else {
+                // Group by month
+                const byMonth = {};
+                for (const w of wars) {
+                    const d = new Date(w.war_date * 1000);
+                    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                    if (!byMonth[key]) byMonth[key] = { wins: 0, losses: 0, draws: 0 };
+                    if (w.result === 'win') byMonth[key].wins++;
+                    else if (w.result === 'loss') byMonth[key].losses++;
+                    else byMonth[key].draws++;
+                }
+                for (const [month, s] of Object.entries(byMonth)) {
+                    const total = s.wins + s.losses + s.draws;
+                    const wr = total > 0 ? Math.round(s.wins / total * 100) : 0;
+                    const barW = Math.max(5, wr);
+                    html += `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:0.85em">
+                        <span style="width:70px;color:var(--text-muted)">${month}</span>
+                        <div style="flex:1;background:var(--bg-input);border-radius:4px;height:20px;overflow:hidden">
+                            <div style="width:${barW}%;background:linear-gradient(90deg,#34d399,#059669);height:100%;border-radius:4px;transition:width 0.3s"></div>
+                        </div>
+                        <span style="width:80px;text-align:right"><span style="color:#34d399">${s.wins}W</span>/<span style="color:#ef4444">${s.losses}L</span> ${wr}%</span>
+                    </div>`;
+                }
+            }
+            html += '</div>';
+
+            // DKP progression
+            html += '<div class="card"><h3>DKP Top Earners</h3>';
+            const dkp = dkpData.data || [];
+            if (dkp.length === 0) {
+                html += '<div class="empty-state">No DKP data</div>';
+            } else {
+                const balances = {};
+                for (const d of dkp) {
+                    if (!balances[d.username]) balances[d.username] = 0;
+                    balances[d.username] += d.amount;
+                }
+                const sorted = Object.entries(balances).sort((a, b) => b[1] - a[1]).slice(0, 10);
+                const maxBal = Math.max(...sorted.map(s => Math.abs(s[1])), 1);
+                for (const [name, bal] of sorted) {
+                    const barW = Math.max(5, Math.abs(bal) / maxBal * 100);
+                    html += `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:0.85em">
+                        <span style="width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</span>
+                        <div style="flex:1;background:var(--bg-input);border-radius:4px;height:16px;overflow:hidden">
+                            <div style="width:${barW}%;background:${bal >= 0 ? '#34d399' : '#ef4444'};height:100%;border-radius:4px"></div>
+                        </div>
+                        <span style="width:60px;text-align:right;color:${bal >= 0 ? '#34d399' : '#ef4444'}">${bal}</span>
+                    </div>`;
+                }
+            }
+            html += '</div>';
+
+            // Attendance rates
+            html += '<div class="card"><h3>Attendance Rates</h3>';
+            const att = attData.data || [];
+            if (att.length === 0) {
+                html += '<div class="empty-state">No attendance data</div>';
+            } else {
+                for (const a of att) {
+                    const rate = a.total > 0 ? Math.round(a.attended / a.total * 100) : 0;
+                    const barW = Math.max(5, rate);
+                    html += `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:0.85em">
+                        <span style="width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.username}</span>
+                        <div style="flex:1;background:var(--bg-input);border-radius:4px;height:16px;overflow:hidden">
+                            <div style="width:${barW}%;background:var(--accent);height:100%;border-radius:4px"></div>
+                        </div>
+                        <span style="width:70px;text-align:right;color:var(--text-muted)">${a.attended}/${a.total} (${rate}%)</span>
+                    </div>`;
+                }
+            }
+            html += '</div>';
+
+            // CSV Export
+            html += `<div class="card"><h3>Export Data (CSV)</h3>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+                    <button class="btn btn-secondary btn-sm" onclick="exportCSV('members')">Members</button>
+                    <button class="btn btn-secondary btn-sm" onclick="exportCSV('dkp')">DKP</button>
+                    <button class="btn btn-secondary btn-sm" onclick="exportCSV('wars')">Wars</button>
+                    <button class="btn btn-secondary btn-sm" onclick="exportCSV('loot')">Loot</button>
+                </div>
+            </div>`;
+
+            el.innerHTML = html;
+        }
+
+        const exportCSV = guard('exportCSV', async function(type) {
+            const resp = await fetch(`${API}/api/teams/${currentTeamId}/export?type=${type}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const csv = await resp.text();
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${type}-export.csv`; a.click();
+            URL.revokeObjectURL(url);
+            showToast(`${type} exported!`);
+        });
 
         // --- Announcements ---
 
@@ -2158,7 +2495,10 @@
             renderTeamView();
             const data = await api('GET', `/api/teams/${currentTeamId}/loot`);
             const el = document.getElementById('lootContent');
-            if (el) el.innerHTML = renderLootContent(data.loot || []);
+            let html = renderLootContent(data.loot || []);
+            // Add wishlist for premium
+            html += await renderWishlistSection();
+            if (el) el.innerHTML = html;
         }
 
         function renderLootContent(loot) {
@@ -2252,7 +2592,9 @@
                 api('GET', `/api/teams/${currentTeamId}/dkp/history`),
             ]);
             const el = document.getElementById('dkpContent');
-            if (el) el.innerHTML = renderDKPContent(balData.balances || [], histData.history || []);
+            let html = renderDKPContent(balData.balances || [], histData.history || []);
+            html += await renderAuctionsSection();
+            if (el) el.innerHTML = html;
         }
 
         function renderDKPContent(balances, history) {
@@ -2355,6 +2697,208 @@
                 if (data.error) { showToast(data.error); return; }
                 showToast('DKP updated!');
             }
+            loadAndRenderDKP();
+        });
+
+        // --- Premium: Boss History Modal ---
+
+        const showBossHistory = guard('showBossHistory', async function() {
+            const data = await api('GET', `/api/teams/${currentTeamId}/bosses/history`);
+            let html = '<h2>Boss Kill History</h2>';
+            const stats = data.stats || [];
+            if (stats.length > 0) {
+                html += '<h3 style="color:var(--text-muted);margin:12px 0 8px">Kill Stats</h3>';
+                for (const s of stats) {
+                    html += `<div class="dkp-row"><span>${s.boss_name}</span><span style="color:#34d399">${s.kill_count} kills</span></div>`;
+                }
+            }
+            const history = data.history || [];
+            if (history.length > 0) {
+                html += '<h3 style="color:var(--text-muted);margin:12px 0 8px">Recent Kills</h3>';
+                for (const h of history.slice(0, 20)) {
+                    const date = new Date(h.killed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    html += `<div style="font-size:0.85em;padding:4px 0;border-bottom:1px solid var(--border)">${h.boss_name} <span style="color:var(--text-dim)">by ${h.killed_by_name || 'unknown'} &middot; ${date}</span></div>`;
+                }
+            } else {
+                html += '<div class="empty-state">No kills logged yet</div>';
+            }
+            html += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'deathModal\').innerHTML=\'\'" style="margin-top:12px">Close</button>';
+            document.getElementById('deathModal').innerHTML = `
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                    <div class="card" style="width:500px;max-width:90vw;margin:0;max-height:80vh;overflow-y:auto">${html}</div>
+                </div>`;
+        });
+
+        const showBossTemplates = guard('showBossTemplates', async function() {
+            const data = await api('GET', '/api/boss-templates');
+            const templates = data.templates || [];
+            let html = '<h2>Boss Templates</h2>';
+            if (templates.length === 0) {
+                html += '<div class="empty-state">No templates available</div>';
+            } else {
+                for (const t of templates) {
+                    const bosses = JSON.parse(t.bosses);
+                    html += `<div class="dkp-row"><div><span style="font-weight:600">${t.name}</span> <span style="color:var(--text-dim);font-size:0.8em">(${t.game} &middot; ${bosses.length} bosses)</span></div>
+                        <button class="btn btn-primary btn-sm" onclick="importBossTemplate('${t.id}')" style="font-size:0.75em">Import</button></div>`;
+                }
+            }
+            html += `<div style="margin-top:12px;display:flex;gap:8px">
+                <button class="btn btn-secondary btn-sm" onclick="saveBossesAsTemplate()">Save Current as Template</button>
+                <button class="btn btn-secondary btn-sm" onclick="document.getElementById('deathModal').innerHTML=''">Close</button>
+            </div>`;
+            document.getElementById('deathModal').innerHTML = `
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                    <div class="card" style="width:500px;max-width:90vw;margin:0;max-height:80vh;overflow-y:auto">${html}</div>
+                </div>`;
+        });
+
+        const importBossTemplate = guard('importBossTemplate', async function(templateId) {
+            const data = await api('POST', `/api/teams/${currentTeamId}/bosses/import-template`, { templateId });
+            if (data.error) { showToast(data.error); return; }
+            showToast(`Imported ${data.count} bosses!`);
+            document.getElementById('deathModal').innerHTML = '';
+            await loadTeamBosses(currentTeamId);
+            renderTeamView();
+        });
+
+        const saveBossesAsTemplate = guard('saveBossesAsTemplate', async function() {
+            const name = prompt('Template name:');
+            if (!name) return;
+            const game = prompt('Game name:');
+            if (!game) return;
+            const bosses = teamBosses.map(b => ({ name: b.name, type: b.type, intervalMs: b.interval_ms, fixedTime: b.fixed_time, weeklyDay: b.weekly_day, weeklyTime: b.weekly_time, biweeklyDays: b.biweekly_days ? JSON.parse(b.biweekly_days) : null, alertMinutes: b.alert_minutes }));
+            await api('POST', '/api/boss-templates', { name, game, bosses });
+            showToast('Template saved!');
+        });
+
+        // --- Premium: Wishlist (in Loot tab) ---
+
+        async function renderWishlistSection() {
+            if (!teamData?.team?.premium_team) return '';
+            const data = await api('GET', `/api/teams/${currentTeamId}/wishlist`);
+            const wishes = data.wishes || [];
+            const canManage = teamData.team.my_role !== 'member';
+            const priorities = ['', 'Low', 'Med', 'High'];
+
+            let html = '<div class="card"><h3>Loot Wishlist</h3>';
+            html += `<div class="form-row" style="margin-bottom:8px">
+                <div class="form-group"><input type="text" id="wishItem" placeholder="Item name"></div>
+                <div class="form-group" style="max-width:120px"><input type="text" id="wishBoss" placeholder="Boss (opt)"></div>
+                <div class="form-group" style="max-width:80px">
+                    <select id="wishPriority" style="background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:10px;border-radius:8px">
+                        <option value="1">Low</option><option value="2">Med</option><option value="3">High</option>
+                    </select>
+                </div>
+                <div><button class="btn btn-primary btn-sm" onclick="addWish()">Add</button></div>
+            </div>`;
+
+            if (wishes.length === 0) {
+                html += '<div class="empty-state">No wishes yet</div>';
+            } else {
+                for (const w of wishes) {
+                    html += `<div class="loot-item"><div>
+                        <span style="font-weight:600">${w.item_name}</span>
+                        ${w.boss_name ? `<span style="color:var(--text-dim);font-size:0.8em"> from ${w.boss_name}</span>` : ''}
+                        <div style="font-size:0.75em;color:var(--text-muted)">${w.username} &middot; Priority: ${priorities[w.priority] || 'Low'}</div>
+                    </div>
+                    <button class="btn btn-danger btn-sm" onclick="deleteWish('${w.id}')" style="font-size:0.7em;padding:2px 8px">X</button>
+                    </div>`;
+                }
+            }
+            html += '</div>';
+            return html;
+        }
+
+        const addWish = guard('addWish', async function() {
+            const itemName = document.getElementById('wishItem').value.trim();
+            if (!itemName) return showToast('Item name required');
+            await api('POST', `/api/teams/${currentTeamId}/wishlist`, {
+                itemName,
+                bossName: document.getElementById('wishBoss').value.trim() || null,
+                priority: parseInt(document.getElementById('wishPriority').value) || 1,
+            });
+            showToast('Added to wishlist');
+            loadAndRenderLoot();
+        });
+
+        const deleteWish = guard('deleteWish', async function(id) {
+            await api('DELETE', `/api/teams/${currentTeamId}/wishlist/${id}`);
+            loadAndRenderLoot();
+        });
+
+        // --- Premium: DKP Auctions ---
+
+        async function renderAuctionsSection() {
+            if (!teamData?.team?.premium_team) return '';
+            const data = await api('GET', `/api/teams/${currentTeamId}/auctions`);
+            const auctions = data.auctions || [];
+            const canManage = teamData.team.my_role !== 'member';
+
+            let html = '<div class="card"><h3>DKP Auctions</h3>';
+            if (canManage) {
+                html += `<div class="form-row" style="margin-bottom:8px">
+                    <div class="form-group"><input type="text" id="auctionItem" placeholder="Item name"></div>
+                    <div class="form-group" style="max-width:100px"><input type="number" id="auctionMinBid" placeholder="Min bid" value="0" min="0"></div>
+                    <div><button class="btn btn-primary btn-sm" onclick="createAuction()">Start Auction</button></div>
+                </div>`;
+            }
+
+            const open = auctions.filter(a => a.status === 'open');
+            const closed = auctions.filter(a => a.status === 'closed');
+
+            if (open.length > 0) {
+                html += '<h4 style="color:var(--text-muted);font-size:0.85em;margin:8px 0">Active</h4>';
+                for (const a of open) {
+                    html += `<div class="dkp-row" style="flex-wrap:wrap">
+                        <div><span class="loot-item-name">${a.item_name}</span> <span style="font-size:0.8em;color:var(--text-dim)">by ${a.started_by_name} &middot; ${a.bid_count} bids</span></div>
+                        <div style="display:flex;gap:6px;align-items:center">
+                            <span style="font-weight:600;color:#34d399">${a.top_bid || a.min_bid || 0} DKP</span>
+                            <input type="number" id="bid_${a.id}" placeholder="Your bid" min="${(a.top_bid || a.min_bid || 0) + 1}" style="width:80px;background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:6px;border-radius:6px;font-size:0.85em">
+                            <button class="btn btn-primary btn-sm" onclick="placeBid('${a.id}')" style="font-size:0.75em">Bid</button>
+                            ${canManage ? `<button class="btn btn-secondary btn-sm" onclick="closeAuction('${a.id}')" style="font-size:0.75em">Close</button>` : ''}
+                        </div>
+                    </div>`;
+                }
+            }
+
+            if (closed.length > 0) {
+                html += '<h4 style="color:var(--text-muted);font-size:0.85em;margin:8px 0">Closed</h4>';
+                for (const a of closed.slice(0, 10)) {
+                    html += `<div class="dkp-row" style="opacity:0.6">
+                        <span>${a.item_name}</span>
+                        <span style="font-size:0.85em">${a.winner_name ? `Won by ${a.winner_name} for ${a.winning_bid} DKP` : 'No bids'}</span>
+                    </div>`;
+                }
+            }
+
+            if (auctions.length === 0) html += '<div class="empty-state">No auctions yet</div>';
+            html += '</div>';
+            return html;
+        }
+
+        const createAuction = guard('createAuction', async function() {
+            const itemName = document.getElementById('auctionItem').value.trim();
+            if (!itemName) return showToast('Item name required');
+            await api('POST', `/api/teams/${currentTeamId}/auctions`, {
+                itemName, minBid: parseInt(document.getElementById('auctionMinBid').value) || 0
+            });
+            showToast('Auction started!');
+            loadAndRenderDKP();
+        });
+
+        const placeBid = guard('placeBid', async function(auctionId) {
+            const amount = parseInt(document.getElementById('bid_' + auctionId).value);
+            if (!amount) return showToast('Enter a bid amount');
+            const data = await api('POST', `/api/teams/${currentTeamId}/auctions/${auctionId}/bid`, { amount });
+            if (data.error) { showToast(data.error); return; }
+            showToast('Bid placed!');
+            loadAndRenderDKP();
+        });
+
+        const closeAuction = guard('closeAuction', async function(auctionId) {
+            if (!confirm('Close this auction? Winner will be charged.')) return;
+            await api('POST', `/api/teams/${currentTeamId}/auctions/${auctionId}/close`);
+            showToast('Auction closed');
             loadAndRenderDKP();
         });
 

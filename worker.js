@@ -1577,6 +1577,20 @@ async function handleRequest(request, env) {
       LIMIT 100
     `).bind(teamId, parseInt(after)).all();
 
+    // Attach reactions
+    const msgIds = messages.results.map(m => m.id);
+    if (msgIds.length > 0) {
+      const reactions = await env.DB.prepare(
+        `SELECT * FROM chat_reactions WHERE message_id IN (${msgIds.map(() => '?').join(',')})`)
+        .bind(...msgIds).all().catch(() => ({ results: [] }));
+      const reactionMap = {};
+      for (const r of reactions.results) {
+        if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
+        reactionMap[r.message_id].push(r);
+      }
+      for (const m of messages.results) m.reactions = reactionMap[m.id] || [];
+    }
+
     return json({ messages: messages.results });
   }
 
