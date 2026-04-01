@@ -704,9 +704,12 @@ async function handleRequest(request, env) {
     // Check if subscription is still active
     let isPremium = false;
     if (dbUser.premium) {
-      if (dbUser.premium_type === 'lifetime') {
+      if (String(dbUser.premium_type).trim().toLowerCase() === 'lifetime') {
         isPremium = true;
       } else if (dbUser.premium_until && dbUser.premium_until > Math.floor(Date.now() / 1000)) {
+        isPremium = true;
+      } else if (!dbUser.premium_type && !dbUser.premium_until) {
+        // Manually set premium with no type — treat as lifetime
         isPremium = true;
       } else {
         // Subscription expired
