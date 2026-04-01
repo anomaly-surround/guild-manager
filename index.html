@@ -318,6 +318,79 @@
             color: #475569;
         }
 
+        /* Boss timers */
+        .boss-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #0f1623;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            position: relative;
+        }
+
+        .boss-item.spawning {
+            border-color: #7f1d1d;
+            animation: pulse-red 1.5s ease-in-out infinite;
+        }
+
+        .boss-item.warning { border-color: #78350f; }
+
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 5px rgba(239,68,68,0.2); }
+            50% { box-shadow: 0 0 15px rgba(239,68,68,0.4); }
+        }
+
+        .boss-name-text { font-weight: 600; font-size: 0.95em; }
+        .boss-meta-text { font-size: 0.75em; color: #64748b; margin-top: 2px; }
+        .boss-death-text { font-size: 0.7em; color: #f59e0b; margin-top: 2px; }
+
+        .boss-countdown {
+            font-size: 1.4em;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            min-width: 100px;
+            text-align: right;
+        }
+
+        .boss-countdown.active { color: #34d399; }
+        .boss-countdown.warning-text { color: #f59e0b; }
+        .boss-countdown.spawned { color: #ef4444; }
+
+        .boss-actions { display: flex; gap: 6px; }
+
+        .collapsible-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .collapsible-body { overflow: hidden; max-height: 0; transition: max-height 0.3s ease-out; }
+        .collapsible-body.open { max-height: 2000px; }
+
+        .toggle-arrow { font-size: 0.8em; color: #64748b; transition: transform 0.2s; }
+        .toggle-arrow.open { transform: rotate(180deg); }
+
+        .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; }
+
+        .tab-btn {
+            padding: 8px 16px;
+            background: #1e293b;
+            color: #64748b;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .tab-btn:hover { color: #e0e6f0; }
+        .tab-btn.active { background: #334155; color: #a78bfa; }
+
         @media (max-width: 600px) {
             .form-row { flex-direction: column; }
             .container { padding: 16px; }
@@ -470,33 +543,42 @@
             content.innerHTML = html;
         }
 
+        let teamBosses = [];
+        let teamData = null;
+        let teamTab = 'timers';
+
         async function openTeam(teamId) {
             currentTeamId = teamId;
             const content = document.getElementById('mainContent');
             content.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
 
             const data = await api('GET', `/api/teams/${teamId}`);
-            if (data.error) {
-                showToast(data.error);
-                showTeamList();
-                return;
-            }
+            if (data.error) { showToast(data.error); showTeamList(); return; }
 
-            const team = data.team;
-            const members = data.members;
-            const isLeader = team.my_role === 'leader';
-            const isOfficer = team.my_role === 'officer';
-            const canManage = isLeader || isOfficer;
+            teamData = data;
+            teamTab = 'timers';
+            await loadTeamBosses(teamId);
+            renderTeamView();
+        }
+
+        async function loadTeamBosses(teamId) {
+            const data = await api('GET', `/api/teams/${teamId}/bosses`);
+            teamBosses = data.bosses || [];
+        }
+
+        function renderTeamView() {
+            const content = document.getElementById('mainContent');
+            const team = teamData.team;
+            const members = teamData.members;
+            const canManage = team.my_role === 'leader' || team.my_role === 'officer';
 
             let html = `
                 <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
-
                 <div class="card">
                     <div style="display:flex;justify-content:space-between;align-items:center">
                         <h2>${team.name}</h2>
                         <span class="team-role ${team.my_role}">${team.my_role}</span>
                     </div>
-
                     <div class="invite-box">
                         <span style="color:#64748b;font-size:0.85em">Invite Code:</span>
                         <span class="invite-code">${team.invite_code}</span>
@@ -504,33 +586,165 @@
                     </div>
                 </div>
 
-                <div class="card">
-                    <h3>Members (${members.length}/${team.max_members})</h3>
+                <div class="tab-bar">
+                    <button class="tab-btn ${teamTab === 'timers' ? 'active' : ''}" onclick="teamTab='timers';renderTeamView()">Boss Timers</button>
+                    <button class="tab-btn ${teamTab === 'members' ? 'active' : ''}" onclick="teamTab='members';renderTeamView()">Members (${members.length})</button>
+                    <button class="tab-btn ${teamTab === 'settings' ? 'active' : ''}" onclick="teamTab='settings';renderTeamSettings()">Settings</button>
+                </div>
             `;
 
+            if (teamTab === 'timers') {
+                html += renderTimersTab(team, canManage);
+            } else if (teamTab === 'members') {
+                html += renderMembersTab(team, members, canManage);
+            }
+
+            content.innerHTML = html;
+        }
+
+        function renderTimersTab(team, canManage) {
+            const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            let html = `
+                <div class="card">
+                    <div class="collapsible-header" onclick="toggleSection('addBossForm', this)">
+                        <h3>+ Add Boss</h3>
+                        <span class="toggle-arrow">&#9660;</span>
+                    </div>
+                    <div class="collapsible-body" id="addBossForm">
+                        <div class="form-row" style="margin-top:12px">
+                            <div class="form-group">
+                                <label>Boss Name</label>
+                                <input type="text" id="bossName" placeholder="e.g. Dragon Lord">
+                            </div>
+                            <div class="form-group" style="max-width:160px">
+                                <label>Type</label>
+                                <select id="bossType" onchange="toggleBossInputs()" style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px">
+                                    <option value="interval">Interval</option>
+                                    <option value="fixed">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-top:8px" id="bossIntervalRow">
+                            <div class="form-group" style="max-width:80px">
+                                <label>Hours</label>
+                                <input type="number" id="bossHours" min="0" placeholder="H">
+                            </div>
+                            <div class="form-group" style="max-width:80px">
+                                <label>Minutes</label>
+                                <input type="number" id="bossMinutes" min="0" max="59" placeholder="M">
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-top:8px;display:none" id="bossFixedRow">
+                            <div class="form-group" style="max-width:150px">
+                                <label>Time</label>
+                                <input type="time" id="bossFixedTime">
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-top:8px;display:none" id="bossWeeklyRow">
+                            <div class="form-group" style="max-width:120px">
+                                <label>Day</label>
+                                <select id="bossWeeklyDay" style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px">
+                                    <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
+                                    <option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="max-width:150px">
+                                <label>Time</label>
+                                <input type="time" id="bossWeeklyTime">
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-top:8px">
+                            <div class="form-group" style="max-width:100px">
+                                <label>Alert (min)</label>
+                                <input type="number" id="bossAlert" value="5" min="1" max="60">
+                            </div>
+                            <div><button class="btn btn-primary" onclick="addBoss()">Add Boss</button></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Boss list
+            if (teamBosses.length === 0) {
+                html += '<div class="empty-state">No boss timers yet</div>';
+            } else {
+                const sorted = [...teamBosses].sort((a, b) => {
+                    if (a.status === 'spawned' && b.status !== 'spawned') return -1;
+                    if (b.status === 'spawned' && a.status !== 'spawned') return 1;
+                    return a.next_spawn - b.next_spawn;
+                });
+
+                for (const boss of sorted) {
+                    const now = Date.now();
+                    const remaining = boss.next_spawn - now;
+                    const alertMs = boss.alert_minutes * 60000;
+                    const isSpawned = remaining <= 0 || boss.status === 'spawned';
+                    const isWarning = !isSpawned && remaining <= alertMs;
+
+                    let cls = 'boss-item';
+                    if (isSpawned) cls += ' spawning';
+                    else if (isWarning) cls += ' warning';
+
+                    let countdownCls = 'boss-countdown active';
+                    let countdownText = formatTime(remaining);
+                    if (isSpawned) { countdownCls = 'boss-countdown spawned'; countdownText = 'SPAWNED'; }
+                    else if (isWarning) { countdownCls = 'boss-countdown warning-text'; }
+
+                    let meta = '';
+                    if (boss.type === 'interval') {
+                        const totalMin = boss.interval_ms / 60000;
+                        const h = Math.floor(totalMin / 60), m = totalMin % 60;
+                        meta = 'Every ' + (h > 0 ? h + 'h ' : '') + (m > 0 ? m + 'm' : '');
+                    } else if (boss.type === 'fixed') {
+                        meta = 'Daily at ' + boss.fixed_time;
+                    } else if (boss.type === 'weekly') {
+                        meta = dayNames[boss.weekly_day] + ' at ' + boss.weekly_time;
+                    }
+
+                    html += `
+                        <div class="${cls}">
+                            <div style="flex:1">
+                                <div class="boss-name-text">${boss.name}</div>
+                                <div class="boss-meta-text">${meta} | Alert: ${boss.alert_minutes}m</div>
+                                ${boss.last_death ? `<div class="boss-death-text">Killed: ${new Date(boss.last_death).toLocaleString()}</div>` : ''}
+                            </div>
+                            <div class="${countdownCls}">${countdownText}</div>
+                            <div class="boss-actions">
+                                <button class="btn btn-sm" style="background:#065f46;color:#34d399" onclick="killBoss('${boss.id}')">Killed</button>
+                                ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteBoss('${boss.id}')">X</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            return html;
+        }
+
+        function renderMembersTab(team, members, canManage) {
+            const isLeader = team.my_role === 'leader';
+            let html = '<div class="card"><h3>Members (' + members.length + '/' + team.max_members + ')</h3>';
+
             for (const m of members) {
-                const avatarUrl = m.avatar
-                    ? `https://cdn.discordapp.com/avatars/${m.discord_id}/${m.avatar}.png?size=64`
-                    : '';
+                const avatarUrl = m.avatar ? `https://cdn.discordapp.com/avatars/${m.discord_id}/${m.avatar}.png?size=64` : '';
                 const isMe = m.id === currentUser.id;
                 const isMemberLeader = m.role === 'leader';
 
                 html += `
                     <div class="member-item">
                         <img class="member-avatar" src="${avatarUrl}" onerror="this.style.background='#334155'">
-                        <div class="member-info">
-                            <div class="member-name">${m.username}${isMe ? ' (you)' : ''}</div>
-                        </div>
+                        <div class="member-info"><div class="member-name">${m.username}${isMe ? ' (you)' : ''}</div></div>
                         <span class="member-role-badge team-role ${m.role}">${m.role}</span>
                         ${canManage && !isMe && !isMemberLeader ? `
                             <div class="member-actions">
                                 ${isLeader ? `
-                                    <select onchange="changeRole('${teamId}','${m.id}',this.value)" style="background:#1e293b;color:#e0e6f0;border:1px solid #334155;border-radius:4px;padding:4px;font-size:0.75em">
+                                    <select onchange="changeRole('${currentTeamId}','${m.id}',this.value)" style="background:#1e293b;color:#e0e6f0;border:1px solid #334155;border-radius:4px;padding:4px;font-size:0.75em">
                                         <option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option>
                                         <option value="officer" ${m.role === 'officer' ? 'selected' : ''}>Officer</option>
                                     </select>
                                 ` : ''}
-                                <button class="btn btn-danger btn-sm" onclick="kickMember('${teamId}','${m.id}','${m.username}')">Kick</button>
+                                <button class="btn btn-danger btn-sm" onclick="kickMember('${currentTeamId}','${m.id}','${m.username}')">Kick</button>
                             </div>
                         ` : ''}
                     </div>
@@ -538,16 +752,154 @@
             }
 
             html += '</div>';
+            if (isLeader) html += `<button class="btn btn-danger" onclick="deleteTeam('${currentTeamId}')" style="margin-top:12px">Delete Team</button>`;
+            else html += `<button class="btn btn-danger" onclick="leaveTeam('${currentTeamId}')" style="margin-top:12px">Leave Team</button>`;
+            return html;
+        }
 
-            // Leave / Delete
-            if (isLeader) {
-                html += `<button class="btn btn-danger" onclick="deleteTeam('${teamId}')" style="margin-top:12px">Delete Team</button>`;
-            } else {
-                html += `<button class="btn btn-danger" onclick="leaveTeam('${teamId}')" style="margin-top:12px">Leave Team</button>`;
-            }
+        async function renderTeamSettings() {
+            teamTab = 'settings';
+            const content = document.getElementById('mainContent');
+            const team = teamData.team;
+            const canManage = team.my_role === 'leader' || team.my_role === 'officer';
+
+            const settings = await api('GET', `/api/teams/${currentTeamId}/settings`);
+
+            let html = `
+                <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <h2>${team.name}</h2>
+                        <span class="team-role ${team.my_role}">${team.my_role}</span>
+                    </div>
+                </div>
+
+                <div class="tab-bar">
+                    <button class="tab-btn" onclick="teamTab='timers';loadTeamBosses(currentTeamId).then(()=>renderTeamView())">Boss Timers</button>
+                    <button class="tab-btn" onclick="teamTab='members';renderTeamView()">Members</button>
+                    <button class="tab-btn active">Settings</button>
+                </div>
+
+                <div class="card">
+                    <h3>Discord Webhook</h3>
+                    ${canManage ? `
+                        <div class="form-row" style="margin-top:8px">
+                            <div class="form-group">
+                                <label>Webhook URL</label>
+                                <input type="text" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookUrl || ''}">
+                            </div>
+                            <div><button class="btn btn-primary btn-sm" onclick="saveWebhook()">Save</button></div>
+                            <div><button class="btn btn-secondary btn-sm" onclick="testWebhook()">Test</button></div>
+                        </div>
+                        <div style="margin-top:10px;display:flex;gap:16px;font-size:0.85em;color:#94a3b8">
+                            <label><input type="checkbox" id="onWarning" ${settings.onWarning ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Warning before spawn</label>
+                            <label><input type="checkbox" id="onSpawn" ${settings.onSpawn ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Spawn notification</label>
+                        </div>
+                    ` : `<p style="color:#64748b;font-size:0.85em">Only officers and leaders can manage settings.</p>`}
+                </div>
+            `;
 
             content.innerHTML = html;
         }
+
+        // --- Boss timer actions ---
+
+        function toggleBossInputs() {
+            const type = document.getElementById('bossType').value;
+            document.getElementById('bossIntervalRow').style.display = type === 'interval' ? '' : 'none';
+            document.getElementById('bossFixedRow').style.display = type === 'fixed' ? '' : 'none';
+            document.getElementById('bossWeeklyRow').style.display = type === 'weekly' ? '' : 'none';
+        }
+
+        function toggleSection(id, el) {
+            document.getElementById(id).classList.toggle('open');
+            el.querySelector('.toggle-arrow').classList.toggle('open');
+        }
+
+        async function addBoss() {
+            const name = document.getElementById('bossName').value.trim();
+            if (!name) return;
+            const type = document.getElementById('bossType').value;
+            const alertMinutes = parseInt(document.getElementById('bossAlert').value) || 5;
+
+            const body = { name, type, alertMinutes };
+
+            if (type === 'interval') {
+                const h = parseInt(document.getElementById('bossHours').value) || 0;
+                const m = parseInt(document.getElementById('bossMinutes').value) || 0;
+                if (h === 0 && m === 0) return;
+                body.intervalMs = (h * 3600 + m * 60) * 1000;
+            } else if (type === 'fixed') {
+                body.fixedTime = document.getElementById('bossFixedTime').value;
+                if (!body.fixedTime) return;
+            } else if (type === 'weekly') {
+                body.weeklyDay = parseInt(document.getElementById('bossWeeklyDay').value);
+                body.weeklyTime = document.getElementById('bossWeeklyTime').value;
+                if (!body.weeklyTime) return;
+            }
+
+            const data = await api('POST', `/api/teams/${currentTeamId}/bosses`, body);
+            if (data.error) { showToast(data.error); return; }
+            showToast(`${name} added`);
+            await loadTeamBosses(currentTeamId);
+            renderTeamView();
+        }
+
+        async function killBoss(bossId) {
+            await api('POST', `/api/teams/${currentTeamId}/bosses/${bossId}/kill`, { deathTime: Date.now() });
+            await loadTeamBosses(currentTeamId);
+            renderTeamView();
+        }
+
+        async function deleteBoss(bossId) {
+            if (!confirm('Remove this boss timer?')) return;
+            await api('DELETE', `/api/teams/${currentTeamId}/bosses/${bossId}`);
+            await loadTeamBosses(currentTeamId);
+            renderTeamView();
+        }
+
+        async function saveWebhook() {
+            const url = document.getElementById('webhookUrl').value.trim();
+            await api('PUT', `/api/teams/${currentTeamId}/settings`, { webhookUrl: url });
+            showToast(url ? 'Webhook saved' : 'Webhook removed');
+        }
+
+        async function testWebhook() {
+            const data = await api('POST', `/api/teams/${currentTeamId}/settings/test`);
+            showToast(data.ok ? 'Test sent!' : data.error || 'Failed');
+        }
+
+        async function saveNotifSettings() {
+            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
+                onWarning: document.getElementById('onWarning').checked,
+                onSpawn: document.getElementById('onSpawn').checked,
+            });
+        }
+
+        function formatTime(ms) {
+            if (ms <= 0) return '00:00';
+            const totalSec = Math.floor(ms / 1000);
+            const h = Math.floor(totalSec / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = totalSec % 60;
+            if (h > 0) return h + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+            return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+        }
+
+        // Tick — update countdowns every second
+        setInterval(() => {
+            if (!currentTeamId || teamTab !== 'timers') return;
+            document.querySelectorAll('.boss-countdown').forEach(el => {
+                // Re-render timers tab without API call
+                renderTeamView();
+            });
+        }, 1000);
+
+        // Refresh boss data from server every 15 seconds
+        setInterval(async () => {
+            if (!currentTeamId || teamTab !== 'timers') return;
+            await loadTeamBosses(currentTeamId);
+        }, 15000);
 
         // --- Actions ---
 

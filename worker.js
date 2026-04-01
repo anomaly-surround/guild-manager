@@ -1,6 +1,7 @@
 /**
  * Guild Manager - Cloudflare Worker
  * Phase 1: Discord OAuth + Team creation + Invite system
+ * Phase 2: Shared boss timers per team + Discord webhook notifications
  *
  * Bindings: DB (D1), DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, JWT_SECRET
  */
@@ -91,7 +92,139 @@ async function initDB(db) {
       FOREIGN KEY (team_id) REFERENCES teams(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS bosses (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      interval_ms INTEGER,
+      fixed_time TEXT,
+      weekly_day INTEGER,
+      weekly_time TEXT,
+      biweekly_days TEXT,
+      alert_minutes INTEGER DEFAULT 5,
+      next_spawn INTEGER NOT NULL,
+      status TEXT DEFAULT 'waiting',
+      spawned_at INTEGER,
+      auto_reset_at INTEGER,
+      last_death INTEGER,
+      warned INTEGER DEFAULT 0,
+      spawn_notified INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS team_settings (
+      team_id TEXT PRIMARY KEY,
+      webhook_url TEXT,
+      on_warning INTEGER DEFAULT 1,
+      on_spawn INTEGER DEFAULT 1,
+      timezone TEXT DEFAULT 'Asia/Manila',
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    )`),
   ]);
+}
+
+// --- Boss timer helpers ---
+
+function getNextFixedSpawn(timeStr, tz) {
+  const [h, m] = timeStr.split(':').map(Number);
+  const now = new Date();
+  const local = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+  const spawn = new Date(local);
+  spawn.setHours(h, m, 0, 0);
+  if (spawn <= local) spawn.setDate(spawn.getDate() + 1);
+  const offset = now.getTime() - local.getTime();
+  return spawn.getTime() + offset;
+}
+
+function getNextWeeklySpawn(targetDay, timeStr, tz) {
+  const [h, m] = timeStr.split(':').map(Number);
+  const now = new Date();
+  const local = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+  const spawn = new Date(local);
+  spawn.setHours(h, m, 0, 0);
+  let daysUntil = targetDay - local.getDay();
+  if (daysUntil < 0) daysUntil += 7;
+  if (daysUntil === 0 && spawn <= local) daysUntil = 7;
+  spawn.setDate(spawn.getDate() + daysUntil);
+  const offset = now.getTime() - local.getTime();
+  return spawn.getTime() + offset;
+}
+
+function getNextBiweeklySpawn(days, tz) {
+  const parsed = typeof days === 'string' ? JSON.parse(days) : days;
+  return Math.min(...parsed.map(d => getNextWeeklySpawn(d.day, d.time, tz)));
+}
+
+function calcNextSpawn(boss, fromTime, tz) {
+  if (boss.type === 'interval') return fromTime + boss.interval_ms;
+  if (boss.type === 'fixed') return getNextFixedSpawn(boss.fixed_time, tz);
+  if (boss.type === 'weekly') return getNextWeeklySpawn(boss.weekly_day, boss.weekly_time, tz);
+  if (boss.type === 'biweekly') return getNextBiweeklySpawn(boss.biweekly_days, tz);
+  return fromTime + 3600000;
+}
+
+async function sendDiscord(webhookUrl, title, description, color) {
+  if (!webhookUrl) return;
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        embeds: [{ title, description, color, footer: { text: 'Guild Manager' }, timestamp: new Date().toISOString() }],
+      }),
+    });
+  } catch (e) { /* ignore */ }
+}
+
+// --- Cron handler ---
+
+async function handleScheduled(env) {
+  await initDB(env.DB);
+  const now = Date.now();
+
+  const bosses = await env.DB.prepare('SELECT * FROM bosses WHERE status = ?').bind('waiting').all();
+
+  for (const boss of bosses.results) {
+    const remaining = boss.next_spawn - now;
+    const alertMs = (boss.alert_minutes || 5) * 60000;
+
+    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(boss.team_id).first();
+    const tz = settings?.timezone || 'Asia/Manila';
+
+    // Warning
+    if (remaining > 0 && remaining <= alertMs && !boss.warned) {
+      if (settings?.on_warning && settings?.webhook_url) {
+        const minLeft = Math.max(1, Math.round(remaining / 60000));
+        await sendDiscord(settings.webhook_url, `${boss.name} - Spawning Soon!`,
+          `**${boss.name}** spawns in **${minLeft} minute${minLeft !== 1 ? 's' : ''}**!`, 16760576);
+      }
+      await env.DB.prepare('UPDATE bosses SET warned = 1 WHERE id = ?').bind(boss.id).run();
+      continue;
+    }
+
+    // Spawned
+    if (remaining <= 0) {
+      if (!boss.spawn_notified && settings?.on_spawn && settings?.webhook_url) {
+        await sendDiscord(settings.webhook_url, `${boss.name} has SPAWNED!`,
+          `**${boss.name}** is now available!\nAuto-reset in 5 minutes if not killed.`, 15548997);
+      }
+      await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = ?, auto_reset_at = ?, spawn_notified = 1 WHERE id = ?')
+        .bind('spawned', now, now + 300000, boss.id).run();
+    }
+  }
+
+  // Auto-reset spawned bosses
+  const spawned = await env.DB.prepare('SELECT * FROM bosses WHERE status = ? AND auto_reset_at <= ?')
+    .bind('spawned', now).all();
+
+  for (const boss of spawned.results) {
+    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(boss.team_id).first();
+    const tz = settings?.timezone || 'Asia/Manila';
+    const nextSpawn = calcNextSpawn(boss, now, tz);
+    await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = NULL, auto_reset_at = NULL, warned = 0, spawn_notified = 0, next_spawn = ? WHERE id = ?')
+      .bind('waiting', nextSpawn, boss.id).run();
+  }
 }
 
 // --- Routes ---
@@ -376,11 +509,166 @@ async function handleRequest(request, env) {
     return json({ team: { name: team.name, members: count.count } });
   }
 
+  // === BOSS TIMER ROUTES ===
+
+  // Helper: check team membership
+  async function requireTeamMember(teamId, userId) {
+    return env.DB.prepare('SELECT role FROM team_members WHERE team_id = ? AND user_id = ?')
+      .bind(teamId, userId).first();
+  }
+
+  // GET /api/teams/:id/bosses
+  const bossListMatch = path.match(/^\/api\/teams\/([^/]+)\/bosses$/);
+  if (bossListMatch && request.method === 'GET') {
+    const teamId = bossListMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const bosses = await env.DB.prepare('SELECT * FROM bosses WHERE team_id = ? ORDER BY next_spawn ASC')
+      .bind(teamId).all();
+    return json({ bosses: bosses.results });
+  }
+
+  // POST /api/teams/:id/bosses — add boss
+  if (bossListMatch && request.method === 'POST') {
+    const teamId = bossListMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (member.role === 'member') {
+      // Members can add bosses too — officers+ can delete
+    }
+
+    const body = await request.json();
+    if (!body.name?.trim()) return json({ error: 'Name required' }, 400);
+
+    const settings = await env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    const tz = settings?.timezone || 'Asia/Manila';
+
+    const id = crypto.randomUUID();
+    let nextSpawn = Date.now() + 3600000; // default 1hr
+
+    if (body.type === 'interval') {
+      nextSpawn = Date.now() + (body.intervalMs || 3600000);
+    } else if (body.type === 'fixed') {
+      nextSpawn = getNextFixedSpawn(body.fixedTime, tz);
+    } else if (body.type === 'weekly') {
+      nextSpawn = getNextWeeklySpawn(body.weeklyDay, body.weeklyTime, tz);
+    } else if (body.type === 'biweekly') {
+      nextSpawn = getNextBiweeklySpawn(body.biweeklyDays, tz);
+    }
+
+    // Suppress immediate warning if inside alert window
+    const alertMs = (body.alertMinutes || 5) * 60000;
+    const warned = (nextSpawn - Date.now()) <= alertMs ? 1 : 0;
+
+    await env.DB.prepare(`INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, next_spawn, warned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, teamId, body.name.trim(), body.type,
+        body.intervalMs || null, body.fixedTime || null,
+        body.weeklyDay ?? null, body.weeklyTime || null,
+        body.biweeklyDays ? JSON.stringify(body.biweeklyDays) : null,
+        body.alertMinutes || 5, nextSpawn, warned).run();
+
+    return json({ ok: true, id });
+  }
+
+  // POST /api/teams/:id/bosses/:bossId/kill
+  const bossKillMatch = path.match(/^\/api\/teams\/([^/]+)\/bosses\/([^/]+)\/kill$/);
+  if (bossKillMatch && request.method === 'POST') {
+    const [, teamId, bossId] = bossKillMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const body = await request.json().catch(() => ({}));
+    const deathTime = body.deathTime || Date.now();
+
+    const boss = await env.DB.prepare('SELECT * FROM bosses WHERE id = ? AND team_id = ?').bind(bossId, teamId).first();
+    if (!boss) return json({ error: 'Boss not found' }, 404);
+
+    const settings = await env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    const tz = settings?.timezone || 'Asia/Manila';
+    const nextSpawn = calcNextSpawn(boss, deathTime, tz);
+
+    await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = NULL, auto_reset_at = NULL, last_death = ?, next_spawn = ?, warned = 0, spawn_notified = 0 WHERE id = ?')
+      .bind('waiting', deathTime, nextSpawn, bossId).run();
+
+    return json({ ok: true });
+  }
+
+  // DELETE /api/teams/:id/bosses/:bossId
+  const bossDeleteMatch = path.match(/^\/api\/teams\/([^/]+)\/bosses\/([^/]+)$/);
+  if (bossDeleteMatch && request.method === 'DELETE') {
+    const [, teamId, bossId] = bossDeleteMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    await env.DB.prepare('DELETE FROM bosses WHERE id = ? AND team_id = ?').bind(bossId, teamId).run();
+    return json({ ok: true });
+  }
+
+  // GET /api/teams/:id/settings
+  const settingsGetMatch = path.match(/^\/api\/teams\/([^/]+)\/settings$/);
+  if (settingsGetMatch && request.method === 'GET') {
+    const teamId = settingsGetMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    return json({
+      webhookUrl: settings?.webhook_url ? '...' + settings.webhook_url.slice(-8) : '',
+      onWarning: settings?.on_warning ?? true,
+      onSpawn: settings?.on_spawn ?? true,
+      timezone: settings?.timezone || 'Asia/Manila',
+    });
+  }
+
+  // PUT /api/teams/:id/settings
+  if (settingsGetMatch && request.method === 'PUT') {
+    const teamId = settingsGetMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) {
+      return json({ error: 'Officers+ only' }, 403);
+    }
+
+    const body = await request.json();
+    const existing = await env.DB.prepare('SELECT 1 FROM team_settings WHERE team_id = ?').bind(teamId).first();
+
+    if (existing) {
+      const sets = [];
+      const vals = [];
+      if (body.webhookUrl !== undefined) { sets.push('webhook_url = ?'); vals.push(body.webhookUrl); }
+      if (body.onWarning !== undefined) { sets.push('on_warning = ?'); vals.push(body.onWarning ? 1 : 0); }
+      if (body.onSpawn !== undefined) { sets.push('on_spawn = ?'); vals.push(body.onSpawn ? 1 : 0); }
+      if (body.timezone !== undefined) { sets.push('timezone = ?'); vals.push(body.timezone); }
+      if (sets.length > 0) {
+        vals.push(teamId);
+        await env.DB.prepare(`UPDATE team_settings SET ${sets.join(', ')} WHERE team_id = ?`).bind(...vals).run();
+      }
+    } else {
+      await env.DB.prepare('INSERT INTO team_settings (team_id, webhook_url, on_warning, on_spawn, timezone) VALUES (?, ?, ?, ?, ?)')
+        .bind(teamId, body.webhookUrl || null, body.onWarning !== false ? 1 : 0, body.onSpawn !== false ? 1 : 0, body.timezone || 'Asia/Manila').run();
+    }
+
+    return json({ ok: true });
+  }
+
+  // POST /api/teams/:id/settings/test — test webhook
+  const settingsTestMatch = path.match(/^\/api\/teams\/([^/]+)\/settings\/test$/);
+  if (settingsTestMatch && request.method === 'POST') {
+    const teamId = settingsTestMatch[1];
+    const settings = await env.DB.prepare('SELECT webhook_url FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    if (!settings?.webhook_url) return json({ error: 'No webhook' }, 400);
+    await sendDiscord(settings.webhook_url, 'Test Notification', 'Guild Manager webhook is working!', 5793266);
+    return json({ ok: true });
+  }
+
   return json({ error: 'Not found' }, 404);
 }
 
 export default {
   async fetch(request, env) {
     return handleRequest(request, env);
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(handleScheduled(env));
   },
 };
