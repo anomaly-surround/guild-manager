@@ -225,6 +225,15 @@ async function initDB(db) {
       FOREIGN KEY (target_user_id) REFERENCES users(id),
       FOREIGN KEY (author_id) REFERENCES users(id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS war_log (
       id TEXT PRIMARY KEY,
       team_id TEXT NOT NULL,
@@ -709,6 +718,7 @@ async function handleRequest(request, env) {
       env.DB.prepare('DELETE FROM member_availability WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM boss_loot WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM dkp_ledger WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM chat_messages WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM war_log WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM announcements WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM team_members WHERE team_id = ?').bind(teamId),
@@ -1279,6 +1289,59 @@ async function handleRequest(request, env) {
 
     await env.DB.prepare('INSERT OR REPLACE INTO member_activity (team_id, user_id, last_seen) VALUES (?, ?, unixepoch())')
       .bind(teamId, user.userId).run();
+    return json({ ok: true });
+  }
+
+  // --- Chat ---
+
+  const chatMatch = path.match(/^\/api\/teams\/([^/]+)\/chat$/);
+  if (chatMatch && request.method === 'GET') {
+    const teamId = chatMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const url = new URL(request.url);
+    const after = url.searchParams.get('after') || '0';
+
+    const messages = await env.DB.prepare(`
+      SELECT cm.*, u.username, u.avatar, u.discord_id
+      FROM chat_messages cm JOIN users u ON u.id = cm.user_id
+      WHERE cm.team_id = ? AND cm.created_at > ?
+      ORDER BY cm.created_at ASC
+      LIMIT 100
+    `).bind(teamId, parseInt(after)).all();
+
+    return json({ messages: messages.results });
+  }
+
+  if (chatMatch && request.method === 'POST') {
+    const teamId = chatMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const body = await request.json();
+    if (!body.message?.trim()) return json({ error: 'Message required' }, 400);
+    if (body.message.length > 2000) return json({ error: 'Message too long' }, 400);
+
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO chat_messages (id, team_id, user_id, message) VALUES (?, ?, ?, ?)')
+      .bind(id, teamId, user.userId, body.message.trim()).run();
+
+    return json({ ok: true, id });
+  }
+
+  // DELETE single message (author or officers+)
+  const chatDeleteMatch = path.match(/^\/api\/teams\/([^/]+)\/chat\/([^/]+)$/);
+  if (chatDeleteMatch && request.method === 'DELETE') {
+    const [, teamId, msgId] = chatDeleteMatch;
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const msg = await env.DB.prepare('SELECT * FROM chat_messages WHERE id = ? AND team_id = ?').bind(msgId, teamId).first();
+    if (!msg) return json({ error: 'Not found' }, 404);
+    if (msg.user_id !== user.userId && member.role === 'member') return json({ error: 'No permission' }, 403);
+
+    await env.DB.prepare('DELETE FROM chat_messages WHERE id = ?').bind(msgId).run();
     return json({ ok: true });
   }
 
