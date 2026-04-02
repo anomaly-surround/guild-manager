@@ -1002,7 +1002,7 @@
                     <p style="color:var(--text-dim);font-size:0.75em;margin-top:6px">No payment required. One trial per account.</p>
                 </div>`;
             document.getElementById('deathModal').innerHTML = `
-                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
                     <div class="card" style="width:420px;max-width:90vw;margin:0;border-color:#7c3aed;">
                         <h2 style="color:#a78bfa">Upgrade to Premium</h2>
                         <p style="color:var(--text-muted);font-size:0.9em;margin-bottom:14px">Unlimited teams, 50 members, analytics, custom roles, and more.</p>
