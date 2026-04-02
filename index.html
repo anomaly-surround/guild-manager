@@ -487,6 +487,11 @@
         .toggle-arrow { font-size: 0.8em; color: #64748b; transition: transform 0.2s; }
         .toggle-arrow.open { transform: rotate(180deg); }
 
+        /* Mobile tab dropdown - hidden on desktop */
+        .mobile-tab-select {
+            display: none;
+        }
+
         /* Sidebar layout */
         .team-layout {
             display: flex;
@@ -958,23 +963,27 @@
                 padding: 8px;
             }
 
-            /* Sidebar tabs on mobile — horizontal scroll */
+            /* Hide sidebar tabs on mobile, show dropdown instead */
             .sidebar {
-                flex-wrap: nowrap !important;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                scrollbar-width: none;
-                padding-bottom: 4px;
+                display: none !important;
             }
-            .sidebar::-webkit-scrollbar {
-                display: none;
-            }
-            .sidebar .tab-btn {
-                padding: 6px 12px;
-                font-size: 0.75em;
-                flex-shrink: 0;
-                text-align: center;
-                white-space: nowrap;
+            .mobile-tab-select {
+                display: block !important;
+                width: 100%;
+                padding: 12px 14px;
+                background: var(--bg-input);
+                border: 1px solid var(--border-input);
+                color: var(--text);
+                border-radius: 8px;
+                font-size: 0.95em;
+                font-weight: 600;
+                margin-bottom: 12px;
+                appearance: none;
+                -webkit-appearance: none;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 12px center;
+                cursor: pointer;
             }
 
             /* Invite code */
@@ -1374,6 +1383,20 @@
                     </div>
                 </div>
 
+                <select class="mobile-tab-select" onchange="mobileTabSwitch(this.value)">
+                    <option value="dashboard" ${teamTab === 'dashboard' ? 'selected' : ''}>Dashboard</option>
+                    <option value="chat" ${teamTab === 'chat' ? 'selected' : ''}>Chat</option>
+                    <option value="announcements" ${teamTab === 'announcements' ? 'selected' : ''}>Announcements</option>
+                    <option value="timers" ${teamTab === 'timers' ? 'selected' : ''}>Boss Timers</option>
+                    <option value="events" ${teamTab === 'events' ? 'selected' : ''}>Events</option>
+                    <option value="members" ${teamTab === 'members' ? 'selected' : ''}>Members (${members.length})</option>
+                    <option value="loot" ${teamTab === 'loot' ? 'selected' : ''}>Loot</option>
+                    <option value="dkp" ${teamTab === 'dkp' ? 'selected' : ''}>DKP</option>
+                    <option value="wars" ${teamTab === 'wars' ? 'selected' : ''}>Wars</option>
+                    <option value="availability" ${teamTab === 'availability' ? 'selected' : ''}>Availability</option>
+                    ${team.premium_team ? `<option value="analytics" ${teamTab === 'analytics' ? 'selected' : ''}>Analytics</option>` : ''}
+                    <option value="settings" ${teamTab === 'settings' ? 'selected' : ''}>Settings</option>
+                </select>
                 <div class="team-layout">
                     <div class="sidebar">
                         <button class="tab-btn ${teamTab === 'dashboard' ? 'active' : ''}" onclick="loadAndRenderDashboard()">Dashboard</button>
@@ -1861,6 +1884,19 @@
                     </div>
                 </div>
 
+                <select class="mobile-tab-select" onchange="mobileTabSwitch(this.value)">
+                    <option value="dashboard">Dashboard</option>
+                    <option value="chat">Chat</option>
+                    <option value="announcements">Announcements</option>
+                    <option value="timers">Boss Timers</option>
+                    <option value="events">Events</option>
+                    <option value="members">Members (${members.length})</option>
+                    <option value="loot">Loot</option>
+                    <option value="dkp">DKP</option>
+                    <option value="wars">Wars</option>
+                    <option value="availability">Availability</option>
+                    <option value="settings" selected>Settings</option>
+                </select>
                 <div class="team-layout">
                     <div class="sidebar">
                         <button class="tab-btn" onclick="loadAndRenderDashboard()">Dashboard</button>
@@ -2109,6 +2145,24 @@
             });
             showToast('DKP decay settings saved');
         });
+
+        // --- Mobile tab switcher ---
+        function mobileTabSwitch(tab) {
+            switch(tab) {
+                case 'dashboard': loadAndRenderDashboard(); break;
+                case 'chat': loadAndRenderChat(); break;
+                case 'announcements': loadAndRenderAnnouncements(); break;
+                case 'timers': teamTab='timers'; renderTeamView(); break;
+                case 'events': teamTab='events'; loadAndRenderEvents(); break;
+                case 'members': teamTab='members'; renderTeamView(); break;
+                case 'loot': loadAndRenderLoot(); break;
+                case 'dkp': loadAndRenderDKP(); break;
+                case 'wars': loadAndRenderWars(); break;
+                case 'availability': loadAndRenderAvailability(); break;
+                case 'analytics': loadAndRenderAnalytics(); break;
+                case 'settings': teamTab='settings'; renderTeamSettings(); break;
+            }
+        }
 
         // --- Dashboard ---
 
