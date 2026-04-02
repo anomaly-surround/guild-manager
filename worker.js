@@ -636,6 +636,9 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
 
+  // Test endpoint
+  if (path === '/ping') return json({ pong: true, time: Date.now(), version: 'v2' });
+
   // Init DB on first request
   try { await initDB(env.DB); } catch(e) { console.error('initDB error:', e); }
 
