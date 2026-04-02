@@ -950,13 +950,6 @@
                 padding: 4px 2px;
             }
 
-            /* Invite box */
-            .invite-box {
-                flex-direction: column;
-                text-align: center;
-                gap: 8px;
-            }
-
             /* Chat */
             .chat-container {
                 height: 50vh;
@@ -965,13 +958,35 @@
                 padding: 8px;
             }
 
-            /* Sidebar tabs on mobile */
+            /* Sidebar tabs on mobile — horizontal scroll */
+            .sidebar {
+                flex-wrap: nowrap !important;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                padding-bottom: 4px;
+            }
+            .sidebar::-webkit-scrollbar {
+                display: none;
+            }
             .sidebar .tab-btn {
-                padding: 5px 8px;
-                font-size: 0.72em;
-                flex: 1;
+                padding: 6px 12px;
+                font-size: 0.75em;
+                flex-shrink: 0;
                 text-align: center;
-                min-width: 0;
+                white-space: nowrap;
+            }
+
+            /* Invite code */
+            .invite-box {
+                flex-direction: column;
+                text-align: center;
+                gap: 6px;
+                padding: 10px 12px;
+            }
+            .invite-code {
+                font-size: 0.9em;
+                word-break: break-all;
             }
 
             /* Announcements */
