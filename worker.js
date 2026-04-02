@@ -639,6 +639,21 @@ async function handleRequest(request, env) {
   // Test endpoint
   if (path === '/ping') return json({ pong: true, time: Date.now(), version: 'v2' });
 
+  // Debug endpoints
+  if (path === '/debug/cron') {
+    try {
+      await handleScheduled(env);
+      return json({ ok: true, message: 'Cron executed' });
+    } catch(e) {
+      return json({ error: e.message, stack: e.stack });
+    }
+  }
+  if (path === '/debug/bosses') {
+    try { await initDB(env.DB); } catch(e) {}
+    const bosses = await env.DB.prepare('SELECT id, name, status, next_spawn, auto_reset_at FROM bosses').all();
+    return json({ bosses: bosses.results, now: Date.now() });
+  }
+
   // Init DB on first request
   try { await initDB(env.DB); } catch(e) { console.error('initDB error:', e); }
 
