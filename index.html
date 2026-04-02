@@ -1085,7 +1085,7 @@
                         <div class="team-card" onclick="openTeam('${t.id}')">
                             ${t.team_icon ? `<img class="team-icon" src="${t.team_icon}" style="object-fit:cover">` : `<div class="team-icon">${initials}</div>`}
                             <div class="team-info">
-                                <div class="team-name">${t.name}</div>
+                                <div class="team-name">${escapeHtml(t.name)}</div>
                                 ${t.description ? `<div class="team-desc">${t.description}</div>` : ''}
                                 <div class="team-stats">
                                     <span>${t.member_count} member${t.member_count !== 1 ? 's' : ''}</span>
@@ -1352,14 +1352,14 @@
                 html += `
                     <div class="${cls}" data-boss-id="${boss.id}">
                         <div style="flex:1">
-                            <div class="boss-name-text">${boss.name}</div>
+                            <div class="boss-name-text">${escapeHtml(boss.name)}</div>
                             <div class="boss-meta-text">${meta} | Alert: ${boss.alert_minutes}m</div>
                             ${boss.last_death ? `<div class="boss-death-text">Killed: ${new Date(boss.last_death).toLocaleString()}</div>` : ''}
                         </div>
                         <div class="${countdownCls}">${countdownText}</div>
                         <div class="boss-actions">
                             <button class="btn btn-sm" style="background:#065f46;color:#34d399" onclick="killBoss('${boss.id}')">Killed</button>
-                            <button class="btn btn-sm" style="background:#1e3a5f;color:#60a5fa" onclick="openDeathModal('${boss.id}','${boss.name}')">Set Death</button>
+                            <button class="btn btn-sm" style="background:#1e3a5f;color:#60a5fa" onclick="openDeathModal('${boss.id}','${escapeHtml(boss.name)}')">Set Death</button>
                             ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteBoss('${boss.id}')">X</button>` : ''}
                         </div>
                     </div>
@@ -1983,7 +1983,7 @@
                 const eventDate = new Date(e.event_time);
                 const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
                 const timeStr = eventDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                html += `<div class="dash-value">${e.title}</div>`;
+                html += `<div class="dash-value">${escapeHtml(e.title)}</div>`;
                 html += `<div class="dash-sub">${dateStr} at ${timeStr}</div>`;
             } else {
                 html += `<div class="dash-value" style="color:var(--text-dim)">No upcoming</div>`;
@@ -2389,14 +2389,14 @@
                         <div class="announcement-header">
                             <div>
                                 ${a.pinned ? '<span class="pin-icon">&#128204;</span>' : ''}
-                                <span class="announcement-title">${a.title}</span>
+                                <span class="announcement-title">${escapeHtml(a.title)}</span>
                             </div>
                             <div style="display:flex;gap:4px;">
                                 ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="togglePin('${a.id}')" style="font-size:0.7em;padding:2px 8px">${a.pinned ? 'Unpin' : 'Pin'}</button>` : ''}
                                 ${canManage || a.created_by === currentUser?.id ? `<button class="btn btn-danger btn-sm" onclick="deleteAnnouncement('${a.id}')" style="font-size:0.7em;padding:2px 8px">X</button>` : ''}
                             </div>
                         </div>
-                        ${a.body ? `<div class="announcement-body">${a.body}</div>` : ''}
+                        ${a.body ? `<div class="announcement-body">${escapeHtml(a.body)}</div>` : ''}
                         <div class="announcement-meta">by ${a.author_name} &middot; ${date}</div>
                     </div>
                 `;
@@ -2552,7 +2552,7 @@
                                 <span style="font-weight:600">vs ${w.opponent}</span>
                                 ${score ? `<span style="font-size:0.85em;color:#94a3b8"> (${score})</span>` : ''}
                                 <span class="event-type-badge ${w.event_type}" style="margin-left:4px">${w.event_type}</span>
-                                ${w.notes ? `<div style="font-size:0.8em;color:#64748b;margin-top:2px">${w.notes}</div>` : ''}
+                                ${w.notes ? `<div style="font-size:0.8em;color:#64748b;margin-top:2px">${escapeHtml(w.notes)}</div>` : ''}
                                 <div style="font-size:0.7em;color:#64748b">${date} &middot; by ${w.logged_by_name}</div>
                             </div>
                             <div style="display:flex;align-items:center;gap:6px">
@@ -2659,8 +2659,8 @@
                     html += `
                         <div class="loot-item">
                             <div>
-                                <span class="loot-item-name">${l.item_name}</span>
-                                <span style="color:#64748b;font-size:0.8em"> from ${l.boss_name}</span>
+                                <span class="loot-item-name">${escapeHtml(l.item_name)}</span>
+                                <span style="color:#64748b;font-size:0.8em"> from ${escapeHtml(l.boss_name)}</span>
                                 <div style="font-size:0.8em;color:#94a3b8">${l.recipient_name} ${l.dkp_cost ? `(-${l.dkp_cost} DKP)` : ''} &middot; ${date}</div>
                             </div>
                             ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteLoot('${l.id}')" style="font-size:0.7em;padding:2px 8px">X</button>` : ''}
@@ -2850,7 +2850,7 @@
             } else {
                 for (const t of templates) {
                     const bosses = JSON.parse(t.bosses);
-                    html += `<div class="dkp-row"><div><span style="font-weight:600">${t.name}</span> <span style="color:var(--text-dim);font-size:0.8em">(${t.game} &middot; ${bosses.length} bosses)</span></div>
+                    html += `<div class="dkp-row"><div><span style="font-weight:600">${escapeHtml(t.name)}</span> <span style="color:var(--text-dim);font-size:0.8em">(${t.game} &middot; ${bosses.length} bosses)</span></div>
                         <button class="btn btn-primary btn-sm" onclick="importBossTemplate('${t.id}')" style="font-size:0.75em">Import</button></div>`;
                 }
             }
@@ -3227,14 +3227,14 @@
                 <div class="event-card ${isPast ? 'past' : ''}" data-event-id="${e.id}">
                     <div class="event-header">
                         <div>
-                            <span class="event-title">${e.title}</span>
+                            <span class="event-title">${escapeHtml(e.title)}</span>
                             <span class="event-type-badge ${e.event_type}">${e.event_type}</span>
                             ${e.recurrence ? `<span class="event-type-badge" style="background:#1e3a5f;color:#60a5fa">${e.recurrence}</span>` : ''}
                         </div>
                         ${canManage || e.created_by === currentUser?.id ? `<button class="btn btn-danger btn-sm" onclick="deleteEvent('${e.id}')">X</button>` : ''}
                     </div>
                     <div class="event-time">${dateStr} at ${timeStr} (${e.duration_minutes || 60}min)<span class="event-countdown">${countdown}</span></div>
-                    ${e.description ? `<div class="event-desc">${e.description}</div>` : ''}
+                    ${e.description ? `<div class="event-desc">${escapeHtml(e.description)}</div>` : ''}
                     <div class="event-time" style="margin-top:4px;font-size:0.75em">by ${e.creator_name}</div>
                     <div class="rsvp-bar">
                         <button class="rsvp-btn ${e.my_rsvp === 'going' ? 'active-going' : ''}" onclick="rsvpEvent('${e.id}','going')">Going</button>
@@ -3381,11 +3381,6 @@
             await api('POST', `/api/teams/${currentTeamId}/heartbeat`);
         }, 300000);
 
-        // Trigger cron every 60 seconds (backup for Cloudflare cron)
-        setInterval(async () => {
-            if (!token) return;
-            await fetch(API + '/debug/cron').catch(() => {});
-        }, 60000);
 
         // --- Actions ---
 
@@ -3481,7 +3476,7 @@
                 const date = new Date(n.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                 notesHtml += `
                     <div class="note-item">
-                        <div class="note-text">${n.note}</div>
+                        <div class="note-text">${escapeHtml(n.note)}</div>
                         <div class="note-meta">${n.author_name} &middot; ${date}
                             ${n.author_id === currentUser.id || teamData.team.my_role === 'leader' ? `<button class="btn btn-danger btn-sm" onclick="deleteMemberNote('${n.id}','${userId}','${username}')" style="font-size:0.65em;padding:1px 6px;margin-left:6px">X</button>` : ''}
                         </div>

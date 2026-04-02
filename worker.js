@@ -18,7 +18,7 @@ function json(data, status = 200) {
 
 function corsHeaders() {
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': 'https://anomaly-surround.github.io',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
@@ -636,24 +636,6 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
 
-  // Test endpoint
-  if (path === '/ping') return json({ pong: true, time: Date.now(), version: 'v2' });
-
-  // Debug endpoints
-  if (path === '/debug/cron') {
-    try {
-      await handleScheduled(env);
-      return json({ ok: true, message: 'Cron executed' });
-    } catch(e) {
-      return json({ error: e.message, stack: e.stack });
-    }
-  }
-  if (path === '/debug/bosses') {
-    try { await initDB(env.DB); } catch(e) {}
-    const bosses = await env.DB.prepare('SELECT id, name, status, next_spawn, auto_reset_at FROM bosses').all();
-    return json({ bosses: bosses.results, now: Date.now() });
-  }
-
   // Init DB on first request
   try { await initDB(env.DB); } catch(e) { console.error('initDB error:', e); }
 
@@ -778,8 +760,8 @@ async function handleRequest(request, env) {
   if (path === '/auth/guest' && request.method === 'POST') {
     const body = await request.json().catch(() => ({}));
     const username = body.username?.trim();
-    if (!username || username.length < 2 || username.length > 20) {
-      return json({ error: 'Username must be 2-20 characters' }, 400);
+    if (!username || username.length < 2 || username.length > 20 || !/^[a-zA-Z0-9_\- ]+$/.test(username)) {
+      return json({ error: 'Username must be 2-20 characters (letters, numbers, underscore, dash)' }, 400);
     }
 
     const userId = crypto.randomUUID();
@@ -843,7 +825,15 @@ async function handleRequest(request, env) {
 
   // --- LemonSqueezy webhook (no auth required) ---
   if (path === '/ls/webhook' && request.method === 'POST') {
-    const body = await request.json();
+    // Verify webhook signature
+    const rawBody = await request.text();
+    const signature = request.headers.get('x-signature');
+    if (env.LS_WEBHOOK_SECRET && signature) {
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.LS_WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const sig = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody)))));
+      if (sig !== signature) return json({ error: 'Invalid signature' }, 403);
+    }
+    const body = JSON.parse(rawBody);
     const eventName = body.meta?.event_name;
 
     if (eventName === 'order_created') {
@@ -1376,7 +1366,10 @@ async function handleRequest(request, env) {
     if (existing) {
       const sets = [];
       const vals = [];
-      if (body.webhookUrl !== undefined) { sets.push('webhook_url = ?'); vals.push(body.webhookUrl); }
+      if (body.webhookUrl !== undefined) {
+        if (body.webhookUrl && !body.webhookUrl.startsWith('https://discord.com/api/webhooks/')) return json({ error: 'Webhook must be a Discord webhook URL' }, 400);
+        sets.push('webhook_url = ?'); vals.push(body.webhookUrl);
+      }
       if (body.onWarning !== undefined) { sets.push('on_warning = ?'); vals.push(body.onWarning ? 1 : 0); }
       if (body.onSpawn !== undefined) { sets.push('on_spawn = ?'); vals.push(body.onSpawn ? 1 : 0); }
       if (body.onAnnouncement !== undefined) { sets.push('on_announcement = ?'); vals.push(body.onAnnouncement ? 1 : 0); }
