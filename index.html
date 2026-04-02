@@ -221,7 +221,7 @@
             letter-spacing: 0.5px;
         }
 
-        .form-group input {
+        .form-group input, .form-group select, .form-group textarea {
             background: var(--bg-input);
             border: 1px solid var(--border-input);
             color: var(--text);
@@ -230,6 +230,7 @@
             font-size: 0.95em;
             outline: none;
             color-scheme: var(--color-scheme);
+            font-family: inherit;
         }
 
         .form-group input:focus {
@@ -801,10 +802,195 @@
                 font-size: 0.8em;
                 text-align: center;
             }
+            .boss-grid {
+                grid-template-columns: 1fr !important;
+            }
         }
         @media (max-width: 600px) {
-            .form-row { flex-direction: column; }
-            .container { padding: 16px; }
+            /* Header */
+            .header {
+                padding: 10px 12px;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .header h1 {
+                font-size: 1.1em;
+            }
+            .header h1 img {
+                height: 1em !important;
+            }
+            #headerActions {
+                gap: 4px !important;
+            }
+            #headerActions .btn {
+                padding: 4px 8px !important;
+                font-size: 0.75em !important;
+            }
+            .user-info {
+                gap: 6px;
+            }
+            .user-name {
+                display: none;
+            }
+            .user-avatar {
+                width: 28px;
+                height: 28px;
+            }
+            .btn-logout {
+                padding: 4px 8px;
+                font-size: 0.7em;
+            }
+            #upgradeBtn {
+                padding: 4px 8px !important;
+                font-size: 0.75em !important;
+            }
+            #themeBtn {
+                padding: 4px 8px !important;
+                font-size: 1em !important;
+            }
+
+            /* Container */
+            .container { padding: 10px; }
+
+            /* Forms */
+            .form-row {
+                flex-direction: column;
+            }
+            .form-row .form-group {
+                max-width: 100% !important;
+                width: 100% !important;
+            }
+            .form-group input, .form-group select {
+                width: 100%;
+            }
+
+            /* Cards & modals */
+            .card {
+                padding: 14px;
+                margin-bottom: 10px;
+            }
+
+            /* Boss items */
+            .boss-item {
+                flex-wrap: wrap;
+                gap: 8px;
+                padding: 10px 12px;
+            }
+            .boss-countdown {
+                min-width: auto !important;
+                text-align: left;
+                font-size: 1.2em;
+            }
+            .boss-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            /* Team cards */
+            .team-card {
+                padding: 12px;
+                gap: 10px;
+            }
+            .team-icon {
+                width: 36px;
+                height: 36px;
+                font-size: 1em;
+            }
+            .team-card-right {
+                display: none;
+            }
+
+            /* Member items */
+            .member-item {
+                flex-wrap: wrap;
+                gap: 8px;
+                padding: 8px 10px;
+            }
+            .member-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+
+            /* War items */
+            .war-item {
+                flex-wrap: wrap;
+                gap: 6px;
+                font-size: 0.85em;
+            }
+            .stat-box {
+                padding: 8px;
+            }
+            .stat-number {
+                font-size: 1.4em;
+            }
+
+            /* Loot & DKP */
+            .loot-item, .dkp-row {
+                flex-wrap: wrap;
+                gap: 6px;
+                font-size: 0.85em;
+            }
+
+            /* Events */
+            .event-header {
+                flex-direction: column;
+                gap: 6px;
+            }
+            .rsvp-bar {
+                flex-wrap: wrap;
+            }
+
+            /* Availability grid */
+            .avail-grid {
+                grid-template-columns: 60px repeat(7, 1fr);
+                font-size: 0.65em;
+                gap: 1px;
+            }
+            .avail-header {
+                padding: 4px 2px;
+            }
+
+            /* Invite box */
+            .invite-box {
+                flex-direction: column;
+                text-align: center;
+                gap: 8px;
+            }
+
+            /* Chat */
+            .chat-container {
+                height: 50vh;
+            }
+            .chat-input-bar {
+                padding: 8px;
+            }
+
+            /* Sidebar tabs on mobile */
+            .sidebar .tab-btn {
+                padding: 5px 8px;
+                font-size: 0.72em;
+                flex: 1;
+                text-align: center;
+                min-width: 0;
+            }
+
+            /* Announcements */
+            .announcement-header {
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            /* Dash grid */
+            .dash-grid {
+                grid-template-columns: 1fr;
+            }
+
+            /* Toast positioning */
+            .toast-container {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+            }
         }
     </style>
 </head>
@@ -939,8 +1125,8 @@
             document.getElementById('mainContent').innerHTML = `
                 <div class="login-screen">
                     <h2>Guild Manager</h2>
-                    <p>Manage your gaming team, track boss spawns, schedule events</p>
-                    <div style="display:flex;flex-direction:column;gap:10px;width:280px">
+                    <p style="padding:0 16px">Manage your gaming team, track boss spawns, schedule events</p>
+                    <div style="display:flex;flex-direction:column;gap:10px;width:280px;max-width:90vw">
                         <button class="btn btn-discord" onclick="login()" style="justify-content:center">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
                             Login with Discord
@@ -954,9 +1140,9 @@
                             <span style="color:var(--text-dim);font-size:0.8em">or</span>
                             <div style="flex:1;height:1px;background:var(--border)"></div>
                         </div>
-                        <div style="display:flex;gap:8px">
-                            <input type="text" id="guestName" placeholder="Enter a username" style="flex:1;background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:10px 14px;border-radius:8px;font-size:0.9em" maxlength="20" onkeydown="if(event.key==='Enter')loginGuest()">
-                            <button class="btn btn-secondary" onclick="loginGuest()" style="white-space:nowrap">Join as Guest</button>
+                        <div style="display:flex;flex-direction:column;gap:8px">
+                            <input type="text" id="guestName" placeholder="Enter a username" style="background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:10px 14px;border-radius:8px;font-size:0.9em;width:100%" maxlength="20" onkeydown="if(event.key==='Enter')loginGuest()">
+                            <button class="btn btn-secondary" onclick="loginGuest()" style="width:100%;padding:12px">Join as Guest</button>
                         </div>
                         <p style="color:var(--text-dim);font-size:0.7em;text-align:center">Guest accounts have limited features. Sign in with Discord or Google for the full experience.</p>
                     </div>
