@@ -348,7 +348,8 @@ async function initDB(db) {
   // Run migrations (each one is idempotent via catch)
   const needsMigrations = await db.prepare("SELECT premium FROM users LIMIT 1").first().then(() => false).catch(() => true)
     || await db.prepare("SELECT accent_color FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT trial_started FROM users LIMIT 1").first().then(() => false).catch(() => true);
+    || await db.prepare("SELECT trial_started FROM users LIMIT 1").first().then(() => false).catch(() => true)
+    || await db.prepare("SELECT google_id FROM users LIMIT 1").first().then(() => false).catch(() => true);
   if (needsMigrations) {
     const migrations = [
       'ALTER TABLE users ADD COLUMN premium INTEGER DEFAULT 0',
@@ -382,6 +383,8 @@ async function initDB(db) {
       'ALTER TABLE team_settings ADD COLUMN team_icon TEXT',
       'ALTER TABLE users ADD COLUMN trial_started INTEGER',
       'ALTER TABLE users ADD COLUMN trial_used INTEGER DEFAULT 0',
+      'ALTER TABLE users ADD COLUMN google_id TEXT',
+      'ALTER TABLE users ADD COLUMN auth_type TEXT DEFAULT "discord"',
     ];
     for (const sql of migrations) await db.exec(sql).catch(() => {});
   }
@@ -698,6 +701,73 @@ async function handleRequest(request, env) {
     return Response.redirect(`${frontendUrl}?token=${jwt}`, 302);
   }
 
+  // GET /auth/google — redirect to Google OAuth
+  if (path === '/auth/google') {
+    const redirect = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${env.GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(url.origin + '/auth/google/callback')}&response_type=code&scope=openid%20profile&prompt=select_account`;
+    return Response.redirect(redirect, 302);
+  }
+
+  // GET /auth/google/callback
+  if (path === '/auth/google/callback') {
+    const code = url.searchParams.get('code');
+    if (!code) return json({ error: 'No code provided' }, 400);
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: url.origin + '/auth/google/callback',
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) return json({ error: 'Google OAuth failed' }, 400);
+
+    const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const googleUser = await userRes.json();
+    if (!googleUser.id) return json({ error: 'Failed to get Google user' }, 400);
+
+    const existing = await env.DB.prepare('SELECT id FROM users WHERE google_id = ?').bind(googleUser.id).first();
+    let finalUserId;
+
+    if (existing) {
+      finalUserId = existing.id;
+      await env.DB.prepare('UPDATE users SET username = ?, avatar = ? WHERE id = ?')
+        .bind(googleUser.name || googleUser.email, googleUser.picture || null, existing.id).run();
+    } else {
+      finalUserId = crypto.randomUUID();
+      await env.DB.prepare('INSERT INTO users (id, google_id, discord_id, username, avatar, auth_type) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(finalUserId, googleUser.id, 'google_' + googleUser.id, googleUser.name || googleUser.email, googleUser.picture || null, 'google').run();
+    }
+
+    const jwt = await createToken({ userId: finalUserId, username: googleUser.name || googleUser.email }, env.JWT_SECRET);
+    const frontendUrl = 'https://anomaly-surround.github.io/guild-manager';
+    return Response.redirect(`${frontendUrl}?token=${jwt}`, 302);
+  }
+
+  // POST /auth/guest — create guest account
+  if (path === '/auth/guest' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const username = body.username?.trim();
+    if (!username || username.length < 2 || username.length > 20) {
+      return json({ error: 'Username must be 2-20 characters' }, 400);
+    }
+
+    const userId = crypto.randomUUID();
+    const guestId = 'guest_' + userId.slice(0, 8);
+
+    await env.DB.prepare('INSERT INTO users (id, discord_id, username, auth_type) VALUES (?, ?, ?, ?)')
+      .bind(userId, guestId, username, 'guest').run();
+
+    const jwt = await createToken({ userId, username }, env.JWT_SECRET);
+    return json({ token: jwt });
+  }
+
   // GET /auth/me — get current user
   if (path === '/auth/me') {
     const user = await getUser(request, env);
@@ -743,6 +813,7 @@ async function handleRequest(request, env) {
       trial: isTrial,
       trialDaysLeft: isTrial ? trialDaysLeft : 0,
       trialUsed: !!(dbUser.trial_used || dbUser.trial_started),
+      authType: dbUser.auth_type || 'discord',
     });
   }
 
