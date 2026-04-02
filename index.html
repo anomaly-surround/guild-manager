@@ -986,16 +986,17 @@
                 cursor: pointer;
             }
 
-            /* Invite code */
+            /* Invite code — compact on mobile */
             .invite-box {
-                flex-direction: column;
-                text-align: center;
                 gap: 6px;
-                padding: 10px 12px;
+                padding: 8px 10px;
+                margin-top: 8px;
+            }
+            .invite-box > span:first-child {
+                display: none;
             }
             .invite-code {
-                font-size: 0.9em;
-                word-break: break-all;
+                font-size: 0.85em;
             }
 
             /* Announcements */
