@@ -1032,7 +1032,7 @@
 
         function showCreateTeamModal() {
             document.getElementById('deathModal').innerHTML = `
-                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
                     <div class="card" style="width:400px;max-width:90vw;margin:0;">
                         <h2>Create Team</h2>
                         <div class="form-group">
@@ -1049,7 +1049,7 @@
 
         function showJoinTeamModal() {
             document.getElementById('deathModal').innerHTML = `
-                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
                     <div class="card" style="width:400px;max-width:90vw;margin:0;">
                         <h2>Join Team</h2>
                         <div class="form-group">
@@ -2836,7 +2836,7 @@
             }
             html += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'deathModal\').innerHTML=\'\'" style="margin-top:12px">Close</button>';
             document.getElementById('deathModal').innerHTML = `
-                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
                     <div class="card" style="width:500px;max-width:90vw;margin:0;max-height:80vh;overflow-y:auto">${html}</div>
                 </div>`;
         });
@@ -2859,7 +2859,7 @@
                 <button class="btn btn-secondary btn-sm" onclick="document.getElementById('deathModal').innerHTML=''">Close</button>
             </div>`;
             document.getElementById('deathModal').innerHTML = `
-                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
                     <div class="card" style="width:500px;max-width:90vw;margin:0;max-height:80vh;overflow-y:auto">${html}</div>
                 </div>`;
         });
@@ -3483,7 +3483,7 @@
                 `;
             }
             document.getElementById('deathModal').innerHTML = `
-                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
                     <div class="card" style="width:450px;max-width:90vw;margin:0;max-height:80vh;overflow-y:auto;">
                         <h2>Notes — ${username}</h2>
                         <div id="notesListModal">${notesHtml || '<div class="empty-state" style="padding:12px">No notes yet</div>'}</div>
