@@ -710,8 +710,11 @@ async function handleRequest(request, env) {
   // GET /auth/google/callback
   if (path === '/auth/google/callback') {
     const code = url.searchParams.get('code');
-    if (!code) return json({ error: 'No code provided' }, 400);
+    const error = url.searchParams.get('error');
+    const frontendUrl = 'https://anomaly-surround.github.io/guild-manager';
+    if (error || !code) return Response.redirect(frontendUrl, 302);
 
+    try {
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -724,7 +727,7 @@ async function handleRequest(request, env) {
       }),
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) return json({ error: 'Google OAuth failed' }, 400);
+    if (!tokenData.access_token) return Response.redirect(frontendUrl, 302);
 
     const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
@@ -746,8 +749,11 @@ async function handleRequest(request, env) {
     }
 
     const jwt = await createToken({ userId: finalUserId, username: googleUser.name || googleUser.email }, env.JWT_SECRET);
-    const frontendUrl = 'https://anomaly-surround.github.io/guild-manager';
     return Response.redirect(`${frontendUrl}?token=${jwt}`, 302);
+    } catch(e) {
+      console.error('Google auth error:', e);
+      return Response.redirect(frontendUrl, 302);
+    }
   }
 
   // POST /auth/guest — create guest account
