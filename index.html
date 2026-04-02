@@ -3381,6 +3381,12 @@
             await api('POST', `/api/teams/${currentTeamId}/heartbeat`);
         }, 300000);
 
+        // Trigger cron every 60 seconds (backup for Cloudflare cron)
+        setInterval(async () => {
+            if (!token) return;
+            await fetch(API + '/debug/cron').catch(() => {});
+        }, 60000);
+
         // --- Actions ---
 
         const checkout = guard('checkout', async function(type) {
