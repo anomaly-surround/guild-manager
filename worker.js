@@ -1024,15 +1024,44 @@ async function handleRequest(request, env) {
       .bind(teamId, user.userId).first();
     if (!team) return json({ error: 'Not the owner' }, 403);
 
+    // Delete all child records first
+    // Get event IDs for this team to clean up rsvps/attendance/reactions
+    const teamEvents = await env.DB.prepare('SELECT id FROM events WHERE team_id = ?').bind(teamId).all();
+    for (const e of teamEvents.results) {
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM event_rsvps WHERE event_id = ?').bind(e.id),
+        env.DB.prepare('DELETE FROM event_attendance WHERE event_id = ?').bind(e.id),
+      ]);
+    }
+    // Get chat message IDs to clean up reactions
+    const chatMsgs = await env.DB.prepare('SELECT id FROM chat_messages WHERE team_id = ?').bind(teamId).all();
+    for (const m of chatMsgs.results) {
+      await env.DB.prepare('DELETE FROM chat_reactions WHERE message_id = ?').bind(m.id).run();
+    }
+    // Get auction IDs to clean up bids
+    const auctions = await env.DB.prepare('SELECT id FROM dkp_auctions WHERE team_id = ?').bind(teamId).all();
+    for (const a of auctions.results) {
+      await env.DB.prepare('DELETE FROM dkp_bids WHERE auction_id = ?').bind(a.id).run();
+    }
+    // Delete everything else
     await env.DB.batch([
+      env.DB.prepare('DELETE FROM events WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM bosses WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM member_notes WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM member_activity WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM member_availability WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM boss_loot WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM boss_kill_log WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM dkp_ledger WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM dkp_auctions WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM loot_wishlist WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM chat_messages WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM war_log WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM announcements WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM event_templates WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM analytics_snapshots WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM custom_roles WHERE team_id = ?').bind(teamId),
+      env.DB.prepare('DELETE FROM team_settings WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM team_members WHERE team_id = ?').bind(teamId),
       env.DB.prepare('DELETE FROM teams WHERE id = ?').bind(teamId),
     ]);
@@ -1167,22 +1196,25 @@ async function handleRequest(request, env) {
   }
 
   async function isPremiumTeam(teamId) {
-    const team = await env.DB.prepare('SELECT owner_id FROM teams WHERE id = ?').bind(teamId).first();
-    if (!team) return false;
-    const owner = await env.DB.prepare('SELECT premium, premium_type, premium_until, trial_started, trial_used FROM users WHERE id = ?').bind(team.owner_id).first();
-    if (!owner) return false;
-    // Check paid premium
-    if (owner.premium) {
-      if (String(owner.premium_type).trim().toLowerCase() === 'lifetime') return true;
-      if (owner.premium_until && owner.premium_until > Math.floor(Date.now() / 1000)) return true;
-      if (!owner.premium_type && !owner.premium_until) return true;
+    try {
+      const team = await env.DB.prepare('SELECT owner_id FROM teams WHERE id = ?').bind(teamId).first();
+      if (!team) return false;
+      const owner = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(team.owner_id).first();
+      if (!owner) return false;
+      if (owner.premium) {
+        if (String(owner.premium_type || '').trim().toLowerCase() === 'lifetime') return true;
+        if (owner.premium_until && owner.premium_until > Math.floor(Date.now() / 1000)) return true;
+        if (!owner.premium_type && !owner.premium_until) return true;
+      }
+      if (owner.trial_started && !owner.trial_used) {
+        const trialEnd = owner.trial_started + 7 * 86400;
+        if (Math.floor(Date.now() / 1000) < trialEnd) return true;
+      }
+      return false;
+    } catch(e) {
+      console.error('isPremiumTeam error:', e);
+      return false;
     }
-    // Check active trial
-    if (owner.trial_started && !owner.trial_used) {
-      const trialEnd = owner.trial_started + 7 * 86400;
-      if (Math.floor(Date.now() / 1000) < trialEnd) return true;
-    }
-    return false;
   }
 
   // GET /api/teams/:id/bosses
