@@ -639,16 +639,6 @@ async function handleRequest(request, env) {
   // Init DB on first request
   try { await initDB(env.DB); } catch(e) { console.error('initDB error:', e); }
 
-  // Manual cron trigger for testing
-  if (path === '/debug/cron') {
-    try {
-      await handleScheduled(env);
-      return json({ ok: true, message: 'Cron executed' });
-    } catch(e) {
-      return json({ error: e.message, stack: e.stack });
-    }
-  }
-
   // --- Auth routes ---
 
   // GET /auth/login — redirect to Discord OAuth
