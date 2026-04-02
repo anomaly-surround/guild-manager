@@ -948,20 +948,40 @@
             el.style.display = 'flex';
             document.getElementById('headerActions').style.display = 'flex';
             document.getElementById('userName').textContent = currentUser.username +
-                (currentUser.premium ? ' (Premium)' : '');
+                (currentUser.trial ? ' (Trial)' : currentUser.premium ? ' (Premium)' : '');
             if (currentUser.avatar) {
                 document.getElementById('userAvatar').src =
                     `https://cdn.discordapp.com/avatars/${currentUser.discordId}/${currentUser.avatar}.png?size=64`;
             }
-            document.getElementById('upgradeBtn').style.display = currentUser.premium ? 'none' : 'inline-block';
+            const upgradeBtn = document.getElementById('upgradeBtn');
+            if (currentUser.trial) {
+                upgradeBtn.style.display = 'inline-block';
+                upgradeBtn.textContent = `Trial: ${currentUser.trialDaysLeft}d left`;
+                upgradeBtn.style.background = 'linear-gradient(135deg,#065f46,#059669)';
+                upgradeBtn.onclick = showUpgradeModal;
+            } else if (currentUser.premium) {
+                upgradeBtn.style.display = 'none';
+            } else {
+                upgradeBtn.style.display = 'inline-block';
+                upgradeBtn.textContent = 'Upgrade';
+                upgradeBtn.style.background = 'linear-gradient(135deg,#7c3aed,#6d28d9)';
+            }
         }
 
         function showUpgradeModal() {
+            const trialUsed = currentUser?.trialUsed;
+            const trialBtn = trialUsed ? '' : `
+                <div style="margin-bottom:14px;padding:12px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:8px;text-align:center">
+                    <p style="color:#34d399;font-size:0.9em;font-weight:600;margin-bottom:8px">Try Premium free for 7 days!</p>
+                    <button class="btn" style="background:#065f46;color:#34d399;padding:8px 20px;font-size:0.9em" onclick="startFreeTrial()">Start Free Trial</button>
+                    <p style="color:var(--text-dim);font-size:0.75em;margin-top:6px">No payment required. One trial per account.</p>
+                </div>`;
             document.getElementById('deathModal').innerHTML = `
                 <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.innerHTML=''">
-                    <div class="card" style="width:400px;max-width:90vw;margin:0;border-color:#7c3aed;">
+                    <div class="card" style="width:420px;max-width:90vw;margin:0;border-color:#7c3aed;">
                         <h2 style="color:#a78bfa">Upgrade to Premium</h2>
-                        <p style="color:#94a3b8;font-size:0.9em;margin-bottom:12px">Unlimited teams, up to 50 members per team</p>
+                        <p style="color:var(--text-muted);font-size:0.9em;margin-bottom:14px">Unlimited teams, 50 members, analytics, custom roles, and more.</p>
+                        ${trialBtn}
                         <div style="display:flex;gap:10px;">
                             <button class="btn btn-primary" onclick="checkout('monthly')">Monthly Plan</button>
                             <button class="btn btn-primary" onclick="checkout('lifetime')">Lifetime (one-time)</button>
@@ -970,6 +990,20 @@
                     </div>
                 </div>`;
         }
+
+        const startFreeTrial = guard('startFreeTrial', async function() {
+            const data = await api('POST', '/api/start-trial');
+            if (data.error) { showToast(data.error); return; }
+            document.getElementById('deathModal').innerHTML = '';
+            showToast('Free trial started! You have 7 days of Premium.');
+            // Refresh user data
+            const user = await api('GET', '/auth/me');
+            if (user && !user.error) {
+                currentUser = user;
+                showUserInfo();
+            }
+            if (currentTeamId) openTeam(currentTeamId);
+        });
 
         function showCreateTeamModal() {
             document.getElementById('deathModal').innerHTML = `

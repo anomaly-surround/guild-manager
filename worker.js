@@ -347,7 +347,8 @@ async function initDB(db) {
 
   // Run migrations (each one is idempotent via catch)
   const needsMigrations = await db.prepare("SELECT premium FROM users LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT accent_color FROM team_settings LIMIT 1").first().then(() => false).catch(() => true);
+    || await db.prepare("SELECT accent_color FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
+    || await db.prepare("SELECT trial_started FROM users LIMIT 1").first().then(() => false).catch(() => true);
   if (needsMigrations) {
     const migrations = [
       'ALTER TABLE users ADD COLUMN premium INTEGER DEFAULT 0',
@@ -379,6 +380,8 @@ async function initDB(db) {
       'ALTER TABLE team_settings ADD COLUMN dkp_decay_last_run INTEGER',
       'ALTER TABLE team_settings ADD COLUMN accent_color TEXT',
       'ALTER TABLE team_settings ADD COLUMN team_icon TEXT',
+      'ALTER TABLE users ADD COLUMN trial_started INTEGER',
+      'ALTER TABLE users ADD COLUMN trial_used INTEGER DEFAULT 0',
     ];
     for (const sql of migrations) await db.exec(sql).catch(() => {});
   }
@@ -703,17 +706,30 @@ async function handleRequest(request, env) {
     if (!dbUser) return json({ error: 'User not found' }, 404);
     // Check if subscription is still active
     let isPremium = false;
+    let isTrial = false;
+    let trialDaysLeft = 0;
     if (dbUser.premium) {
       if (String(dbUser.premium_type).trim().toLowerCase() === 'lifetime') {
         isPremium = true;
       } else if (dbUser.premium_until && dbUser.premium_until > Math.floor(Date.now() / 1000)) {
         isPremium = true;
       } else if (!dbUser.premium_type && !dbUser.premium_until) {
-        // Manually set premium with no type — treat as lifetime
         isPremium = true;
       } else {
-        // Subscription expired
         await env.DB.prepare('UPDATE users SET premium = 0 WHERE id = ?').bind(dbUser.id).run();
+      }
+    }
+
+    // Check free trial
+    if (!isPremium && dbUser.trial_started) {
+      const trialEnd = dbUser.trial_started + 7 * 86400;
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (nowSec < trialEnd) {
+        isPremium = true;
+        isTrial = true;
+        trialDaysLeft = Math.ceil((trialEnd - nowSec) / 86400);
+      } else if (!dbUser.trial_used) {
+        await env.DB.prepare('UPDATE users SET trial_used = 1 WHERE id = ?').bind(dbUser.id).run();
       }
     }
 
@@ -723,7 +739,10 @@ async function handleRequest(request, env) {
       avatar: dbUser.avatar,
       discordId: dbUser.discord_id,
       premium: isPremium,
-      premiumType: isPremium ? dbUser.premium_type : null,
+      premiumType: isPremium ? (isTrial ? 'trial' : dbUser.premium_type) : null,
+      trial: isTrial,
+      trialDaysLeft: isTrial ? trialDaysLeft : 0,
+      trialUsed: !!(dbUser.trial_used || dbUser.trial_started),
     });
   }
 
@@ -775,6 +794,22 @@ async function handleRequest(request, env) {
   }
 
   // --- Checkout URL generator ---
+  // POST /api/start-trial — start 7-day free trial
+  if (path === '/api/start-trial' && request.method === 'POST') {
+    const user = await getUser(request, env);
+    if (!user) return json({ error: 'Not logged in' }, 401);
+
+    const dbUser = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user.userId).first();
+    if (!dbUser) return json({ error: 'User not found' }, 404);
+    if (dbUser.premium) return json({ error: 'Already premium' }, 400);
+    if (dbUser.trial_started || dbUser.trial_used) return json({ error: 'Trial already used' }, 400);
+
+    await env.DB.prepare('UPDATE users SET trial_started = ? WHERE id = ?')
+      .bind(Math.floor(Date.now() / 1000), user.userId).run();
+
+    return json({ ok: true, trialDaysLeft: 7 });
+  }
+
   if (path === '/api/checkout' && request.method === 'POST') {
     const user = await getUser(request, env);
     if (!user) return json({ error: 'Not logged in' }, 401);
