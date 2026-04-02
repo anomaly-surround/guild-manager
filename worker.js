@@ -2418,7 +2418,15 @@ async function handleRequest(request, env) {
 
 export default {
   async fetch(request, env) {
-    return handleRequest(request, env);
+    try {
+      return await handleRequest(request, env);
+    } catch(e) {
+      console.error('Unhandled error:', e);
+      return new Response(JSON.stringify({ error: 'Internal server error', detail: e.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+      });
+    }
   },
   async scheduled(event, env, ctx) {
     ctx.waitUntil(handleScheduled(env));
