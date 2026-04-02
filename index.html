@@ -990,8 +990,12 @@
         }
 
         function showUpgradeModal() {
-            const trialUsed = currentUser?.trialUsed;
-            const trialBtn = trialUsed ? '' : `
+            const isGuest = currentUser?.authType === 'guest';
+            const trialUsed = currentUser?.trialUsed || isGuest;
+            const trialBtn = trialUsed ? (isGuest ? `
+                <div style="margin-bottom:14px;padding:12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;text-align:center">
+                    <p style="color:#f59e0b;font-size:0.85em">Sign in with Discord or Google to start a free trial.</p>
+                </div>` : '') : `
                 <div style="margin-bottom:14px;padding:12px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:8px;text-align:center">
                     <p style="color:#34d399;font-size:0.9em;font-weight:600;margin-bottom:8px">Try Premium free for 7 days!</p>
                     <button class="btn" style="background:#065f46;color:#34d399;padding:8px 20px;font-size:0.9em" onclick="startFreeTrial()">Start Free Trial</button>

@@ -878,6 +878,7 @@ async function handleRequest(request, env) {
 
     const dbUser = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user.userId).first();
     if (!dbUser) return json({ error: 'User not found' }, 404);
+    if (dbUser.auth_type === 'guest') return json({ error: 'Sign in with Discord or Google to start a trial' }, 400);
     if (dbUser.premium) return json({ error: 'Already premium' }, 400);
     if (dbUser.trial_started || dbUser.trial_used) return json({ error: 'Trial already used' }, 400);
 
