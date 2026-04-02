@@ -898,7 +898,12 @@
                 showLogin();
                 return;
             }
-            const user = await api('GET', '/auth/me');
+            let user = await api('GET', '/auth/me');
+            // Retry once on failure (cold start)
+            if (!user || user.error) {
+                await new Promise(r => setTimeout(r, 1500));
+                user = await api('GET', '/auth/me');
+            }
             if (!user || user.error) {
                 localStorage.removeItem('gm_token');
                 token = '';
