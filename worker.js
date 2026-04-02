@@ -446,7 +446,7 @@ async function sendDiscord(webhookUrl, title, description, color) {
 // --- Cron handler ---
 
 async function handleScheduled(env) {
-  await initDB(env.DB);
+  try { await initDB(env.DB); } catch(e) { console.error('initDB error in cron:', e); }
   const now = Date.now();
 
   const bosses = await env.DB.prepare('SELECT * FROM bosses WHERE status = ?').bind('waiting').all();
