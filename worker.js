@@ -985,9 +985,8 @@ async function handleRequest(request, env) {
     const team = await env.DB.prepare('SELECT * FROM teams WHERE id = ?').bind(teamId).first();
     if (!team) return json({ error: 'Team not found' }, 404);
 
-    // Check if team owner is premium
-    const owner = await env.DB.prepare('SELECT premium FROM users WHERE id = ?').bind(team.owner_id).first();
-    const premiumTeam = !!(owner?.premium);
+    // Check if team owner is premium (including trial)
+    const premiumTeam = await isPremiumTeam(teamId);
 
     const members = await env.DB.prepare(`
       SELECT u.id, u.username, u.avatar, u.discord_id, u.premium, tm.role, tm.joined_at,
@@ -1160,8 +1159,20 @@ async function handleRequest(request, env) {
   async function isPremiumTeam(teamId) {
     const team = await env.DB.prepare('SELECT owner_id FROM teams WHERE id = ?').bind(teamId).first();
     if (!team) return false;
-    const owner = await env.DB.prepare('SELECT premium FROM users WHERE id = ?').bind(team.owner_id).first();
-    return !!(owner?.premium);
+    const owner = await env.DB.prepare('SELECT premium, premium_type, premium_until, trial_started, trial_used FROM users WHERE id = ?').bind(team.owner_id).first();
+    if (!owner) return false;
+    // Check paid premium
+    if (owner.premium) {
+      if (String(owner.premium_type).trim().toLowerCase() === 'lifetime') return true;
+      if (owner.premium_until && owner.premium_until > Math.floor(Date.now() / 1000)) return true;
+      if (!owner.premium_type && !owner.premium_until) return true;
+    }
+    // Check active trial
+    if (owner.trial_started && !owner.trial_used) {
+      const trialEnd = owner.trial_started + 7 * 86400;
+      if (Math.floor(Date.now() / 1000) < trialEnd) return true;
+    }
+    return false;
   }
 
   // GET /api/teams/:id/bosses
