@@ -436,6 +436,25 @@ async function initDB(db) {
       FOREIGN KEY (post_id) REFERENCES recruitment_posts(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS matches (
+      id TEXT PRIMARY KEY,
+      challenger_team_id TEXT NOT NULL,
+      challenged_team_id TEXT NOT NULL,
+      challenger_name TEXT NOT NULL,
+      challenged_name TEXT NOT NULL,
+      match_type TEXT DEFAULT 'gvg',
+      scheduled_time INTEGER,
+      message TEXT,
+      status TEXT DEFAULT 'pending',
+      result_challenger INTEGER,
+      result_challenged INTEGER,
+      winner_team_id TEXT,
+      completed_by TEXT,
+      created_by TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (challenger_team_id) REFERENCES teams(id),
+      FOREIGN KEY (challenged_team_id) REFERENCES teams(id)
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS team_files (
       id TEXT PRIMARY KEY,
       team_id TEXT NOT NULL,
@@ -3030,6 +3049,152 @@ async function handleRequest(request, env) {
       await env.FILES.delete(r2Key);
       await env.DB.prepare('DELETE FROM team_files WHERE id = ?').bind(fileId).run();
     }
+
+    return json({ ok: true });
+  }
+
+  // ========== MATCH SCHEDULING ==========
+
+  const matchesMatch = path.match(/^\/api\/teams\/([^/]+)\/matches$/);
+  const matchActionMatch = path.match(/^\/api\/teams\/([^/]+)\/matches\/([^/]+)\/(accept|decline|result)$/);
+  const matchDeleteMatch = path.match(/^\/api\/teams\/([^/]+)\/matches\/([^/]+)$/);
+  const teamSearchMatch = path.match(/^\/api\/teams\/([^/]+)\/search-teams$/);
+
+  // GET /api/teams/:id/search-teams?q=name — search other teams by name
+  if (teamSearchMatch && request.method === 'GET') {
+    const teamId = teamSearchMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const q = url.searchParams.get('q') || '';
+    if (q.length < 2) return json({ teams: [] });
+
+    const results = await env.DB.prepare(
+      "SELECT id, name FROM teams WHERE name LIKE ? AND id != ? LIMIT 10"
+    ).bind(`%${q}%`, teamId).all();
+
+    return json({ teams: results.results });
+  }
+
+  // GET /api/teams/:id/matches — list all matches (sent & received)
+  if (matchesMatch && request.method === 'GET') {
+    const teamId = matchesMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const matches = await env.DB.prepare(`
+      SELECT m.*, u.username as created_by_name FROM matches m
+      LEFT JOIN users u ON u.id = m.created_by
+      WHERE m.challenger_team_id = ? OR m.challenged_team_id = ?
+      ORDER BY m.created_at DESC LIMIT 50
+    `).bind(teamId, teamId).all();
+
+    return json({ matches: matches.results });
+  }
+
+  // POST /api/teams/:id/matches — send challenge
+  if (matchesMatch && request.method === 'POST') {
+    const teamId = matchesMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    const body = await request.json();
+    if (!body.opponentTeamId) return json({ error: 'Opponent team required' }, 400);
+
+    const myTeam = await env.DB.prepare('SELECT name FROM teams WHERE id = ?').bind(teamId).first();
+    const oppTeam = await env.DB.prepare('SELECT name FROM teams WHERE id = ?').bind(body.opponentTeamId).first();
+    if (!oppTeam) return json({ error: 'Opponent team not found' }, 404);
+
+    const matchId = crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO matches (id, challenger_team_id, challenged_team_id, challenger_name, challenged_name, match_type, scheduled_time, message, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(matchId, teamId, body.opponentTeamId, myTeam.name, oppTeam.name, body.matchType || 'gvg',
+        body.scheduledTime || null, (body.message || '').slice(0, 200), user.userId).run();
+
+    // Notify opponent via webhook
+    const oppSettings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(body.opponentTeamId).first();
+    if (oppSettings?.webhook_url) {
+      await sendDiscord(oppSettings.webhook_url, 'New Match Challenge!',
+        `**${myTeam.name}** has challenged your team to a **${body.matchType || 'gvg'}**!${body.message ? '\n> ' + body.message : ''}${body.scheduledTime ? '\nScheduled: <t:' + Math.floor(body.scheduledTime / 1000) + ':F>' : ''}`, 16760576);
+    }
+
+    return json({ ok: true, id: matchId });
+  }
+
+  // POST /api/teams/:id/matches/:matchId/accept
+  if (matchActionMatch && matchActionMatch[3] === 'accept') {
+    const teamId = matchActionMatch[1];
+    const matchId = matchActionMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    const match = await env.DB.prepare('SELECT * FROM matches WHERE id = ? AND challenged_team_id = ? AND status = ?').bind(matchId, teamId, 'pending').first();
+    if (!match) return json({ error: 'Match not found or already responded' }, 404);
+
+    await env.DB.prepare('UPDATE matches SET status = ? WHERE id = ?').bind('accepted', matchId).run();
+
+    // Notify challenger
+    const challengerSettings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(match.challenger_team_id).first();
+    if (challengerSettings?.webhook_url) {
+      await sendDiscord(challengerSettings.webhook_url, 'Challenge Accepted!',
+        `**${match.challenged_name}** accepted your match challenge!`, 5763719);
+    }
+
+    return json({ ok: true });
+  }
+
+  // POST /api/teams/:id/matches/:matchId/decline
+  if (matchActionMatch && matchActionMatch[3] === 'decline') {
+    const teamId = matchActionMatch[1];
+    const matchId = matchActionMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    const match = await env.DB.prepare('SELECT * FROM matches WHERE id = ? AND challenged_team_id = ? AND status = ?').bind(matchId, teamId, 'pending').first();
+    if (!match) return json({ error: 'Match not found or already responded' }, 404);
+
+    await env.DB.prepare('UPDATE matches SET status = ? WHERE id = ?').bind('declined', matchId).run();
+
+    return json({ ok: true });
+  }
+
+  // POST /api/teams/:id/matches/:matchId/result — log result (either team can do this)
+  if (matchActionMatch && matchActionMatch[3] === 'result') {
+    const teamId = matchActionMatch[1];
+    const matchId = matchActionMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    const match = await env.DB.prepare('SELECT * FROM matches WHERE id = ? AND status = ? AND (challenger_team_id = ? OR challenged_team_id = ?)')
+      .bind(matchId, 'accepted', teamId, teamId).first();
+    if (!match) return json({ error: 'Match not found or not accepted' }, 404);
+
+    const body = await request.json();
+    const scoreCh = body.scoreChallenger !== undefined ? parseInt(body.scoreChallenger) : null;
+    const scoreCd = body.scoreChallenged !== undefined ? parseInt(body.scoreChallenged) : null;
+
+    let winnerId = null;
+    if (scoreCh !== null && scoreCd !== null) {
+      if (scoreCh > scoreCd) winnerId = match.challenger_team_id;
+      else if (scoreCd > scoreCh) winnerId = match.challenged_team_id;
+    }
+
+    await env.DB.prepare('UPDATE matches SET status = ?, result_challenger = ?, result_challenged = ?, winner_team_id = ?, completed_by = ? WHERE id = ?')
+      .bind('completed', scoreCh, scoreCd, winnerId, user.userId, matchId).run();
+
+    return json({ ok: true });
+  }
+
+  // DELETE /api/teams/:id/matches/:matchId
+  if (matchDeleteMatch && request.method === 'DELETE') {
+    const teamId = matchDeleteMatch[1];
+    const matchId = matchDeleteMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    // Only allow deleting if this team is involved
+    await env.DB.prepare('DELETE FROM matches WHERE id = ? AND (challenger_team_id = ? OR challenged_team_id = ?)')
+      .bind(matchId, teamId, teamId).run();
 
     return json({ ok: true });
   }
