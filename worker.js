@@ -21,6 +21,9 @@ function corsHeaders() {
     'Access-Control-Allow-Origin': 'https://anomaly-surround.github.io',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
   };
 }
 
@@ -36,7 +39,9 @@ async function createToken(payload, secret) {
 
 async function verifyToken(token, secret) {
   try {
-    const [header, body, sig] = token.split('.');
+    const parts = token.split('.');
+    if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return null;
+    const [header, body, sig] = parts;
     const data = `${header}.${body}`;
     const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
     const expected = new Uint8Array(atob(sig).split('').map(c => c.charCodeAt(0)));
@@ -60,6 +65,11 @@ async function getUser(request, env) {
   }
   if (!token) return null;
   return verifyToken(token, env.JWT_SECRET);
+}
+
+async function safeJson(request) {
+  try { return await request.json(); }
+  catch { return null; }
 }
 
 function generateInviteCode() {
@@ -553,14 +563,21 @@ function calcNextSpawn(boss, fromTime, tz) {
   return fromTime + 3600000;
 }
 
+function isValidDiscordWebhook(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && (parsed.hostname === 'discord.com' || parsed.hostname === 'discordapp.com') && parsed.pathname.startsWith('/api/webhooks/');
+  } catch { return false; }
+}
+
 async function sendDiscord(webhookUrl, title, description, color) {
-  if (!webhookUrl) return;
+  if (!webhookUrl || !isValidDiscordWebhook(webhookUrl)) return;
   try {
     await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        embeds: [{ title, description, color, footer: { text: 'Guild Manager' }, timestamp: new Date().toISOString() }],
+        embeds: [{ title: String(title).slice(0, 256), description: String(description).slice(0, 2048), color, footer: { text: 'Guild Manager' }, timestamp: new Date().toISOString() }],
       }),
     });
   } catch (e) { /* ignore */ }
@@ -948,14 +965,13 @@ async function handleRequest(request, env) {
 
   // --- LemonSqueezy webhook (no auth required) ---
   if (path === '/ls/webhook' && request.method === 'POST') {
-    // Verify webhook signature
+    // Verify webhook signature (mandatory)
     const rawBody = await request.text();
     const signature = request.headers.get('x-signature');
-    if (env.LS_WEBHOOK_SECRET && signature) {
-      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.LS_WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-      const sig = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody)))));
-      if (sig !== signature) return json({ error: 'Invalid signature' }, 403);
-    }
+    if (!env.LS_WEBHOOK_SECRET || !signature) return json({ error: 'Unauthorized' }, 403);
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.LS_WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sig = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody)))));
+    if (sig !== signature) return json({ error: 'Invalid signature' }, 403);
     const body = JSON.parse(rawBody);
     const eventName = body.meta?.event_name;
 
@@ -1023,7 +1039,8 @@ async function handleRequest(request, env) {
     const user = await getUser(request, env);
     if (!user) return json({ error: 'Not logged in' }, 401);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     const variant = body.type === 'lifetime' ? env.LS_MONTHLY_VARIANT : env.LS_LIFETIME_VARIANT;
 
     const res = await fetch('https://api.lemonsqueezy.com/v1/checkouts', {
@@ -1079,7 +1096,8 @@ async function handleRequest(request, env) {
 
   // POST /api/teams — create a team
   if (path === '/api/teams' && request.method === 'POST') {
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.name || !body.name.trim()) return json({ error: 'Name required' }, 400);
 
     // Check team limit (free = 1, premium = unlimited)
@@ -1200,7 +1218,15 @@ async function handleRequest(request, env) {
   const roleMatch = path.match(/^\/api\/teams\/([^/]+)\/members\/role$/);
   if (roleMatch && request.method === 'POST') {
     const teamId = roleMatch[1];
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
+    if (!body.userId || !body.role) return json({ error: 'userId and role required' }, 400);
+
+    // Prevent self-role-change
+    if (body.userId === user.userId) return json({ error: 'Cannot change own role' }, 403);
+
+    // Validate role value
+    if (!['member', 'officer', 'leader'].includes(body.role)) return json({ error: 'Invalid role' }, 400);
 
     const myRole = await env.DB.prepare(
       'SELECT role FROM team_members WHERE team_id = ? AND user_id = ?'
@@ -1209,9 +1235,23 @@ async function handleRequest(request, env) {
       return json({ error: 'No permission' }, 403);
     }
 
-    // Can't change leader role unless you're the leader
+    // Verify target exists in team
+    const targetRole = await env.DB.prepare(
+      'SELECT role FROM team_members WHERE team_id = ? AND user_id = ?'
+    ).bind(teamId, body.userId).first();
+    if (!targetRole) return json({ error: 'User not in team' }, 400);
+
+    // Only leader can promote to leader or officer
     if (body.role === 'leader' && myRole.role !== 'leader') {
       return json({ error: 'Only leader can promote to leader' }, 403);
+    }
+    if (body.role === 'officer' && myRole.role !== 'leader') {
+      return json({ error: 'Only leader can promote to officer' }, 403);
+    }
+
+    // Officers can only demote members, not other officers
+    if (myRole.role === 'officer' && targetRole.role !== 'member') {
+      return json({ error: 'Officers can only manage members' }, 403);
     }
 
     await env.DB.prepare('UPDATE team_members SET role = ? WHERE team_id = ? AND user_id = ?')
@@ -1223,7 +1263,8 @@ async function handleRequest(request, env) {
   const kickMatch = path.match(/^\/api\/teams\/([^/]+)\/kick$/);
   if (kickMatch && request.method === 'POST') {
     const teamId = kickMatch[1];
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
 
     const myRole = await env.DB.prepare(
       'SELECT role FROM team_members WHERE team_id = ? AND user_id = ?'
@@ -1366,7 +1407,8 @@ async function handleRequest(request, env) {
       // Members can add bosses too — officers+ can delete
     }
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.name?.trim()) return json({ error: 'Name required' }, 400);
 
     const settings = await env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
@@ -1483,15 +1525,16 @@ async function handleRequest(request, env) {
       return json({ error: 'Officers+ only' }, 403);
     }
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     const existing = await env.DB.prepare('SELECT 1 FROM team_settings WHERE team_id = ?').bind(teamId).first();
 
     if (existing) {
       const sets = [];
       const vals = [];
       if (body.webhookUrl !== undefined) {
-        if (body.webhookUrl && !body.webhookUrl.startsWith('https://discord.com/api/webhooks/')) return json({ error: 'Webhook must be a Discord webhook URL' }, 400);
-        sets.push('webhook_url = ?'); vals.push(body.webhookUrl);
+        if (body.webhookUrl && !isValidDiscordWebhook(body.webhookUrl)) return json({ error: 'Webhook must be a Discord webhook URL (https://discord.com/api/webhooks/...)' }, 400);
+        sets.push('webhook_url = ?'); vals.push(body.webhookUrl || null);
       }
       if (body.onWarning !== undefined) { sets.push('on_warning = ?'); vals.push(body.onWarning ? 1 : 0); }
       if (body.onSpawn !== undefined) { sets.push('on_spawn = ?'); vals.push(body.onSpawn ? 1 : 0); }
@@ -1508,10 +1551,22 @@ async function handleRequest(request, env) {
       if (body.startingDkp !== undefined) { sets.push('starting_dkp = ?'); vals.push(body.startingDkp); }
       if (body.timezone !== undefined) { sets.push('timezone = ?'); vals.push(body.timezone); }
       // Premium fields
-      if (body.webhookBoss !== undefined) { sets.push('webhook_boss = ?'); vals.push(body.webhookBoss || null); }
-      if (body.webhookEvents !== undefined) { sets.push('webhook_events = ?'); vals.push(body.webhookEvents || null); }
-      if (body.webhookWars !== undefined) { sets.push('webhook_wars = ?'); vals.push(body.webhookWars || null); }
-      if (body.webhookAnnouncements !== undefined) { sets.push('webhook_announcements = ?'); vals.push(body.webhookAnnouncements || null); }
+      if (body.webhookBoss !== undefined) {
+        if (body.webhookBoss && !isValidDiscordWebhook(body.webhookBoss)) return json({ error: 'Invalid Discord webhook URL' }, 400);
+        sets.push('webhook_boss = ?'); vals.push(body.webhookBoss || null);
+      }
+      if (body.webhookEvents !== undefined) {
+        if (body.webhookEvents && !isValidDiscordWebhook(body.webhookEvents)) return json({ error: 'Invalid Discord webhook URL' }, 400);
+        sets.push('webhook_events = ?'); vals.push(body.webhookEvents || null);
+      }
+      if (body.webhookWars !== undefined) {
+        if (body.webhookWars && !isValidDiscordWebhook(body.webhookWars)) return json({ error: 'Invalid Discord webhook URL' }, 400);
+        sets.push('webhook_wars = ?'); vals.push(body.webhookWars || null);
+      }
+      if (body.webhookAnnouncements !== undefined) {
+        if (body.webhookAnnouncements && !isValidDiscordWebhook(body.webhookAnnouncements)) return json({ error: 'Invalid Discord webhook URL' }, 400);
+        sets.push('webhook_announcements = ?'); vals.push(body.webhookAnnouncements || null);
+      }
       if (body.dkpDecayEnabled !== undefined) { sets.push('dkp_decay_enabled = ?'); vals.push(body.dkpDecayEnabled ? 1 : 0); }
       if (body.dkpDecayPercent !== undefined) { sets.push('dkp_decay_percent = ?'); vals.push(body.dkpDecayPercent); }
       if (body.dkpDecayInactiveDays !== undefined) { sets.push('dkp_decay_inactive_days = ?'); vals.push(body.dkpDecayInactiveDays); }
@@ -1523,8 +1578,10 @@ async function handleRequest(request, env) {
         await env.DB.prepare(`UPDATE team_settings SET ${sets.join(', ')} WHERE team_id = ?`).bind(...vals).run();
       }
     } else {
+      const webhookVal = body.webhookUrl || null;
+      if (webhookVal && !isValidDiscordWebhook(webhookVal)) return json({ error: 'Invalid Discord webhook URL' }, 400);
       await env.DB.prepare('INSERT INTO team_settings (team_id, webhook_url, on_warning, on_spawn, on_announcement, timezone) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(teamId, body.webhookUrl || null, body.onWarning !== false ? 1 : 0, body.onSpawn !== false ? 1 : 0, body.onAnnouncement !== false ? 1 : 0, body.timezone || 'Asia/Manila').run();
+        .bind(teamId, webhookVal, body.onWarning !== false ? 1 : 0, body.onSpawn !== false ? 1 : 0, body.onAnnouncement !== false ? 1 : 0, body.timezone || 'Asia/Manila').run();
     }
 
     return json({ ok: true });
@@ -1538,7 +1595,8 @@ async function handleRequest(request, env) {
       .bind(teamId, user.userId).first();
     if (!team) return json({ error: 'Not the owner' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.userId) return json({ error: 'User required' }, 400);
 
     const target = await env.DB.prepare('SELECT * FROM team_members WHERE team_id = ? AND user_id = ?')
@@ -1553,10 +1611,12 @@ async function handleRequest(request, env) {
     return json({ ok: true });
   }
 
-  // POST /api/teams/:id/settings/test — test webhook
+  // POST /api/teams/:id/settings/test — test webhook (leader/officer only)
   const settingsTestMatch = path.match(/^\/api\/teams\/([^/]+)\/settings\/test$/);
   if (settingsTestMatch && request.method === 'POST') {
     const teamId = settingsTestMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
     const settings = await env.DB.prepare('SELECT webhook_url FROM team_settings WHERE team_id = ?').bind(teamId).first();
     if (!settings?.webhook_url) return json({ error: 'No webhook' }, 400);
     await sendDiscord(settings.webhook_url, 'Test Notification', 'Guild Manager webhook is working!', 5793266);
@@ -1599,7 +1659,8 @@ async function handleRequest(request, env) {
       if (ts && !ts.members_create_events) return json({ error: 'Only officers+ can create events' }, 403);
     }
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.title?.trim() || !body.eventTime) return json({ error: 'Title and time required' }, 400);
 
     const id = crypto.randomUUID();
@@ -1654,7 +1715,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member) return json({ error: 'Not a member' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     const status = ['going', 'maybe', 'not_going'].includes(body.status) ? body.status : 'going';
 
     const existing = await env.DB.prepare('SELECT 1 FROM event_rsvps WHERE event_id = ? AND user_id = ?')
@@ -1694,7 +1756,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     // body.attendance = [{userId, attended: true/false}, ...]
     for (const a of (body.attendance || [])) {
       const existing = await env.DB.prepare('SELECT 1 FROM event_attendance WHERE event_id = ? AND user_id = ?')
@@ -1749,7 +1812,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.title?.trim()) return json({ error: 'Title required' }, 400);
 
     const id = crypto.randomUUID();
@@ -1772,7 +1836,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     await env.DB.prepare('UPDATE announcements SET title = ?, body = ?, pinned = ? WHERE id = ? AND team_id = ?')
       .bind(body.title?.trim(), body.body || null, body.pinned ? 1 : 0, announcementId, teamId).run();
     return json({ ok: true });
@@ -1829,8 +1894,10 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.note?.trim()) return json({ error: 'Note required' }, 400);
+    if (body.note.trim().length > 1000) return json({ error: 'Note too long (max 1000 chars)' }, 400);
 
     const id = crypto.randomUUID();
     await env.DB.prepare('INSERT INTO member_notes (id, team_id, target_user_id, author_id, note) VALUES (?, ?, ?, ?, ?)')
@@ -1907,7 +1974,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member) return json({ error: 'Not a member' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.message?.trim()) return json({ error: 'Message required' }, 400);
     if (body.message.length > 2000) return json({ error: 'Message too long' }, 400);
 
@@ -1959,7 +2027,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.itemName?.trim() || !body.recipientId) return json({ error: 'Item and recipient required' }, 400);
 
     const id = crypto.randomUUID();
@@ -2011,12 +2080,16 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
 
-    const body = await request.json();
-    if (!body.userId || !body.amount || !body.reason?.trim()) return json({ error: 'User, amount, and reason required' }, 400);
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
+    if (!body.userId || body.amount === undefined || !body.reason?.trim()) return json({ error: 'User, amount, and reason required' }, 400);
+    const dkpAmount = Number(body.amount);
+    if (!Number.isFinite(dkpAmount) || dkpAmount === 0 || Math.abs(dkpAmount) > 999999) return json({ error: 'Invalid amount (max 999999)' }, 400);
+    if (body.reason.trim().length > 200) return json({ error: 'Reason too long (max 200 chars)' }, 400);
 
     const id = crypto.randomUUID();
     await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(id, teamId, body.userId, body.amount, body.reason.trim(), user.userId).run();
+      .bind(id, teamId, body.userId, dkpAmount, body.reason.trim(), user.userId).run();
 
     return json({ ok: true, id });
   }
@@ -2048,7 +2121,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     // body.userIds = [...], body.amount, body.reason
     if (!body.userIds?.length || !body.amount || !body.reason?.trim()) return json({ error: 'Users, amount, and reason required' }, 400);
 
@@ -2099,7 +2173,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.opponent?.trim() || !['win', 'loss', 'draw'].includes(body.result)) {
       return json({ error: 'Opponent and result (win/loss/draw) required' }, 400);
     }
@@ -2142,7 +2217,8 @@ async function handleRequest(request, env) {
     if (!member) return json({ error: 'Not a member' }, 403);
     if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.emoji) return json({ error: 'Emoji required' }, 400);
 
     const existing = await env.DB.prepare('SELECT 1 FROM chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?')
@@ -2166,7 +2242,8 @@ async function handleRequest(request, env) {
   }
 
   if (path === '/api/boss-templates' && request.method === 'POST') {
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.name?.trim() || !body.game?.trim() || !body.bosses) return json({ error: 'Name, game, and bosses required' }, 400);
     const id = crypto.randomUUID();
     await env.DB.prepare('INSERT INTO boss_templates (id, name, game, bosses, created_by) VALUES (?, ?, ?, ?, ?)')
@@ -2188,7 +2265,8 @@ async function handleRequest(request, env) {
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
     if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     const template = await env.DB.prepare('SELECT * FROM boss_templates WHERE id = ?').bind(body.templateId).first();
     if (!template) return json({ error: 'Template not found' }, 404);
 
@@ -2249,7 +2327,8 @@ async function handleRequest(request, env) {
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
     if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.name?.trim() || !body.title?.trim()) return json({ error: 'Name and title required' }, 400);
     const id = crypto.randomUUID();
     await env.DB.prepare('INSERT INTO event_templates (id, team_id, name, title, description, event_type, duration_minutes, recurrence, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -2316,7 +2395,8 @@ async function handleRequest(request, env) {
     if (!member) return json({ error: 'Not a member' }, 403);
     if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.itemName?.trim()) return json({ error: 'Item name required' }, 400);
     const id = crypto.randomUUID();
     await env.DB.prepare('INSERT INTO loot_wishlist (id, team_id, user_id, item_name, boss_name, priority) VALUES (?, ?, ?, ?, ?, ?)')
@@ -2361,7 +2441,8 @@ async function handleRequest(request, env) {
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
     if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.itemName?.trim()) return json({ error: 'Item name required' }, 400);
     const id = crypto.randomUUID();
     await env.DB.prepare('INSERT INTO dkp_auctions (id, team_id, item_name, boss_name, started_by, min_bid, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -2379,7 +2460,8 @@ async function handleRequest(request, env) {
       .bind(auctionId, teamId, 'open').first();
     if (!auction) return json({ error: 'Auction not found or closed' }, 404);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.amount || body.amount <= 0) return json({ error: 'Invalid bid' }, 400);
     if (body.amount < (auction.min_bid || 0)) return json({ error: `Minimum bid is ${auction.min_bid}` }, 400);
 
@@ -2525,7 +2607,8 @@ async function handleRequest(request, env) {
     if (!member || member.role !== 'leader') return json({ error: 'Leader only' }, 403);
     if (!(await isPremiumTeam(teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     // body.roles = { leader: {displayName, color}, officer: {...}, member: {...} }
     await env.DB.prepare('DELETE FROM custom_roles WHERE team_id = ?').bind(teamId).run();
     for (const [role, data] of Object.entries(body.roles || {})) {
@@ -2562,7 +2645,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member) return json({ error: 'Not a member' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     // body.slots = [{day: 0-6, startTime: "HH:MM", endTime: "HH:MM"}, ...]
     await env.DB.prepare('DELETE FROM member_availability WHERE team_id = ? AND user_id = ?')
       .bind(teamId, user.userId).run();
@@ -2616,7 +2700,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member) return json({ error: 'Not a member' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.question || !body.options || body.options.length < 2) return json({ error: 'Question and at least 2 options required' }, 400);
 
     const pollId = crypto.randomUUID();
@@ -2643,7 +2728,8 @@ async function handleRequest(request, env) {
     if (poll.closed) return json({ error: 'Poll is closed' }, 400);
     if (poll.expires_at && poll.expires_at < Math.floor(Date.now() / 1000)) return json({ error: 'Poll has expired' }, 400);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     const optionIds = Array.isArray(body.optionIds) ? body.optionIds : [body.optionId];
 
     // Clear previous votes
@@ -2721,7 +2807,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.name) return json({ error: 'Name required' }, 400);
 
     const rosterId = crypto.randomUUID();
@@ -2745,7 +2832,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     await env.DB.prepare('DELETE FROM roster_slots WHERE roster_id = ?').bind(rosterId).run();
 
     for (let i = 0; i < (body.slots || []).length && i < 30; i++) {
@@ -2805,7 +2893,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.userId || !body.eventLabel || !body.stats || !Array.isArray(body.stats)) return json({ error: 'userId, eventLabel, and stats[] required' }, 400);
 
     for (const stat of body.stats.slice(0, 20)) {
@@ -2874,7 +2963,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.title) return json({ error: 'Title required' }, 400);
 
     const postId = crypto.randomUUID();
@@ -2891,7 +2981,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (body.status) {
       await env.DB.prepare('UPDATE recruitment_posts SET status = ? WHERE id = ? AND team_id = ?').bind(body.status, postId, teamId).run();
     }
@@ -2923,7 +3014,8 @@ async function handleRequest(request, env) {
     const existing = await env.DB.prepare('SELECT id FROM recruitment_applications WHERE post_id = ? AND user_id = ?').bind(postId, user.userId).first();
     if (existing) return json({ error: 'Already applied' }, 400);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     await env.DB.prepare('INSERT INTO recruitment_applications (id, post_id, user_id, message) VALUES (?, ?, ?, ?)')
       .bind(crypto.randomUUID(), postId, user.userId, (body.message || '').slice(0, 500)).run();
 
@@ -2937,7 +3029,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (body.status === 'accepted' || body.status === 'rejected') {
       await env.DB.prepare('UPDATE recruitment_applications SET status = ?, reviewed_by = ? WHERE id = ?')
         .bind(body.status, user.userId, appId).run();
@@ -3098,7 +3191,8 @@ async function handleRequest(request, env) {
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.opponentTeamId) return json({ error: 'Opponent team required' }, 400);
 
     const myTeam = await env.DB.prepare('SELECT name FROM teams WHERE id = ?').bind(teamId).first();
@@ -3169,7 +3263,8 @@ async function handleRequest(request, env) {
       .bind(matchId, 'accepted', teamId, teamId).first();
     if (!match) return json({ error: 'Match not found or not accepted' }, 404);
 
-    const body = await request.json();
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
     const scoreCh = body.scoreChallenger !== undefined ? parseInt(body.scoreChallenger) : null;
     const scoreCd = body.scoreChallenged !== undefined ? parseInt(body.scoreChallenged) : null;
 
@@ -3208,7 +3303,7 @@ export default {
       return await handleRequest(request, env);
     } catch(e) {
       console.error('Unhandled error:', e);
-      return new Response(JSON.stringify({ error: 'Internal server error', detail: e.message }), {
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       });

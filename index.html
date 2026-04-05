@@ -1352,7 +1352,7 @@
                             ${t.team_icon ? `<img class="team-icon" src="${t.team_icon}" style="object-fit:cover">` : `<div class="team-icon">${initials}</div>`}
                             <div class="team-info">
                                 <div class="team-name">${escapeHtml(t.name)}</div>
-                                ${t.description ? `<div class="team-desc">${t.description}</div>` : ''}
+                                ${t.description ? `<div class="team-desc">${escapeHtml(t.description)}</div>` : ''}
                                 <div class="team-stats">
                                     <span>${t.member_count} member${t.member_count !== 1 ? 's' : ''}</span>
                                     <span style="color:#34d399">${t.online_count || 0} online</span>
@@ -1443,7 +1443,7 @@
                 <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
                 <div class="card">
                     <div style="display:flex;justify-content:space-between;align-items:center">
-                        <h2>${team.name}</h2>
+                        <h2>${escapeHtml(team.name)}</h2>
                         <span class="team-role ${team.my_role}">${team.my_role}</span>
                     </div>
                     <div class="invite-box">
@@ -1700,20 +1700,20 @@
                     <div class="member-item">
                         <img class="member-avatar" src="${avatarUrl}" onerror="this.style.background='#334155'">
                         <div class="member-info">
-                            <div class="member-name">${m.username}${isMe ? ' (you)' : ''}${m.premium ? ' <span style="color:#f59e0b;font-size:0.75em" title="Premium">&#11088;</span>' : ''}</div>
+                            <div class="member-name">${escapeHtml(m.username)}${isMe ? ' (you)' : ''}${m.premium ? ' <span style="color:#f59e0b;font-size:0.75em" title="Premium">&#11088;</span>' : ''}</div>
                             <div class="activity-text"><span class="activity-dot ${activityDot}"></span>${activityLabel}</div>
                         </div>
                         <span class="member-role-badge team-role ${m.role}">${m.role}</span>
                         <div class="member-actions">
-                            ${canManage && !isMe ? `<button class="btn btn-sm btn-secondary" onclick="openMemberNotes('${m.id}','${m.username}')" style="font-size:0.75em;padding:4px 8px">Notes</button>` : ''}
+                            ${canManage && !isMe ? `<button class="btn btn-sm btn-secondary" onclick="openMemberNotes('${escapeHtml(m.id)}','${escapeHtml(m.username)}')" style="font-size:0.75em;padding:4px 8px">Notes</button>` : ''}
                             ${canManage && !isMe && !isMemberLeader ? `
                                 ${isLeader ? `
-                                    <select onchange="changeRole('${currentTeamId}','${m.id}',this.value)" style="background:var(--bg-input);color:var(--text);border:1px solid #334155;border-radius:4px;padding:4px;font-size:0.75em">
+                                    <select onchange="changeRole('${escapeHtml(currentTeamId)}','${escapeHtml(m.id)}',this.value)" style="background:var(--bg-input);color:var(--text);border:1px solid #334155;border-radius:4px;padding:4px;font-size:0.75em">
                                         <option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option>
                                         <option value="officer" ${m.role === 'officer' ? 'selected' : ''}>Officer</option>
                                     </select>
                                 ` : ''}
-                                <button class="btn btn-danger btn-sm" onclick="kickMember('${currentTeamId}','${m.id}','${m.username}')">Kick</button>
+                                <button class="btn btn-danger btn-sm" onclick="kickMember('${escapeHtml(currentTeamId)}','${escapeHtml(m.id)}','${escapeHtml(m.username)}')">Kick</button>
                             ` : ''}
                         </div>
                     </div>
@@ -1940,7 +1940,7 @@
                     <div class="form-row">
                         <div class="form-group" style="max-width:200px">
                             <select id="transferTarget" style="background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:10px;border-radius:8px">
-                                ${otherMembers.map(m => `<option value="${m.id}">${m.username}</option>`).join('')}
+                                )}'')}
                             </select>
                         </div>
                         <div><button class="btn" style="background:#78350f;color:#fcd34d;padding:8px 16px;font-size:0.85em" onclick="transferOwnership()">Transfer</button></div>
@@ -1966,7 +1966,7 @@
                 <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
                 <div class="card">
                     <div style="display:flex;justify-content:space-between;align-items:center">
-                        <h2>${team.name}</h2>
+                        <h2>${escapeHtml(team.name)}</h2>
                         <span class="team-role ${team.my_role}">${team.my_role}</span>
                     </div>
                 </div>
@@ -2325,10 +2325,10 @@
                 <h4>Boss Timers</h4>`;
             if (spawnedBosses.length > 0) {
                 html += `<div class="dash-value" style="color:#ef4444">${spawnedBosses.length} SPAWNED!</div>`;
-                html += `<div class="dash-sub">${spawnedBosses.map(b => b.name).join(', ')}</div>`;
+                html += `<div class="dash-sub">${spawnedBosses.map(b => escapeHtml(b.name)).join(', ')}</div>`;
             } else if (nextBoss) {
                 const remaining = nextBoss.next_spawn - now;
-                html += `<div class="dash-value">${nextBoss.name}</div>`;
+                html += `<div class="dash-value">${escapeHtml(nextBoss.name)}</div>`;
                 html += `<div class="dash-sub">in ${formatTimeLong(remaining)}</div>`;
             } else {
                 html += `<div class="dash-value" style="color:var(--text-dim)">No timers</div>`;
@@ -2339,7 +2339,7 @@
             html += `<div class="dash-card" onclick="teamTab='events';loadAndRenderEvents()">
                 <h4>Events</h4>`;
             if (liveEvents.length > 0) {
-                html += `<div class="dash-value" style="color:#ef4444">${liveEvents[0].title} — LIVE</div>`;
+                html += `<div class="dash-value" style="color:#ef4444">${escapeHtml(liveEvents[0].title)} — LIVE</div>`;
             } else if (upcomingEvents.length > 0) {
                 const e = upcomingEvents[0];
                 const eventDate = new Date(e.event_time);
@@ -2356,8 +2356,8 @@
             html += `<div class="dash-card" onclick="loadAndRenderAnnouncements()">
                 <h4>Latest Announcement</h4>`;
             if (latestAnnouncement) {
-                html += `<div class="dash-value">${latestAnnouncement.title}</div>`;
-                html += `<div class="dash-sub">by ${latestAnnouncement.author_name}</div>`;
+                html += `<div class="dash-value">${escapeHtml(latestAnnouncement.title)}</div>`;
+                html += `<div class="dash-sub">by ${escapeHtml(latestAnnouncement.author_name)}</div>`;
             } else {
                 html += `<div class="dash-value" style="color:var(--text-dim)">None yet</div>`;
             }
@@ -2388,7 +2388,7 @@
                 <h4>Recent Chat</h4>`;
             if (recentMessages.length > 0) {
                 for (const m of recentMessages) {
-                    html += `<div class="dash-sub" style="margin-top:2px"><b>${m.username}:</b> ${escapeHtml(m.message).substring(0, 40)}${m.message.length > 40 ? '...' : ''}</div>`;
+                    html += `<div class="dash-sub" style="margin-top:2px"><b>${escapeHtml(m.username)}:</b> ${escapeHtml(m.message).substring(0, 40)}${m.message.length > 40 ? '...' : ''}</div>`;
                 }
             } else {
                 html += `<div class="dash-value" style="color:var(--text-dim)">No messages</div>`;
@@ -2459,7 +2459,7 @@
                     <div class="chat-msg">
                         <img class="chat-msg-avatar" src="${avatarUrl}" onerror="this.style.background='#334155'">
                         <div class="chat-msg-body">
-                            <span class="chat-msg-name">${m.username}</span>
+                            <span class="chat-msg-name">${escapeHtml(m.username)}</span>
                             <span class="chat-msg-time">${date} ${time}</span>
                             ${canDelete ? `<span class="chat-msg-time" style="cursor:pointer;color:#ef4444" onclick="deleteChat('${m.id}')">[x]</span>` : ''}
                             <div class="chat-msg-text">${escapeHtml(m.message)}</div>
@@ -2655,7 +2655,7 @@
                     const rate = a.total > 0 ? Math.round(a.attended / a.total * 100) : 0;
                     const barW = Math.max(5, rate);
                     html += `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:0.85em">
-                        <span style="width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.username}</span>
+                        <span style="width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(a.username)}</span>
                         <div style="flex:1;background:var(--bg-input);border-radius:4px;height:16px;overflow:hidden">
                             <div style="width:${barW}%;background:var(--accent);height:100%;border-radius:4px"></div>
                         </div>
@@ -2759,7 +2759,7 @@
                             </div>
                         </div>
                         ${a.body ? `<div class="announcement-body">${escapeHtml(a.body)}</div>` : ''}
-                        <div class="announcement-meta">by ${a.author_name} &middot; ${date}</div>
+                        <div class="announcement-meta">by ${escapeHtml(a.author_name)} &middot; ${date}</div>
                     </div>
                 `;
             }
@@ -2911,11 +2911,11 @@
                     html += `
                         <div class="war-item ${w.result}">
                             <div>
-                                <span style="font-weight:600">vs ${w.opponent}</span>
+                                <span style="font-weight:600">vs ${escapeHtml(w.opponent)}</span>
                                 ${score ? `<span style="font-size:0.85em;color:#94a3b8"> (${score})</span>` : ''}
                                 <span class="event-type-badge ${w.event_type}" style="margin-left:4px">${w.event_type}</span>
                                 ${w.notes ? `<div style="font-size:0.8em;color:#64748b;margin-top:2px">${escapeHtml(w.notes)}</div>` : ''}
-                                <div style="font-size:0.7em;color:#64748b">${date} &middot; by ${w.logged_by_name}</div>
+                                <div style="font-size:0.7em;color:#64748b">${date} &middot; by ${escapeHtml(w.logged_by_name)}</div>
                             </div>
                             <div style="display:flex;align-items:center;gap:6px">
                                 <span class="war-result ${w.result}">${w.result.toUpperCase()}</span>
@@ -2999,7 +2999,7 @@
                                 <div class="form-group">
                                     <label>Received By</label>
                                     <select id="lootRecipient" style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px">
-                                        ${members.map(m => `<option value="${m.id}">${m.username}</option>`).join('')}
+                                        ${members.map(m => `<option value="${m.id}">${escapeHtml(m.username)}</option>`).join('')}
                                     </select>
                                 </div>
                                 <div class="form-group" style="max-width:100px">
@@ -3023,7 +3023,7 @@
                             <div>
                                 <span class="loot-item-name">${escapeHtml(l.item_name)}</span>
                                 <span style="color:#64748b;font-size:0.8em"> from ${escapeHtml(l.boss_name)}</span>
-                                <div style="font-size:0.8em;color:#94a3b8">${l.recipient_name} ${l.dkp_cost ? `(-${l.dkp_cost} ${ptsName()})` : ''} &middot; ${date}</div>
+                                <div style="font-size:0.8em;color:#94a3b8">${escapeHtml(l.recipient_name)} ${l.dkp_cost ? `(-${l.dkp_cost} ${ptsName()})` : ''} &middot; ${date}</div>
                             </div>
                             ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteLoot('${l.id}')" style="font-size:0.7em;padding:2px 8px">X</button>` : ''}
                         </div>
@@ -3090,7 +3090,7 @@
                                     <label>Member</label>
                                     <select id="dkpMember" style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px">
                                         <option value="__all__">All Members</option>
-                                        ${members.map(m => `<option value="${m.id}">${m.username}</option>`).join('')}
+                                        ${members.map(m => `<option value="${m.id}">${escapeHtml(m.username)}</option>`).join('')}
                                     </select>
                                 </div>
                                 <div class="form-group" style="max-width:100px">
@@ -3122,7 +3122,7 @@
                     html += `
                         <div class="dkp-row">
                             <div>
-                                <span>${medal}${b.username}</span>
+                                <span>${medal}${escapeHtml(b.username)}</span>
                             </div>
                             <span class="${b.balance >= 0 ? 'dkp-positive' : 'dkp-negative'}">${b.balance >= 0 ? '+' : ''}${b.balance} ${ptsName()}</span>
                         </div>
@@ -3142,8 +3142,8 @@
                     html += `
                         <div class="dkp-row">
                             <div>
-                                <span style="font-weight:600">${h.username}</span>
-                                <span style="font-size:0.8em;color:#64748b"> &middot; ${h.reason} &middot; by ${h.created_by_name} &middot; ${date}</span>
+                                <span style="font-weight:600">${escapeHtml(h.username)}</span>
+                                <span style="font-size:0.8em;color:#64748b"> &middot; ${escapeHtml(h.reason)} &middot; by ${escapeHtml(h.created_by_name)} &middot; ${date}</span>
                             </div>
                             <span class="${h.amount >= 0 ? 'dkp-positive' : 'dkp-negative'}">${h.amount >= 0 ? '+' : ''}${h.amount}</span>
                         </div>
@@ -3183,7 +3183,7 @@
             if (stats.length > 0) {
                 html += '<h3 style="color:var(--text-muted);margin:12px 0 8px">Kill Stats</h3>';
                 for (const s of stats) {
-                    html += `<div class="dkp-row"><span>${s.boss_name}</span><span style="color:#34d399">${s.kill_count} kills</span></div>`;
+                    html += `<div class="dkp-row"><span>${escapeHtml(s.boss_name)}</span><span style="color:#34d399">${s.kill_count} kills</span></div>`;
                 }
             }
             const history = data.history || [];
@@ -3191,7 +3191,7 @@
                 html += '<h3 style="color:var(--text-muted);margin:12px 0 8px">Recent Kills</h3>';
                 for (const h of history.slice(0, 20)) {
                     const date = new Date(h.killed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    html += `<div style="font-size:0.85em;padding:4px 0;border-bottom:1px solid var(--border)">${h.boss_name} <span style="color:var(--text-dim)">by ${h.killed_by_name || 'unknown'} &middot; ${date}</span></div>`;
+                    html += `<div style="font-size:0.85em;padding:4px 0;border-bottom:1px solid var(--border)">${escapeHtml(h.boss_name)} <span style="color:var(--text-dim)">by ${escapeHtml(h.killed_by_name || 'unknown')} &middot; ${date}</span></div>`;
                 }
             } else {
                 html += '<div class="empty-state">No kills logged yet</div>';
@@ -3271,9 +3271,9 @@
             } else {
                 for (const w of wishes) {
                     html += `<div class="loot-item"><div>
-                        <span style="font-weight:600">${w.item_name}</span>
-                        ${w.boss_name ? `<span style="color:var(--text-dim);font-size:0.8em"> from ${w.boss_name}</span>` : ''}
-                        <div style="font-size:0.75em;color:var(--text-muted)">${w.username} &middot; Priority: ${priorities[w.priority] || 'Low'}</div>
+                        <span style="font-weight:600">${escapeHtml(w.item_name)}</span>
+                        ${w.boss_name ? `<span style="color:var(--text-dim);font-size:0.8em"> from ${escapeHtml(w.boss_name)}</span>` : ''}
+                        <div style="font-size:0.75em;color:var(--text-muted)">${escapeHtml(w.username)} &middot; Priority: ${priorities[w.priority] || 'Low'}</div>
                     </div>
                     <button class="btn btn-danger btn-sm" onclick="deleteWish('${w.id}')" style="font-size:0.7em;padding:2px 8px">X</button>
                     </div>`;
@@ -3324,7 +3324,7 @@
                 html += '<h4 style="color:var(--text-muted);font-size:0.85em;margin:8px 0">Active</h4>';
                 for (const a of open) {
                     html += `<div class="dkp-row" style="flex-wrap:wrap">
-                        <div><span class="loot-item-name">${a.item_name}</span> <span style="font-size:0.8em;color:var(--text-dim)">by ${a.started_by_name} &middot; ${a.bid_count} bids</span></div>
+                        <div><span class="loot-item-name">${escapeHtml(a.item_name)}</span> <span style="font-size:0.8em;color:var(--text-dim)">by ${escapeHtml(a.started_by_name)} &middot; ${a.bid_count} bids</span></div>
                         <div style="display:flex;gap:6px;align-items:center">
                             <span style="font-weight:600;color:#34d399">${a.top_bid || a.min_bid || 0} ${ptsName()}</span>
                             <input type="number" id="bid_${a.id}" placeholder="Your bid" min="${(a.top_bid || a.min_bid || 0) + 1}" style="width:80px;background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:6px;border-radius:6px;font-size:0.85em">
@@ -3339,8 +3339,8 @@
                 html += '<h4 style="color:var(--text-muted);font-size:0.85em;margin:8px 0">Closed</h4>';
                 for (const a of closed.slice(0, 10)) {
                     html += `<div class="dkp-row" style="opacity:0.6">
-                        <span>${a.item_name}</span>
-                        <span style="font-size:0.85em">${a.winner_name ? `Won by ${a.winner_name} for ${a.winning_bid} ${ptsName()}` : 'No bids'}</span>
+                        <span>${escapeHtml(a.item_name)}</span>
+                        <span style="font-size:0.85em">${a.winner_name ? `Won by ${escapeHtml(a.winner_name)} for ${a.winning_bid} ${ptsName()}` : 'No bids'}</span>
                     </div>`;
                 }
             }
@@ -3422,7 +3422,7 @@
                 for (let d = 0; d < 7; d++) html += `<div class="avail-header">${dayNames[d]}</div>`;
 
                 for (const [userId, userData] of Object.entries(byUser)) {
-                    html += `<div class="avail-header" style="text-align:left;padding-left:6px">${userData.username}</div>`;
+                    html += `<div class="avail-header" style="text-align:left;padding-left:6px">${escapeHtml(userData.username)}</div>`;
                     for (let d = 0; d < 7; d++) {
                         const daySlots = userData.slots.filter(s => s.day === d);
                         html += '<div class="avail-cell">';
@@ -3597,7 +3597,7 @@
                     </div>
                     <div class="event-time">${dateStr} at ${timeStr} (${e.duration_minutes || 60}min)<span class="event-countdown">${countdown}</span></div>
                     ${e.description ? `<div class="event-desc">${escapeHtml(e.description)}</div>` : ''}
-                    <div class="event-time" style="margin-top:4px;font-size:0.75em">by ${e.creator_name}</div>
+                    <div class="event-time" style="margin-top:4px;font-size:0.75em">by ${escapeHtml(e.creator_name)}</div>
                     <div class="rsvp-bar">
                         <button class="rsvp-btn ${e.my_rsvp === 'going' ? 'active-going' : ''}" onclick="rsvpEvent('${e.id}','going')">Going</button>
                         <button class="rsvp-btn ${e.my_rsvp === 'maybe' ? 'active-maybe' : ''}" onclick="rsvpEvent('${e.id}','maybe')">Maybe</button>
@@ -3839,8 +3839,8 @@
                 notesHtml += `
                     <div class="note-item">
                         <div class="note-text">${escapeHtml(n.note)}</div>
-                        <div class="note-meta">${n.author_name} &middot; ${date}
-                            ${n.author_id === currentUser.id || teamData.team.my_role === 'leader' ? `<button class="btn btn-danger btn-sm" onclick="deleteMemberNote('${n.id}','${userId}','${username}')" style="font-size:0.65em;padding:1px 6px;margin-left:6px">X</button>` : ''}
+                        <div class="note-meta">${escapeHtml(n.author_name)} &middot; ${date}
+                            ${n.author_id === currentUser.id || teamData.team.my_role === 'leader' ? `<button class="btn btn-danger btn-sm" onclick="deleteMemberNote('${escapeHtml(n.id)}','${escapeHtml(userId)}','${escapeHtml(username)}')" style="font-size:0.65em;padding:1px 6px;margin-left:6px">X</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -3848,13 +3848,13 @@
             document.getElementById('deathModal').innerHTML = `
                 <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
                     <div class="card" style="width:450px;max-width:90vw;margin:0;max-height:80vh;overflow-y:auto;">
-                        <h2>Notes — ${username}</h2>
+                        <h2>Notes — ${escapeHtml(username)}</h2>
                         <div id="notesListModal">${notesHtml || '<div class="empty-state" style="padding:12px">No notes yet</div>'}</div>
                         <div class="form-group" style="margin-top:12px">
                             <textarea id="newNoteText" rows="2" placeholder="Add a note..." style="background:#1e293b;border:1px solid #334155;color:#e0e6f0;padding:10px;border-radius:8px;width:100%;resize:vertical;font-family:inherit"></textarea>
                         </div>
                         <div style="display:flex;gap:8px;">
-                            <button class="btn btn-primary" onclick="addMemberNote('${userId}','${username}')">Add Note</button>
+                            <button class="btn btn-primary" onclick="addMemberNote('${escapeHtml(userId)}','${escapeHtml(username)}')">Add Note</button>
                             <button class="btn" style="background:var(--bg-input);color:var(--text);" onclick="document.getElementById('deathModal').innerHTML=''">Close</button>
                         </div>
                     </div>
