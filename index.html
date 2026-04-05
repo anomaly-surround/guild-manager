@@ -1079,6 +1079,10 @@
                 { icon: '💎', title: 'Points (' + ptsName() + ')', text: 'A customizable points system (default: DKP) to fairly distribute loot and reward participation. Award points for attendance, deduct when loot is claimed. Rename it in Settings → "Points System Name" to fit your game (e.g. Credits, Rep, Contribution). Premium: auctions and point decay.' },
                 { icon: '⚔️', title: 'Wars', text: 'Log war results against other teams. Track wins, losses, and draws. Add notes and scores per war. View your team\'s overall war statistics and win rate.' },
                 { icon: '📆', title: 'Availability', text: 'Weekly availability calendar. Each member marks the days they\'re available so the team can plan events around everyone\'s schedule.' },
+                { icon: '📊', title: 'Polls', text: 'Create polls to let your team vote on decisions — single or multi-choice. Any member can create polls, leaders/officers can close them. Click a bar to vote.' },
+                { icon: '📋', title: 'Rosters', text: 'Build team lineups for events or boss fights. Define roles (Tank, Healer, DPS, etc.) and assign members to each slot. Leaders/officers create and edit rosters.' },
+                { icon: '🏆', title: 'Performance', text: 'Track player stats per event — kills, deaths, damage, healing, or any custom stat. Leaders/officers log stats, and the averages table shows each member\'s performance over time.' },
+                { icon: '📝', title: 'Recruitment', text: 'Post openings for your team. Specify the role needed and requirements. Other members can apply with a message. Leaders/officers review and accept or reject applications.' },
                 { icon: '📈', title: 'Analytics', text: 'Premium feature — detailed charts and stats about your team\'s activity, event attendance, points distribution, and more.' },
                 { icon: '⚙️', title: 'Settings', text: 'Configure your team — set description, timezone, Discord webhook URL for notifications, toggle which events send notifications, manage member permissions, and customize roles with colors and icons.' },
                 { icon: '🔗', title: 'Discord Notifications', text: 'Connect a Discord webhook URL in Settings to get automatic notifications for boss spawns, new events, announcements, and war results directly in your Discord channel.' },
@@ -1419,6 +1423,14 @@
                 tabContent = '<div id="availabilityContent"><div class="empty-state"><div class="spinner"></div></div></div>';
             } else if (teamTab === 'analytics') {
                 tabContent = '<div id="analyticsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'polls') {
+                tabContent = '<div id="pollsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'rosters') {
+                tabContent = '<div id="rostersContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'performance') {
+                tabContent = '<div id="performanceContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+            } else if (teamTab === 'recruitment') {
+                tabContent = '<div id="recruitmentContent"><div class="empty-state"><div class="spinner"></div></div></div>';
             }
 
             let html = `
@@ -1446,6 +1458,10 @@
                     <option value="dkp" ${teamTab === 'dkp' ? 'selected' : ''}>${ptsName()}</option>
                     <option value="wars" ${teamTab === 'wars' ? 'selected' : ''}>Wars</option>
                     <option value="availability" ${teamTab === 'availability' ? 'selected' : ''}>Availability</option>
+                    <option value="polls" ${teamTab === 'polls' ? 'selected' : ''}>Polls</option>
+                    <option value="rosters" ${teamTab === 'rosters' ? 'selected' : ''}>Rosters</option>
+                    <option value="performance" ${teamTab === 'performance' ? 'selected' : ''}>Performance</option>
+                    <option value="recruitment" ${teamTab === 'recruitment' ? 'selected' : ''}>Recruitment</option>
                     ${team.premium_team ? `<option value="analytics" ${teamTab === 'analytics' ? 'selected' : ''}>Analytics</option>` : ''}
                     <option value="settings" ${teamTab === 'settings' ? 'selected' : ''}>Settings</option>
                 </select>
@@ -1461,6 +1477,10 @@
                         <button class="tab-btn ${teamTab === 'dkp' ? 'active' : ''}" onclick="loadAndRenderDKP()">${ptsName()}</button>
                         <button class="tab-btn ${teamTab === 'wars' ? 'active' : ''}" onclick="loadAndRenderWars()">Wars</button>
                         <button class="tab-btn ${teamTab === 'availability' ? 'active' : ''}" onclick="loadAndRenderAvailability()">Availability</button>
+                        <button class="tab-btn ${teamTab === 'polls' ? 'active' : ''}" onclick="loadAndRenderPolls()">Polls</button>
+                        <button class="tab-btn ${teamTab === 'rosters' ? 'active' : ''}" onclick="loadAndRenderRosters()">Rosters</button>
+                        <button class="tab-btn ${teamTab === 'performance' ? 'active' : ''}" onclick="loadAndRenderPerformance()">Performance</button>
+                        <button class="tab-btn ${teamTab === 'recruitment' ? 'active' : ''}" onclick="loadAndRenderRecruitment()">Recruitment</button>
                         ${team.premium_team ? `<button class="tab-btn ${teamTab === 'analytics' ? 'active' : ''}" onclick="loadAndRenderAnalytics()">Analytics</button>` : ''}
                         <button class="tab-btn ${teamTab === 'settings' ? 'active' : ''}" onclick="teamTab='settings';renderTeamSettings()">Settings</button>
                     </div>
@@ -1952,6 +1972,10 @@
                     <option value="dkp">${ptsName()}</option>
                     <option value="wars">Wars</option>
                     <option value="availability">Availability</option>
+                    <option value="polls">Polls</option>
+                    <option value="rosters">Rosters</option>
+                    <option value="performance">Performance</option>
+                    <option value="recruitment">Recruitment</option>
                     <option value="settings" selected>Settings</option>
                 </select>
                 <div class="team-layout">
@@ -1966,6 +1990,10 @@
                         <button class="tab-btn" onclick="loadAndRenderDKP()">${ptsName()}</button>
                         <button class="tab-btn" onclick="loadAndRenderWars()">Wars</button>
                         <button class="tab-btn" onclick="loadAndRenderAvailability()">Availability</button>
+                        <button class="tab-btn" onclick="loadAndRenderPolls()">Polls</button>
+                        <button class="tab-btn" onclick="loadAndRenderRosters()">Rosters</button>
+                        <button class="tab-btn" onclick="loadAndRenderPerformance()">Performance</button>
+                        <button class="tab-btn" onclick="loadAndRenderRecruitment()">Recruitment</button>
                         <button class="tab-btn active">Settings</button>
                     </div>
                     <div class="tab-content">${settingsContent}</div>
@@ -2218,6 +2246,10 @@
                 case 'dkp': loadAndRenderDKP(); break;
                 case 'wars': loadAndRenderWars(); break;
                 case 'availability': loadAndRenderAvailability(); break;
+                case 'polls': loadAndRenderPolls(); break;
+                case 'rosters': loadAndRenderRosters(); break;
+                case 'performance': loadAndRenderPerformance(); break;
+                case 'recruitment': loadAndRenderRecruitment(); break;
                 case 'analytics': loadAndRenderAnalytics(); break;
                 case 'settings': teamTab='settings'; renderTeamSettings(); break;
             }
@@ -3824,6 +3856,613 @@
         const deleteMemberNote = guard('deleteMemberNote', async function(noteId, userId, username) {
             await api('DELETE', `/api/teams/${currentTeamId}/notes/${noteId}`);
             openMemberNotes(userId, username);
+        });
+
+        // --- Polls & Voting ---
+
+        async function loadAndRenderPolls() {
+            teamTab = 'polls';
+            renderTeamView();
+            const data = await api('GET', `/api/teams/${currentTeamId}/polls`);
+            const el = document.getElementById('pollsContent');
+            if (el) el.innerHTML = renderPollsContent(data.polls || []);
+        }
+
+        function renderPollsContent(polls) {
+            const team = teamData.team;
+            const canManage = team.my_role === 'leader' || team.my_role === 'officer';
+            let html = '';
+
+            // Create poll form (any member can create)
+            html += `
+                <div class="card">
+                    <div class="collapsible-header" onclick="toggleSection('addPollForm', this)">
+                        <h3>+ Create Poll</h3>
+                        <span class="toggle-arrow">&#9660;</span>
+                    </div>
+                    <div class="collapsible-body" id="addPollForm">
+                        <div class="form-group" style="margin-top:12px">
+                            <label>Question</label>
+                            <input type="text" id="pollQuestion" placeholder="e.g. Which boss do we farm next?" maxlength="200">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Type</label>
+                                <select id="pollType" style="background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:10px;border-radius:8px">
+                                    <option value="single">Single Choice</option>
+                                    <option value="multi">Multiple Choice</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="pollOptionsContainer">
+                            <label>Options</label>
+                            <div class="form-group"><input type="text" class="poll-option-input" placeholder="Option 1" maxlength="100"></div>
+                            <div class="form-group"><input type="text" class="poll-option-input" placeholder="Option 2" maxlength="100"></div>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" onclick="addPollOptionField()" style="margin:8px 0">+ Add Option</button>
+                        <div><button class="btn btn-primary" onclick="createPoll()">Create Poll</button></div>
+                    </div>
+                </div>
+            `;
+
+            // Polls list
+            if (polls.length === 0) {
+                html += '<div class="card"><div class="empty-state">No polls yet — create one above!</div></div>';
+            }
+            for (const poll of polls) {
+                const totalVotes = poll.options.reduce((sum, o) => sum + o.votes.length, 0);
+                const isExpired = poll.expires_at && poll.expires_at < Math.floor(Date.now() / 1000);
+                const isClosed = poll.closed || isExpired;
+                const hasVoted = poll.myVotes.length > 0;
+
+                html += `<div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                        <div>
+                            <h3>${escapeHtml(poll.question)}</h3>
+                            <div style="font-size:0.75em;color:var(--text-dim);margin-top:2px">
+                                by ${escapeHtml(poll.created_by_name)} &middot; ${poll.poll_type === 'multi' ? 'Multi-choice' : 'Single choice'}
+                                &middot; ${totalVotes} vote${totalVotes !== 1 ? 's' : ''}
+                                ${isClosed ? ' &middot; <span style="color:#ef4444">Closed</span>' : ''}
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:4px">
+                            ${!isClosed && canManage ? `<button class="btn btn-secondary btn-sm" onclick="closePoll('${poll.id}')">Close</button>` : ''}
+                            ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deletePoll('${poll.id}')">X</button>` : ''}
+                        </div>
+                    </div>
+                    <div style="margin-top:12px">`;
+
+                for (const opt of poll.options) {
+                    const pct = totalVotes > 0 ? Math.round((opt.votes.length / totalVotes) * 100) : 0;
+                    const isMyVote = poll.myVotes.includes(opt.id);
+                    const voters = opt.votes.map(v => escapeHtml(v.username)).join(', ');
+
+                    html += `<div style="margin-bottom:8px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+                            <span style="font-size:0.9em;${isMyVote ? 'font-weight:700;color:var(--accent)' : ''}">${escapeHtml(opt.label)}</span>
+                            <span style="font-size:0.8em;color:var(--text-muted)">${opt.votes.length} (${pct}%)</span>
+                        </div>
+                        <div style="background:var(--bg-input);border-radius:6px;height:24px;overflow:hidden;position:relative;cursor:${isClosed ? 'default' : 'pointer'}"
+                            ${!isClosed ? `onclick="votePoll('${poll.id}','${opt.id}','${poll.poll_type}')"` : ''}
+                            title="${voters || 'No votes'}">
+                            <div style="background:linear-gradient(90deg,var(--accent),var(--accent2));height:100%;width:${pct}%;border-radius:6px;transition:width 0.3s"></div>
+                        </div>
+                    </div>`;
+                }
+                html += '</div></div>';
+            }
+
+            return html;
+        }
+
+        function addPollOptionField() {
+            const container = document.getElementById('pollOptionsContainer');
+            const count = container.querySelectorAll('.poll-option-input').length;
+            if (count >= 10) return showToast('Max 10 options');
+            const div = document.createElement('div');
+            div.className = 'form-group';
+            div.innerHTML = `<input type="text" class="poll-option-input" placeholder="Option ${count + 1}" maxlength="100">`;
+            container.appendChild(div);
+        }
+
+        const createPoll = guard('createPoll', async function() {
+            const question = document.getElementById('pollQuestion').value.trim();
+            if (!question) return showToast('Question required');
+            const inputs = document.querySelectorAll('.poll-option-input');
+            const options = [...inputs].map(i => i.value.trim()).filter(Boolean);
+            if (options.length < 2) return showToast('At least 2 options required');
+
+            const data = await api('POST', `/api/teams/${currentTeamId}/polls`, {
+                question,
+                pollType: document.getElementById('pollType').value,
+                options,
+            });
+            if (data.error) { showToast(data.error); return; }
+            showToast('Poll created!');
+            loadAndRenderPolls();
+        });
+
+        const votePoll = guard('votePoll', async function(pollId, optionId, pollType) {
+            const data = await api('POST', `/api/teams/${currentTeamId}/polls/${pollId}/vote`, {
+                optionIds: [optionId],
+            });
+            if (data.error) { showToast(data.error); return; }
+            loadAndRenderPolls();
+        });
+
+        const closePoll = guard('closePoll', async function(pollId) {
+            await api('POST', `/api/teams/${currentTeamId}/polls/${pollId}/close`);
+            loadAndRenderPolls();
+        });
+
+        const deletePoll = guard('deletePoll', async function(pollId) {
+            await api('DELETE', `/api/teams/${currentTeamId}/polls/${pollId}`);
+            loadAndRenderPolls();
+        });
+
+        // --- Roster / Lineup Builder ---
+
+        async function loadAndRenderRosters() {
+            teamTab = 'rosters';
+            renderTeamView();
+            const data = await api('GET', `/api/teams/${currentTeamId}/rosters`);
+            const el = document.getElementById('rostersContent');
+            if (el) el.innerHTML = renderRostersContent(data.rosters || []);
+        }
+
+        function renderRostersContent(rosters) {
+            const team = teamData.team;
+            const members = teamData.members;
+            const canManage = team.my_role === 'leader' || team.my_role === 'officer';
+            let html = '';
+
+            if (canManage) {
+                const memberOpts = members.map(m => `<option value="${m.user_id}">${escapeHtml(m.username)}</option>`).join('');
+                html += `
+                    <div class="card">
+                        <div class="collapsible-header" onclick="toggleSection('addRosterForm', this)">
+                            <h3>+ Create Roster</h3>
+                            <span class="toggle-arrow">&#9660;</span>
+                        </div>
+                        <div class="collapsible-body" id="addRosterForm">
+                            <div class="form-group" style="margin-top:12px">
+                                <label>Roster Name</label>
+                                <input type="text" id="rosterName" placeholder="e.g. Friday GvG Lineup" maxlength="100">
+                            </div>
+                            <div id="rosterSlotsContainer">
+                                <label>Slots</label>
+                                <div class="roster-slot-row" style="display:flex;gap:8px;margin-bottom:6px">
+                                    <input type="text" class="roster-role-input" placeholder="Role (e.g. Tank)" maxlength="50" style="flex:1">
+                                    <select class="roster-member-select" style="flex:1;background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:8px;border-radius:8px">
+                                        <option value="">-- Unassigned --</option>${memberOpts}
+                                    </select>
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary btn-sm" onclick="addRosterSlotField()" style="margin:8px 0">+ Add Slot</button>
+                            <div><button class="btn btn-primary" onclick="createRoster()">Create Roster</button></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (rosters.length === 0) {
+                html += '<div class="card"><div class="empty-state">No rosters yet</div></div>';
+            }
+
+            for (const roster of rosters) {
+                html += `<div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <div>
+                            <h3>${escapeHtml(roster.name)}</h3>
+                            <div style="font-size:0.75em;color:var(--text-dim)">by ${escapeHtml(roster.created_by_name)} &middot; ${roster.slots.length} slot${roster.slots.length !== 1 ? 's' : ''}</div>
+                        </div>
+                        <div style="display:flex;gap:4px">
+                            ${canManage ? `<button class="btn btn-secondary btn-sm" onclick="editRoster('${roster.id}')">Edit</button>` : ''}
+                            ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteRoster('${roster.id}')">X</button>` : ''}
+                        </div>
+                    </div>
+                    <div style="margin-top:12px">`;
+
+                for (const slot of roster.slots) {
+                    html += `
+                        <div class="dkp-row">
+                            <span style="font-weight:600;color:var(--accent)">${escapeHtml(slot.role_name)}</span>
+                            <span>${slot.assigned_name ? escapeHtml(slot.assigned_name) : '<span style="color:var(--text-dim)">— Empty —</span>'}</span>
+                        </div>`;
+                }
+                if (roster.slots.length === 0) html += '<div class="empty-state" style="padding:8px">No slots defined</div>';
+                html += '</div></div>';
+            }
+
+            return html;
+        }
+
+        function addRosterSlotField() {
+            const container = document.getElementById('rosterSlotsContainer');
+            const count = container.querySelectorAll('.roster-slot-row').length;
+            if (count >= 30) return showToast('Max 30 slots');
+            const members = teamData.members;
+            const memberOpts = members.map(m => `<option value="${m.user_id}">${escapeHtml(m.username)}</option>`).join('');
+            const div = document.createElement('div');
+            div.className = 'roster-slot-row';
+            div.style.cssText = 'display:flex;gap:8px;margin-bottom:6px';
+            div.innerHTML = `
+                <input type="text" class="roster-role-input" placeholder="Role" maxlength="50" style="flex:1">
+                <select class="roster-member-select" style="flex:1;background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:8px;border-radius:8px">
+                    <option value="">-- Unassigned --</option>${memberOpts}
+                </select>`;
+            container.appendChild(div);
+        }
+
+        const createRoster = guard('createRoster', async function() {
+            const name = document.getElementById('rosterName').value.trim();
+            if (!name) return showToast('Roster name required');
+
+            const roles = document.querySelectorAll('.roster-role-input');
+            const selects = document.querySelectorAll('.roster-member-select');
+            const slots = [];
+            roles.forEach((r, i) => {
+                if (r.value.trim()) slots.push({ roleName: r.value.trim(), userId: selects[i]?.value || null });
+            });
+
+            const data = await api('POST', `/api/teams/${currentTeamId}/rosters`, { name, slots });
+            if (data.error) { showToast(data.error); return; }
+            showToast('Roster created!');
+            loadAndRenderRosters();
+        });
+
+        const editRoster = guard('editRoster', async function(rosterId) {
+            const data = await api('GET', `/api/teams/${currentTeamId}/rosters`);
+            const roster = (data.rosters || []).find(r => r.id === rosterId);
+            if (!roster) return;
+            const members = teamData.members;
+            const memberOpts = members.map(m => `<option value="${m.user_id}">${escapeHtml(m.username)}</option>`).join('');
+
+            let slotsHtml = '';
+            for (const s of roster.slots) {
+                slotsHtml += `<div style="display:flex;gap:8px;margin-bottom:6px">
+                    <input type="text" class="edit-roster-role" value="${escapeHtml(s.role_name)}" style="flex:1" maxlength="50">
+                    <select class="edit-roster-member" style="flex:1;background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:8px;border-radius:8px">
+                        <option value="">-- Unassigned --</option>${memberOpts}
+                    </select>
+                </div>`;
+            }
+
+            document.getElementById('deathModal').innerHTML = `
+                <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
+                    <div class="card" style="width:500px;max-width:90vw;margin:0;max-height:80vh;overflow-y:auto">
+                        <h2>Edit Roster: ${escapeHtml(roster.name)}</h2>
+                        <div id="editRosterSlots">${slotsHtml}</div>
+                        <button class="btn btn-secondary btn-sm" onclick="addEditRosterSlot()" style="margin:8px 0">+ Add Slot</button>
+                        <div style="display:flex;gap:8px;margin-top:8px">
+                            <button class="btn btn-primary" onclick="saveRosterSlots('${rosterId}')">Save</button>
+                            <button class="btn" style="background:var(--bg-input);color:var(--text)" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
+                        </div>
+                    </div>
+                </div>`;
+
+            // Set selected values after DOM is ready
+            setTimeout(() => {
+                const selects = document.querySelectorAll('.edit-roster-member');
+                roster.slots.forEach((s, i) => { if (selects[i] && s.user_id) selects[i].value = s.user_id; });
+            }, 50);
+        });
+
+        function addEditRosterSlot() {
+            const container = document.getElementById('editRosterSlots');
+            const members = teamData.members;
+            const memberOpts = members.map(m => `<option value="${m.user_id}">${escapeHtml(m.username)}</option>`).join('');
+            const div = document.createElement('div');
+            div.style.cssText = 'display:flex;gap:8px;margin-bottom:6px';
+            div.innerHTML = `
+                <input type="text" class="edit-roster-role" placeholder="Role" style="flex:1" maxlength="50">
+                <select class="edit-roster-member" style="flex:1;background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:8px;border-radius:8px">
+                    <option value="">-- Unassigned --</option>${memberOpts}
+                </select>`;
+            container.appendChild(div);
+        }
+
+        const saveRosterSlots = guard('saveRosterSlots', async function(rosterId) {
+            const roles = document.querySelectorAll('.edit-roster-role');
+            const selects = document.querySelectorAll('.edit-roster-member');
+            const slots = [];
+            roles.forEach((r, i) => {
+                if (r.value.trim()) slots.push({ roleName: r.value.trim(), userId: selects[i]?.value || null });
+            });
+            await api('PUT', `/api/teams/${currentTeamId}/rosters/${rosterId}/slots`, { slots });
+            document.getElementById('deathModal').innerHTML = '';
+            showToast('Roster updated!');
+            loadAndRenderRosters();
+        });
+
+        const deleteRoster = guard('deleteRoster', async function(rosterId) {
+            await api('DELETE', `/api/teams/${currentTeamId}/rosters/${rosterId}`);
+            loadAndRenderRosters();
+        });
+
+        // --- Performance Tracker ---
+
+        async function loadAndRenderPerformance() {
+            teamTab = 'performance';
+            renderTeamView();
+            const data = await api('GET', `/api/teams/${currentTeamId}/performance`);
+            const el = document.getElementById('performanceContent');
+            if (el) el.innerHTML = renderPerformanceContent(data.entries || [], data.memberStats || {});
+        }
+
+        function renderPerformanceContent(entries, memberStats) {
+            const team = teamData.team;
+            const members = teamData.members;
+            const canManage = team.my_role === 'leader' || team.my_role === 'officer';
+            let html = '';
+
+            // Member averages overview
+            const statKeys = new Set();
+            for (const uid in memberStats) {
+                for (const s in memberStats[uid].stats) statKeys.add(s);
+            }
+
+            if (Object.keys(memberStats).length > 0 && statKeys.size > 0) {
+                html += '<div class="card"><h3>Member Averages</h3><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.85em">';
+                html += '<tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px">Player</th>';
+                for (const key of statKeys) html += `<th style="text-align:right;padding:6px">${escapeHtml(key)}</th>`;
+                html += '</tr>';
+
+                for (const uid in memberStats) {
+                    const m = memberStats[uid];
+                    html += `<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px;font-weight:600">${escapeHtml(m.username)}</td>`;
+                    for (const key of statKeys) {
+                        const s = m.stats[key];
+                        const avg = s ? (s.total / s.count).toFixed(1) : '—';
+                        html += `<td style="text-align:right;padding:6px">${avg}</td>`;
+                    }
+                    html += '</tr>';
+                }
+                html += '</table></div></div>';
+            }
+
+            // Log form
+            if (canManage) {
+                const memberOpts = members.map(m => `<option value="${m.user_id}">${escapeHtml(m.username)}</option>`).join('');
+                html += `
+                    <div class="card">
+                        <div class="collapsible-header" onclick="toggleSection('addPerfForm', this)">
+                            <h3>+ Log Stats</h3>
+                            <span class="toggle-arrow">&#9660;</span>
+                        </div>
+                        <div class="collapsible-body" id="addPerfForm">
+                            <div class="form-row" style="margin-top:12px">
+                                <div class="form-group">
+                                    <label>Player</label>
+                                    <select id="perfMember" style="background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:10px;border-radius:8px">
+                                        ${memberOpts}
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Event / Match</label>
+                                    <input type="text" id="perfEventLabel" placeholder="e.g. GvG vs Shadow Legion" maxlength="100">
+                                </div>
+                            </div>
+                            <div id="perfStatsContainer">
+                                <label>Stats</label>
+                                <div class="perf-stat-row" style="display:flex;gap:8px;margin-bottom:6px">
+                                    <input type="text" class="perf-stat-name" placeholder="Stat name (e.g. Kills)" style="flex:1" maxlength="50">
+                                    <input type="number" class="perf-stat-value" placeholder="Value" style="flex:1">
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary btn-sm" onclick="addPerfStatField()" style="margin:8px 0">+ Add Stat</button>
+                            <div><button class="btn btn-primary" onclick="logPerformance()">Log Stats</button></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Recent entries
+            html += '<div class="card"><h3>Recent Entries</h3>';
+            if (entries.length === 0) {
+                html += '<div class="empty-state">No stats logged yet</div>';
+            } else {
+                let lastLabel = '';
+                for (const e of entries) {
+                    const label = `${e.player_name} — ${e.event_label}`;
+                    if (label !== lastLabel) {
+                        if (lastLabel) html += '</div>';
+                        const date = new Date(e.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        html += `<div style="margin-top:10px;padding:8px;background:var(--bg-item);border-radius:8px">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <span style="font-weight:600;font-size:0.9em">${escapeHtml(e.player_name)} — ${escapeHtml(e.event_label)}</span>
+                                <span style="font-size:0.7em;color:var(--text-dim)">${date}</span>
+                            </div>`;
+                        lastLabel = label;
+                    }
+                    html += `<div class="dkp-row" style="padding:2px 0">
+                        <span style="color:var(--text-muted);font-size:0.85em">${escapeHtml(e.stat_name)}</span>
+                        <span style="font-weight:600">${e.stat_value}</span>
+                    </div>`;
+                }
+                if (lastLabel) html += '</div>';
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function addPerfStatField() {
+            const container = document.getElementById('perfStatsContainer');
+            const count = container.querySelectorAll('.perf-stat-row').length;
+            if (count >= 20) return showToast('Max 20 stats');
+            const div = document.createElement('div');
+            div.className = 'perf-stat-row';
+            div.style.cssText = 'display:flex;gap:8px;margin-bottom:6px';
+            div.innerHTML = `
+                <input type="text" class="perf-stat-name" placeholder="Stat name" style="flex:1" maxlength="50">
+                <input type="number" class="perf-stat-value" placeholder="Value" style="flex:1">`;
+            container.appendChild(div);
+        }
+
+        const logPerformance = guard('logPerformance', async function() {
+            const userId = document.getElementById('perfMember').value;
+            const eventLabel = document.getElementById('perfEventLabel').value.trim();
+            if (!eventLabel) return showToast('Event/match label required');
+
+            const names = document.querySelectorAll('.perf-stat-name');
+            const values = document.querySelectorAll('.perf-stat-value');
+            const stats = [];
+            names.forEach((n, i) => {
+                if (n.value.trim() && values[i]?.value !== '') stats.push({ name: n.value.trim(), value: Number(values[i].value) });
+            });
+            if (stats.length === 0) return showToast('At least 1 stat required');
+
+            const data = await api('POST', `/api/teams/${currentTeamId}/performance`, { userId, eventLabel, stats });
+            if (data.error) { showToast(data.error); return; }
+            showToast('Stats logged!');
+            loadAndRenderPerformance();
+        });
+
+        // --- Recruitment Board ---
+
+        async function loadAndRenderRecruitment() {
+            teamTab = 'recruitment';
+            renderTeamView();
+            const data = await api('GET', `/api/teams/${currentTeamId}/recruitment`);
+            const el = document.getElementById('recruitmentContent');
+            if (el) el.innerHTML = renderRecruitmentContent(data.posts || []);
+        }
+
+        function renderRecruitmentContent(posts) {
+            const team = teamData.team;
+            const canManage = team.my_role === 'leader' || team.my_role === 'officer';
+            let html = '';
+
+            if (canManage) {
+                html += `
+                    <div class="card">
+                        <div class="collapsible-header" onclick="toggleSection('addRecruitForm', this)">
+                            <h3>+ Post Opening</h3>
+                            <span class="toggle-arrow">&#9660;</span>
+                        </div>
+                        <div class="collapsible-body" id="addRecruitForm">
+                            <div class="form-group" style="margin-top:12px">
+                                <label>Title</label>
+                                <input type="text" id="recruitTitle" placeholder="e.g. Looking for a Healer" maxlength="100">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Role Needed</label>
+                                    <input type="text" id="recruitRole" placeholder="e.g. Healer, Tank, DPS" maxlength="50">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Description</label>
+                                <textarea id="recruitDesc" rows="3" placeholder="Requirements, schedule, etc..." maxlength="500" style="background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:10px;border-radius:8px;width:100%;resize:vertical;font-family:inherit"></textarea>
+                            </div>
+                            <div><button class="btn btn-primary" onclick="createRecruitPost()">Post Opening</button></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (posts.length === 0) {
+                html += '<div class="card"><div class="empty-state">No recruitment posts yet</div></div>';
+            }
+
+            for (const post of posts) {
+                const isOpen = post.status === 'open';
+                html += `<div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                        <div>
+                            <h3>${escapeHtml(post.title)} ${isOpen ? '<span style="color:#34d399;font-size:0.7em">OPEN</span>' : '<span style="color:#ef4444;font-size:0.7em">CLOSED</span>'}</h3>
+                            ${post.role_needed ? `<div style="font-size:0.85em;color:var(--accent);margin-top:2px">Role: ${escapeHtml(post.role_needed)}</div>` : ''}
+                            ${post.description ? `<div style="font-size:0.85em;color:var(--text-muted);margin-top:4px">${escapeHtml(post.description)}</div>` : ''}
+                            <div style="font-size:0.75em;color:var(--text-dim);margin-top:4px">by ${escapeHtml(post.created_by_name)}</div>
+                        </div>
+                        <div style="display:flex;gap:4px">
+                            ${canManage && isOpen ? `<button class="btn btn-secondary btn-sm" onclick="closeRecruitPost('${post.id}')">Close</button>` : ''}
+                            ${canManage && !isOpen ? `<button class="btn btn-secondary btn-sm" onclick="reopenRecruitPost('${post.id}')">Reopen</button>` : ''}
+                            ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteRecruitPost('${post.id}')">X</button>` : ''}
+                        </div>
+                    </div>`;
+
+                // Applications section
+                if (canManage && post.applications) {
+                    html += `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
+                        <div style="font-size:0.85em;font-weight:600;margin-bottom:6px">Applications (${post.applications.length})</div>`;
+                    if (post.applications.length === 0) {
+                        html += '<div style="font-size:0.8em;color:var(--text-dim)">No applications yet</div>';
+                    }
+                    for (const app of post.applications) {
+                        const statusColor = app.status === 'accepted' ? '#34d399' : app.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px;background:var(--bg-item);border-radius:6px;margin-bottom:4px">
+                            <div>
+                                <span style="font-weight:600;font-size:0.9em">${escapeHtml(app.applicant_name)}</span>
+                                <span style="font-size:0.75em;color:${statusColor};margin-left:6px">${app.status.toUpperCase()}</span>
+                                ${app.message ? `<div style="font-size:0.8em;color:var(--text-muted);margin-top:2px">${escapeHtml(app.message)}</div>` : ''}
+                            </div>
+                            ${app.status === 'pending' ? `<div style="display:flex;gap:4px">
+                                <button class="btn btn-sm" style="background:#065f46;color:#34d399;padding:4px 10px" onclick="reviewApplication('${post.id}','${app.id}','accepted')">Accept</button>
+                                <button class="btn btn-sm" style="background:#7f1d1d;color:#ef4444;padding:4px 10px" onclick="reviewApplication('${post.id}','${app.id}','rejected')">Reject</button>
+                            </div>` : ''}
+                        </div>`;
+                    }
+                    html += '</div>';
+                } else if (!canManage) {
+                    const appCount = post.applicationCount || 0;
+                    html += `<div style="margin-top:8px;font-size:0.8em;color:var(--text-dim)">${appCount} application${appCount !== 1 ? 's' : ''}</div>`;
+                    if (post.myApplication) {
+                        const sc = post.myApplication.status === 'accepted' ? '#34d399' : post.myApplication.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                        html += `<div style="margin-top:4px;font-size:0.85em">Your application: <span style="color:${sc};font-weight:600">${post.myApplication.status.toUpperCase()}</span></div>`;
+                    } else if (isOpen) {
+                        html += `<div style="margin-top:8px">
+                            <input type="text" id="applyMsg_${post.id}" placeholder="Short message (optional)" maxlength="500" style="margin-bottom:6px;width:100%">
+                            <button class="btn btn-primary btn-sm" onclick="applyToPost('${post.id}')">Apply</button>
+                        </div>`;
+                    }
+                }
+
+                html += '</div>';
+            }
+            return html;
+        }
+
+        const createRecruitPost = guard('createRecruitPost', async function() {
+            const title = document.getElementById('recruitTitle').value.trim();
+            if (!title) return showToast('Title required');
+            const data = await api('POST', `/api/teams/${currentTeamId}/recruitment`, {
+                title,
+                roleNeeded: document.getElementById('recruitRole').value.trim(),
+                description: document.getElementById('recruitDesc').value.trim(),
+            });
+            if (data.error) { showToast(data.error); return; }
+            showToast('Post created!');
+            loadAndRenderRecruitment();
+        });
+
+        const closeRecruitPost = guard('closeRecruitPost', async function(postId) {
+            await api('PUT', `/api/teams/${currentTeamId}/recruitment/${postId}`, { status: 'closed' });
+            loadAndRenderRecruitment();
+        });
+
+        const reopenRecruitPost = guard('reopenRecruitPost', async function(postId) {
+            await api('PUT', `/api/teams/${currentTeamId}/recruitment/${postId}`, { status: 'open' });
+            loadAndRenderRecruitment();
+        });
+
+        const deleteRecruitPost = guard('deleteRecruitPost', async function(postId) {
+            await api('DELETE', `/api/teams/${currentTeamId}/recruitment/${postId}`);
+            loadAndRenderRecruitment();
+        });
+
+        const applyToPost = guard('applyToPost', async function(postId) {
+            const msg = document.getElementById(`applyMsg_${postId}`)?.value?.trim() || '';
+            const data = await api('POST', `/api/teams/${currentTeamId}/recruitment/${postId}/apply`, { message: msg });
+            if (data.error) { showToast(data.error); return; }
+            showToast('Application submitted!');
+            loadAndRenderRecruitment();
+        });
+
+        const reviewApplication = guard('reviewApplication', async function(postId, appId, status) {
+            await api('PUT', `/api/teams/${currentTeamId}/recruitment/${postId}/applications/${appId}`, { status });
+            showToast(status === 'accepted' ? 'Accepted!' : 'Rejected');
+            loadAndRenderRecruitment();
         });
 
         function copyInvite(code) {

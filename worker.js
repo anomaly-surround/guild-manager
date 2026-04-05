@@ -345,6 +345,94 @@ async function initDB(db) {
     )`),
   ]);
 
+  // Phase 10 tables: Polls, Roster, Performance, Recruitment
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS polls (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      question TEXT NOT NULL,
+      poll_type TEXT DEFAULT 'single',
+      created_by TEXT NOT NULL,
+      closed INTEGER DEFAULT 0,
+      expires_at INTEGER,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS poll_options (
+      id TEXT PRIMARY KEY,
+      poll_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      sort_order INTEGER DEFAULT 0,
+      FOREIGN KEY (poll_id) REFERENCES polls(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS poll_votes (
+      poll_id TEXT NOT NULL,
+      option_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      PRIMARY KEY (poll_id, option_id, user_id),
+      FOREIGN KEY (poll_id) REFERENCES polls(id),
+      FOREIGN KEY (option_id) REFERENCES poll_options(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS rosters (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      event_id TEXT,
+      created_by TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS roster_slots (
+      id TEXT PRIMARY KEY,
+      roster_id TEXT NOT NULL,
+      role_name TEXT NOT NULL,
+      user_id TEXT,
+      sort_order INTEGER DEFAULT 0,
+      FOREIGN KEY (roster_id) REFERENCES rosters(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS performance_entries (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      event_label TEXT NOT NULL,
+      stat_name TEXT NOT NULL,
+      stat_value REAL NOT NULL,
+      logged_by TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (logged_by) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS recruitment_posts (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      role_needed TEXT,
+      status TEXT DEFAULT 'open',
+      created_by TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (team_id) REFERENCES teams(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS recruitment_applications (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      message TEXT,
+      status TEXT DEFAULT 'pending',
+      reviewed_by TEXT,
+      created_at INTEGER DEFAULT (unixepoch()),
+      FOREIGN KEY (post_id) REFERENCES recruitment_posts(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`),
+  ]);
+
   // Run migrations (each one is idempotent via catch)
   const needsMigrations = await db.prepare("SELECT premium FROM users LIMIT 1").first().then(() => false).catch(() => true)
     || await db.prepare("SELECT accent_color FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
@@ -2450,6 +2538,375 @@ async function handleRequest(request, env) {
         .bind(teamId, user.userId, slot.day, slot.startTime, slot.endTime).run();
     }
 
+    return json({ ok: true });
+  }
+
+  // ========== POLLS ==========
+
+  const pollsMatch = path.match(/^\/api\/teams\/([^/]+)\/polls$/);
+  const pollMatch = path.match(/^\/api\/teams\/([^/]+)\/polls\/([^/]+)$/);
+  const pollVoteMatch = path.match(/^\/api\/teams\/([^/]+)\/polls\/([^/]+)\/vote$/);
+  const pollCloseMatch = path.match(/^\/api\/teams\/([^/]+)\/polls\/([^/]+)\/close$/);
+
+  // GET /api/teams/:id/polls
+  if (pollsMatch && request.method === 'GET') {
+    const teamId = pollsMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const polls = await env.DB.prepare(`
+      SELECT p.*, u.username as created_by_name FROM polls p
+      LEFT JOIN users u ON u.id = p.created_by
+      WHERE p.team_id = ? ORDER BY p.created_at DESC
+    `).bind(teamId).all();
+
+    // Get options and votes for each poll
+    for (const poll of polls.results) {
+      const options = await env.DB.prepare('SELECT * FROM poll_options WHERE poll_id = ? ORDER BY sort_order').bind(poll.id).all();
+      poll.options = options.results;
+      for (const opt of poll.options) {
+        const votes = await env.DB.prepare('SELECT pv.user_id, u.username FROM poll_votes pv LEFT JOIN users u ON u.id = pv.user_id WHERE pv.option_id = ?').bind(opt.id).all();
+        opt.votes = votes.results;
+      }
+      const myVotes = await env.DB.prepare('SELECT option_id FROM poll_votes WHERE poll_id = ? AND user_id = ?').bind(poll.id, user.userId).all();
+      poll.myVotes = myVotes.results.map(v => v.option_id);
+    }
+
+    return json({ polls: polls.results });
+  }
+
+  // POST /api/teams/:id/polls — create poll
+  if (pollsMatch && request.method === 'POST') {
+    const teamId = pollsMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const body = await request.json();
+    if (!body.question || !body.options || body.options.length < 2) return json({ error: 'Question and at least 2 options required' }, 400);
+
+    const pollId = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO polls (id, team_id, question, poll_type, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(pollId, teamId, body.question.slice(0, 200), body.pollType || 'single', user.userId, body.expiresAt || null).run();
+
+    for (let i = 0; i < body.options.length && i < 10; i++) {
+      await env.DB.prepare('INSERT INTO poll_options (id, poll_id, label, sort_order) VALUES (?, ?, ?, ?)')
+        .bind(crypto.randomUUID(), pollId, body.options[i].slice(0, 100), i).run();
+    }
+
+    return json({ ok: true, id: pollId });
+  }
+
+  // POST /api/teams/:id/polls/:pollId/vote
+  if (pollVoteMatch && request.method === 'POST') {
+    const teamId = pollVoteMatch[1];
+    const pollId = pollVoteMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const poll = await env.DB.prepare('SELECT * FROM polls WHERE id = ? AND team_id = ?').bind(pollId, teamId).first();
+    if (!poll) return json({ error: 'Poll not found' }, 404);
+    if (poll.closed) return json({ error: 'Poll is closed' }, 400);
+    if (poll.expires_at && poll.expires_at < Math.floor(Date.now() / 1000)) return json({ error: 'Poll has expired' }, 400);
+
+    const body = await request.json();
+    const optionIds = Array.isArray(body.optionIds) ? body.optionIds : [body.optionId];
+
+    // Clear previous votes
+    await env.DB.prepare('DELETE FROM poll_votes WHERE poll_id = ? AND user_id = ?').bind(pollId, user.userId).run();
+
+    // Add new votes
+    for (const optId of (poll.poll_type === 'single' ? optionIds.slice(0, 1) : optionIds)) {
+      const opt = await env.DB.prepare('SELECT id FROM poll_options WHERE id = ? AND poll_id = ?').bind(optId, pollId).first();
+      if (opt) {
+        await env.DB.prepare('INSERT INTO poll_votes (poll_id, option_id, user_id) VALUES (?, ?, ?)')
+          .bind(pollId, optId, user.userId).run();
+      }
+    }
+
+    return json({ ok: true });
+  }
+
+  // POST /api/teams/:id/polls/:pollId/close
+  if (pollCloseMatch && request.method === 'POST') {
+    const teamId = pollCloseMatch[1];
+    const pollId = pollCloseMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    await env.DB.prepare('UPDATE polls SET closed = 1 WHERE id = ? AND team_id = ?').bind(pollId, teamId).run();
+    return json({ ok: true });
+  }
+
+  // DELETE /api/teams/:id/polls/:pollId
+  if (pollMatch && request.method === 'DELETE') {
+    const teamId = pollMatch[1];
+    const pollId = pollMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    await env.DB.prepare('DELETE FROM poll_votes WHERE poll_id = ?').bind(pollId).run();
+    await env.DB.prepare('DELETE FROM poll_options WHERE poll_id = ?').bind(pollId).run();
+    await env.DB.prepare('DELETE FROM polls WHERE id = ? AND team_id = ?').bind(pollId, teamId).run();
+    return json({ ok: true });
+  }
+
+  // ========== ROSTERS ==========
+
+  const rostersMatch = path.match(/^\/api\/teams\/([^/]+)\/rosters$/);
+  const rosterMatch = path.match(/^\/api\/teams\/([^/]+)\/rosters\/([^/]+)$/);
+  const rosterSlotMatch = path.match(/^\/api\/teams\/([^/]+)\/rosters\/([^/]+)\/slots$/);
+
+  // GET /api/teams/:id/rosters
+  if (rostersMatch && request.method === 'GET') {
+    const teamId = rostersMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const rosters = await env.DB.prepare(`
+      SELECT r.*, u.username as created_by_name FROM rosters r
+      LEFT JOIN users u ON u.id = r.created_by
+      WHERE r.team_id = ? ORDER BY r.created_at DESC
+    `).bind(teamId).all();
+
+    for (const roster of rosters.results) {
+      const slots = await env.DB.prepare(`
+        SELECT rs.*, u.username as assigned_name FROM roster_slots rs
+        LEFT JOIN users u ON u.id = rs.user_id
+        WHERE rs.roster_id = ? ORDER BY rs.sort_order
+      `).bind(roster.id).all();
+      roster.slots = slots.results;
+    }
+
+    return json({ rosters: rosters.results });
+  }
+
+  // POST /api/teams/:id/rosters — create roster
+  if (rostersMatch && request.method === 'POST') {
+    const teamId = rostersMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    const body = await request.json();
+    if (!body.name) return json({ error: 'Name required' }, 400);
+
+    const rosterId = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO rosters (id, team_id, name, event_id, created_by) VALUES (?, ?, ?, ?, ?)')
+      .bind(rosterId, teamId, body.name.slice(0, 100), body.eventId || null, user.userId).run();
+
+    // Add initial slots
+    for (let i = 0; i < (body.slots || []).length && i < 30; i++) {
+      const s = body.slots[i];
+      await env.DB.prepare('INSERT INTO roster_slots (id, roster_id, role_name, user_id, sort_order) VALUES (?, ?, ?, ?, ?)')
+        .bind(crypto.randomUUID(), rosterId, (s.roleName || 'Member').slice(0, 50), s.userId || null, i).run();
+    }
+
+    return json({ ok: true, id: rosterId });
+  }
+
+  // PUT /api/teams/:id/rosters/:rosterId/slots — update all slots
+  if (rosterSlotMatch && request.method === 'PUT') {
+    const teamId = rosterSlotMatch[1];
+    const rosterId = rosterSlotMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    const body = await request.json();
+    await env.DB.prepare('DELETE FROM roster_slots WHERE roster_id = ?').bind(rosterId).run();
+
+    for (let i = 0; i < (body.slots || []).length && i < 30; i++) {
+      const s = body.slots[i];
+      await env.DB.prepare('INSERT INTO roster_slots (id, roster_id, role_name, user_id, sort_order) VALUES (?, ?, ?, ?, ?)')
+        .bind(crypto.randomUUID(), rosterId, (s.roleName || 'Member').slice(0, 50), s.userId || null, i).run();
+    }
+
+    return json({ ok: true });
+  }
+
+  // DELETE /api/teams/:id/rosters/:rosterId
+  if (rosterMatch && request.method === 'DELETE') {
+    const teamId = rosterMatch[1];
+    const rosterId = rosterMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    await env.DB.prepare('DELETE FROM roster_slots WHERE roster_id = ?').bind(rosterId).run();
+    await env.DB.prepare('DELETE FROM rosters WHERE id = ? AND team_id = ?').bind(rosterId, teamId).run();
+    return json({ ok: true });
+  }
+
+  // ========== PERFORMANCE TRACKER ==========
+
+  const perfMatch = path.match(/^\/api\/teams\/([^/]+)\/performance$/);
+  const perfDeleteMatch = path.match(/^\/api\/teams\/([^/]+)\/performance\/([^/]+)$/);
+
+  // GET /api/teams/:id/performance
+  if (perfMatch && request.method === 'GET') {
+    const teamId = perfMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const entries = await env.DB.prepare(`
+      SELECT pe.*, u.username as player_name, u2.username as logged_by_name FROM performance_entries pe
+      LEFT JOIN users u ON u.id = pe.user_id
+      LEFT JOIN users u2 ON u2.id = pe.logged_by
+      WHERE pe.team_id = ? ORDER BY pe.created_at DESC LIMIT 200
+    `).bind(teamId).all();
+
+    // Build per-member averages
+    const memberStats = {};
+    for (const e of entries.results) {
+      if (!memberStats[e.user_id]) memberStats[e.user_id] = { username: e.player_name, stats: {} };
+      if (!memberStats[e.user_id].stats[e.stat_name]) memberStats[e.user_id].stats[e.stat_name] = { total: 0, count: 0 };
+      memberStats[e.user_id].stats[e.stat_name].total += e.stat_value;
+      memberStats[e.user_id].stats[e.stat_name].count++;
+    }
+
+    return json({ entries: entries.results, memberStats });
+  }
+
+  // POST /api/teams/:id/performance — log stats
+  if (perfMatch && request.method === 'POST') {
+    const teamId = perfMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    const body = await request.json();
+    if (!body.userId || !body.eventLabel || !body.stats || !Array.isArray(body.stats)) return json({ error: 'userId, eventLabel, and stats[] required' }, 400);
+
+    for (const stat of body.stats.slice(0, 20)) {
+      if (!stat.name || stat.value === undefined) continue;
+      await env.DB.prepare('INSERT INTO performance_entries (id, team_id, user_id, event_label, stat_name, stat_value, logged_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(crypto.randomUUID(), teamId, body.userId, body.eventLabel.slice(0, 100), stat.name.slice(0, 50), Number(stat.value) || 0, user.userId).run();
+    }
+
+    return json({ ok: true });
+  }
+
+  // DELETE /api/teams/:id/performance/:entryId
+  if (perfDeleteMatch && request.method === 'DELETE') {
+    const teamId = perfDeleteMatch[1];
+    const entryId = perfDeleteMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    await env.DB.prepare('DELETE FROM performance_entries WHERE id = ? AND team_id = ?').bind(entryId, teamId).run();
+    return json({ ok: true });
+  }
+
+  // ========== RECRUITMENT BOARD ==========
+
+  const recruitMatch = path.match(/^\/api\/teams\/([^/]+)\/recruitment$/);
+  const recruitPostMatch = path.match(/^\/api\/teams\/([^/]+)\/recruitment\/([^/]+)$/);
+  const recruitApplyMatch = path.match(/^\/api\/teams\/([^/]+)\/recruitment\/([^/]+)\/apply$/);
+  const recruitAppMatch = path.match(/^\/api\/teams\/([^/]+)\/recruitment\/([^/]+)\/applications\/([^/]+)$/);
+
+  // GET /api/teams/:id/recruitment
+  if (recruitMatch && request.method === 'GET') {
+    const teamId = recruitMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+
+    const posts = await env.DB.prepare(`
+      SELECT rp.*, u.username as created_by_name FROM recruitment_posts rp
+      LEFT JOIN users u ON u.id = rp.created_by
+      WHERE rp.team_id = ? ORDER BY rp.created_at DESC
+    `).bind(teamId).all();
+
+    const canManage = member.role === 'leader' || member.role === 'officer';
+    for (const post of posts.results) {
+      if (canManage) {
+        const apps = await env.DB.prepare(`
+          SELECT ra.*, u.username as applicant_name, u.avatar as applicant_avatar FROM recruitment_applications ra
+          LEFT JOIN users u ON u.id = ra.user_id
+          WHERE ra.post_id = ? ORDER BY ra.created_at DESC
+        `).bind(post.id).all();
+        post.applications = apps.results;
+      } else {
+        const count = await env.DB.prepare('SELECT COUNT(*) as count FROM recruitment_applications WHERE post_id = ?').bind(post.id).first();
+        post.applicationCount = count.count;
+        // Check if current user applied
+        const myApp = await env.DB.prepare('SELECT status FROM recruitment_applications WHERE post_id = ? AND user_id = ?').bind(post.id, user.userId).first();
+        post.myApplication = myApp || null;
+      }
+    }
+
+    return json({ posts: posts.results });
+  }
+
+  // POST /api/teams/:id/recruitment — create post
+  if (recruitMatch && request.method === 'POST') {
+    const teamId = recruitMatch[1];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    const body = await request.json();
+    if (!body.title) return json({ error: 'Title required' }, 400);
+
+    const postId = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO recruitment_posts (id, team_id, title, description, role_needed, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(postId, teamId, body.title.slice(0, 100), (body.description || '').slice(0, 500), (body.roleNeeded || '').slice(0, 50), user.userId).run();
+
+    return json({ ok: true, id: postId });
+  }
+
+  // PUT /api/teams/:id/recruitment/:postId — update status (open/closed)
+  if (recruitPostMatch && request.method === 'PUT') {
+    const teamId = recruitPostMatch[1];
+    const postId = recruitPostMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    const body = await request.json();
+    if (body.status) {
+      await env.DB.prepare('UPDATE recruitment_posts SET status = ? WHERE id = ? AND team_id = ?').bind(body.status, postId, teamId).run();
+    }
+    return json({ ok: true });
+  }
+
+  // DELETE /api/teams/:id/recruitment/:postId
+  if (recruitPostMatch && request.method === 'DELETE') {
+    const teamId = recruitPostMatch[1];
+    const postId = recruitPostMatch[2];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    await env.DB.prepare('DELETE FROM recruitment_applications WHERE post_id = ?').bind(postId).run();
+    await env.DB.prepare('DELETE FROM recruitment_posts WHERE id = ? AND team_id = ?').bind(postId, teamId).run();
+    return json({ ok: true });
+  }
+
+  // POST /api/teams/:id/recruitment/:postId/apply — apply to a post
+  if (recruitApplyMatch && request.method === 'POST') {
+    const teamId = recruitApplyMatch[1];
+    const postId = recruitApplyMatch[2];
+
+    const post = await env.DB.prepare('SELECT * FROM recruitment_posts WHERE id = ? AND team_id = ?').bind(postId, teamId).first();
+    if (!post) return json({ error: 'Post not found' }, 404);
+    if (post.status === 'closed') return json({ error: 'This position is closed' }, 400);
+
+    // Check if already applied
+    const existing = await env.DB.prepare('SELECT id FROM recruitment_applications WHERE post_id = ? AND user_id = ?').bind(postId, user.userId).first();
+    if (existing) return json({ error: 'Already applied' }, 400);
+
+    const body = await request.json();
+    await env.DB.prepare('INSERT INTO recruitment_applications (id, post_id, user_id, message) VALUES (?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), postId, user.userId, (body.message || '').slice(0, 500)).run();
+
+    return json({ ok: true });
+  }
+
+  // PUT /api/teams/:id/recruitment/:postId/applications/:appId — accept/reject
+  if (recruitAppMatch && request.method === 'PUT') {
+    const teamId = recruitAppMatch[1];
+    const appId = recruitAppMatch[3];
+    const member = await requireTeamMember(teamId, user.userId);
+    if (!member || (member.role !== 'leader' && member.role !== 'officer')) return json({ error: 'Leaders/officers only' }, 403);
+
+    const body = await request.json();
+    if (body.status === 'accepted' || body.status === 'rejected') {
+      await env.DB.prepare('UPDATE recruitment_applications SET status = ?, reviewed_by = ? WHERE id = ?')
+        .bind(body.status, user.userId, appId).run();
+    }
     return json({ ok: true });
   }
 
