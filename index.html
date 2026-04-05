@@ -1029,6 +1029,7 @@
             </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
+            <button class="btn" onclick="showHelpModal()" style="padding:6px 12px;font-size:1.2em;background:var(--bg-input);color:var(--text);border:1px solid var(--border-input);border-radius:8px" title="Help & Guide">❓</button>
             <button class="btn" onclick="toggleTheme()" id="themeBtn" style="padding:6px 12px;font-size:1.2em;background:var(--bg-input);color:var(--text);border:1px solid var(--border-input);border-radius:8px" title="Toggle theme">🌙</button>
             <div class="user-info" id="userInfo" style="display:none">
                 <button class="btn" id="upgradeBtn" style="display:none;padding:6px 14px;font-size:0.85em;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;" onclick="showUpgradeModal()">Upgrade</button>
@@ -1064,6 +1065,50 @@
                 document.getElementById('themeBtn').textContent = '☀️';
             }
         })();
+
+        // Help modal
+        function showHelpModal() {
+            const sections = [
+                { icon: '📊', title: 'Dashboard', text: 'Overview of your team at a glance — member count, upcoming events, active boss timers, recent activity, and quick stats.' },
+                { icon: '💬', title: 'Chat', text: 'Real-time team chat. Send messages, react with emojis (Premium), and coordinate with your team. Messages are stored per-team.' },
+                { icon: '📢', title: 'Announcements', text: 'Post important announcements that stay pinned for the whole team. Only officers and the leader can create announcements. Great for rules, updates, or schedules.' },
+                { icon: '⏱️', title: 'Boss Timers', text: 'Track boss respawn timers. Add bosses with interval, daily, weekly, or biweekly respawn types. When a boss dies, click the skull to start the death timer. Get Discord webhook notifications when bosses are about to spawn. Premium users can save boss templates and view kill history.' },
+                { icon: '📅', title: 'Events', text: 'Schedule team events like scrims, raids, GvG, or custom events. Set date, time, and description. Members can RSVP as Going, Maybe, or Not Going. Supports recurring events (daily, weekly, biweekly, monthly).' },
+                { icon: '👥', title: 'Members', text: 'View all team members with their roles. The leader can promote/demote members (Member → Officer → Leader) or kick members. Share the invite code to recruit new members.' },
+                { icon: '🗡️', title: 'Loot', text: 'Track item drops and assign them to team members. Log who got what loot and when. Premium users can set up a loot wishlist for members to claim priority on items.' },
+                { icon: '💎', title: 'DKP', text: 'Dragon Kill Points — a point system to fairly distribute loot. Award points for attendance and participation, deduct points when loot is claimed. Premium features include DKP auctions and point decay.' },
+                { icon: '⚔️', title: 'Wars', text: 'Log war results against other teams. Track wins, losses, and draws. Add notes and scores per war. View your team\'s overall war statistics and win rate.' },
+                { icon: '📆', title: 'Availability', text: 'Weekly availability calendar. Each member marks the days they\'re available so the team can plan events around everyone\'s schedule.' },
+                { icon: '📈', title: 'Analytics', text: 'Premium feature — detailed charts and stats about your team\'s activity, event attendance, DKP distribution, and more.' },
+                { icon: '⚙️', title: 'Settings', text: 'Configure your team — set description, timezone, Discord webhook URL for notifications, toggle which events send notifications, manage member permissions, and customize roles with colors and icons.' },
+                { icon: '🔗', title: 'Discord Notifications', text: 'Connect a Discord webhook URL in Settings to get automatic notifications for boss spawns, new events, announcements, and war results directly in your Discord channel.' },
+                { icon: '⭐', title: 'Premium', text: 'Free tier: 1 team, 5 members. Premium: unlimited teams, 50 members, chat reactions, boss templates & history, loot wishlist, DKP auctions & decay, analytics, CSV export, custom role colors/icons, and no watermark.' },
+            ];
+            let html = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.remove()">
+                <div class="card" style="width:550px;max-width:90vw;max-height:85vh;margin:0;overflow:hidden;display:flex;flex-direction:column">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                        <h2 style="font-size:1.3em">❓ Help & Guide</h2>
+                        <button class="btn" onclick="this.closest('[style*=fixed]').remove()" style="padding:4px 10px;background:var(--bg-input);color:var(--text-muted);font-size:1.1em">✕</button>
+                    </div>
+                    <p style="color:var(--text-muted);font-size:0.85em;margin-bottom:14px">Click any section to learn more about it.</p>
+                    <div style="overflow-y:auto;flex:1;padding-right:4px">`;
+            for (const s of sections) {
+                html += `<details style="margin-bottom:6px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                    <summary style="padding:10px 14px;cursor:pointer;background:var(--bg-item);font-weight:600;font-size:0.95em;list-style:none;display:flex;align-items:center;gap:8px;user-select:none">
+                        <span style="font-size:1.15em">${s.icon}</span> ${s.title}
+                        <span style="margin-left:auto;color:var(--text-dim);font-size:0.8em">▼</span>
+                    </summary>
+                    <div style="padding:10px 14px;font-size:0.88em;color:var(--text-muted);line-height:1.6;background:var(--bg-card)">${s.text}</div>
+                </details>`;
+            }
+            html += `</div>
+                    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:0.78em;color:var(--text-dim);text-align:center">
+                        Click outside the modal or press ✕ to close
+                    </div>
+                </div>
+            </div>`;
+            document.getElementById('deathModal').innerHTML = html;
+        }
 
         const API = 'https://guild-manager.xpropics.workers.dev';
         let token = localStorage.getItem('gm_token') || '';
