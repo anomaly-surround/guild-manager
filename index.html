@@ -1076,13 +1076,13 @@
                 { icon: '📅', title: 'Events', text: 'Schedule team events like scrims, raids, GvG, or custom events. Set date, time, and description. Members can RSVP as Going, Maybe, or Not Going. Supports recurring events (daily, weekly, biweekly, monthly).' },
                 { icon: '👥', title: 'Members', text: 'View all team members with their roles. The leader can promote/demote members (Member → Officer → Leader) or kick members. Share the invite code to recruit new members.' },
                 { icon: '🗡️', title: 'Loot', text: 'Track item drops and assign them to team members. Log who got what loot and when. Premium users can set up a loot wishlist for members to claim priority on items.' },
-                { icon: '💎', title: 'DKP', text: 'Dragon Kill Points — a point system to fairly distribute loot. Award points for attendance and participation, deduct points when loot is claimed. Premium features include DKP auctions and point decay.' },
+                { icon: '💎', title: 'Points (' + ptsName() + ')', text: 'A customizable points system (default: DKP) to fairly distribute loot and reward participation. Award points for attendance, deduct when loot is claimed. Rename it in Settings → "Points System Name" to fit your game (e.g. Credits, Rep, Contribution). Premium: auctions and point decay.' },
                 { icon: '⚔️', title: 'Wars', text: 'Log war results against other teams. Track wins, losses, and draws. Add notes and scores per war. View your team\'s overall war statistics and win rate.' },
                 { icon: '📆', title: 'Availability', text: 'Weekly availability calendar. Each member marks the days they\'re available so the team can plan events around everyone\'s schedule.' },
-                { icon: '📈', title: 'Analytics', text: 'Premium feature — detailed charts and stats about your team\'s activity, event attendance, DKP distribution, and more.' },
+                { icon: '📈', title: 'Analytics', text: 'Premium feature — detailed charts and stats about your team\'s activity, event attendance, points distribution, and more.' },
                 { icon: '⚙️', title: 'Settings', text: 'Configure your team — set description, timezone, Discord webhook URL for notifications, toggle which events send notifications, manage member permissions, and customize roles with colors and icons.' },
                 { icon: '🔗', title: 'Discord Notifications', text: 'Connect a Discord webhook URL in Settings to get automatic notifications for boss spawns, new events, announcements, and war results directly in your Discord channel.' },
-                { icon: '⭐', title: 'Premium', text: 'Free tier: 1 team, 5 members. Premium: unlimited teams, 50 members, chat reactions, boss templates & history, loot wishlist, DKP auctions & decay, analytics, CSV export, custom role colors/icons, and no watermark.' },
+                { icon: '⭐', title: 'Premium', text: 'Free tier: 1 team, 5 members. Premium: unlimited teams, 50 members, chat reactions, boss templates & history, loot wishlist, points auctions & decay, analytics, CSV export, custom role colors/icons, and no watermark.' },
             ];
             let html = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)this.remove()">
                 <div class="card" style="width:550px;max-width:90vw;max-height:85vh;margin:0;overflow:hidden;display:flex;flex-direction:column">
@@ -1114,6 +1114,10 @@
         let token = localStorage.getItem('gm_token') || '';
         let currentUser = null;
         let currentTeamId = null;
+
+        // Points system name helper (customizable per team, defaults to "DKP")
+        let _pointsName = 'DKP';
+        function ptsName() { return _pointsName || 'DKP'; }
 
         // Premium gate helper
         function premiumGate(content, featureName) {
@@ -1375,6 +1379,8 @@
 
             teamData = data;
             teamTab = 'dashboard';
+            // Load points name setting
+            api('GET', `/api/teams/${teamId}/settings`).then(s => { _pointsName = s.pointsName || 'DKP'; }).catch(() => {});
             await loadTeamBosses(teamId);
             loadAndRenderDashboard();
         }
@@ -1437,7 +1443,7 @@
                     <option value="events" ${teamTab === 'events' ? 'selected' : ''}>Events</option>
                     <option value="members" ${teamTab === 'members' ? 'selected' : ''}>Members (${members.length})</option>
                     <option value="loot" ${teamTab === 'loot' ? 'selected' : ''}>Loot</option>
-                    <option value="dkp" ${teamTab === 'dkp' ? 'selected' : ''}>DKP</option>
+                    <option value="dkp" ${teamTab === 'dkp' ? 'selected' : ''}>${ptsName()}</option>
                     <option value="wars" ${teamTab === 'wars' ? 'selected' : ''}>Wars</option>
                     <option value="availability" ${teamTab === 'availability' ? 'selected' : ''}>Availability</option>
                     ${team.premium_team ? `<option value="analytics" ${teamTab === 'analytics' ? 'selected' : ''}>Analytics</option>` : ''}
@@ -1452,7 +1458,7 @@
                         <button class="tab-btn ${teamTab === 'events' ? 'active' : ''}" onclick="teamTab='events';loadAndRenderEvents()">Events</button>
                         <button class="tab-btn ${teamTab === 'members' ? 'active' : ''}" onclick="teamTab='members';renderTeamView()">Members (${members.length})</button>
                         <button class="tab-btn ${teamTab === 'loot' ? 'active' : ''}" onclick="loadAndRenderLoot()">Loot</button>
-                        <button class="tab-btn ${teamTab === 'dkp' ? 'active' : ''}" onclick="loadAndRenderDKP()">DKP</button>
+                        <button class="tab-btn ${teamTab === 'dkp' ? 'active' : ''}" onclick="loadAndRenderDKP()">${ptsName()}</button>
                         <button class="tab-btn ${teamTab === 'wars' ? 'active' : ''}" onclick="loadAndRenderWars()">Wars</button>
                         <button class="tab-btn ${teamTab === 'availability' ? 'active' : ''}" onclick="loadAndRenderAvailability()">Availability</button>
                         ${team.premium_team ? `<button class="tab-btn ${teamTab === 'analytics' ? 'active' : ''}" onclick="loadAndRenderAnalytics()">Analytics</button>` : ''}
@@ -1698,6 +1704,7 @@
                 api('GET', `/api/teams/${currentTeamId}/settings`),
                 api('GET', `/api/teams/${currentTeamId}/roles`),
             ]);
+            _pointsName = settings.pointsName || 'DKP';
             const roles = rolesData.roles || {};
             settings._roleLeader = roles.leader?.displayName || '';
             settings._roleOfficer = roles.officer?.displayName || '';
@@ -1775,8 +1782,12 @@
                             <label>Inactive threshold (days)</label>
                             <input type="number" id="inactiveDays" value="${settings.inactiveDays || 7}" min="1" max="90">
                         </div>
+                        <div class="form-group" style="max-width:180px">
+                            <label>Points System Name</label>
+                            <input type="text" id="pointsName" value="${escapeHtml(settings.pointsName || 'DKP')}" maxlength="20" placeholder="e.g. DKP, Credits, Rep">
+                        </div>
                         <div class="form-group" style="max-width:160px">
-                            <label>Starting DKP</label>
+                            <label>Starting ${escapeHtml(settings.pointsName || 'DKP')}</label>
                             <input type="number" id="startingDkp" value="${settings.startingDkp || 0}" min="0">
                         </div>
                     </div>
@@ -1867,12 +1878,12 @@
                 </div>
                 `, 'Custom Roles')}
 
-                <!-- Premium: DKP Decay -->
+                <!-- Premium: Points Decay -->
                 ${premiumGate(`
                 <div class="card">
-                    <h3>DKP Decay</h3>
-                    <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">Automatically reduce DKP for inactive members.</p>
-                    <label style="font-size:0.85em;color:var(--text-muted)"><input type="checkbox" id="dkpDecayEnabled" ${settings.dkpDecayEnabled ? 'checked' : ''} style="accent-color:#5865F2"> Enable DKP Decay</label>
+                    <h3>${ptsName()} Decay</h3>
+                    <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">Automatically reduce ${ptsName()} for inactive members.</p>
+                    <label style="font-size:0.85em;color:var(--text-muted)"><input type="checkbox" id="dkpDecayEnabled" ${settings.dkpDecayEnabled ? 'checked' : ''} style="accent-color:#5865F2"> Enable ${ptsName()} Decay</label>
                     <div class="form-row" style="margin-top:8px">
                         <div class="form-group" style="max-width:120px">
                             <label>Decay % per cycle</label>
@@ -1889,7 +1900,7 @@
                     </div>
                     <button class="btn btn-primary btn-sm" onclick="saveDkpDecay()" style="margin-top:8px">Save</button>
                 </div>
-                `, 'DKP Decay')}
+                `, ptsName() + ' Decay')}
 
                 ${isLeader ? `
                 <!-- Transfer Ownership -->
@@ -1938,7 +1949,7 @@
                     <option value="events">Events</option>
                     <option value="members">Members (${members.length})</option>
                     <option value="loot">Loot</option>
-                    <option value="dkp">DKP</option>
+                    <option value="dkp">${ptsName()}</option>
                     <option value="wars">Wars</option>
                     <option value="availability">Availability</option>
                     <option value="settings" selected>Settings</option>
@@ -1952,7 +1963,7 @@
                         <button class="tab-btn" onclick="loadAndRenderEvents()">Events</button>
                         <button class="tab-btn" onclick="teamTab='members';renderTeamView()">Members (${members.length})</button>
                         <button class="tab-btn" onclick="loadAndRenderLoot()">Loot</button>
-                        <button class="tab-btn" onclick="loadAndRenderDKP()">DKP</button>
+                        <button class="tab-btn" onclick="loadAndRenderDKP()">${ptsName()}</button>
                         <button class="tab-btn" onclick="loadAndRenderWars()">Wars</button>
                         <button class="tab-btn" onclick="loadAndRenderAvailability()">Availability</button>
                         <button class="tab-btn active">Settings</button>
@@ -2115,7 +2126,9 @@
                 defaultEventDuration: parseInt(document.getElementById('defaultEventDuration').value) || 60,
                 inactiveDays: parseInt(document.getElementById('inactiveDays').value) || 7,
                 startingDkp: parseInt(document.getElementById('startingDkp').value) || 0,
+                pointsName: (document.getElementById('pointsName').value.trim() || 'DKP').substring(0, 20),
             });
+            _pointsName = (document.getElementById('pointsName').value.trim() || 'DKP').substring(0, 20);
             showToast('Rules saved');
         });
 
@@ -2189,7 +2202,7 @@
                 dkpDecayInactiveDays: parseInt(document.getElementById('dkpDecayInactiveDays').value) || 14,
                 dkpDecayIntervalDays: parseInt(document.getElementById('dkpDecayIntervalDays').value) || 7,
             });
-            showToast('DKP decay settings saved');
+            showToast(ptsName() + ' decay settings saved');
         });
 
         // --- Mobile tab switcher ---
@@ -2559,10 +2572,10 @@
             html += '</div>';
 
             // DKP progression
-            html += '<div class="card"><h3>DKP Top Earners</h3>';
+            html += '<div class="card"><h3>' + ptsName() + ' Top Earners</h3>';
             const dkp = dkpData.data || [];
             if (dkp.length === 0) {
-                html += '<div class="empty-state">No DKP data</div>';
+                html += '<div class="empty-state">No ' + ptsName() + ' data</div>';
             } else {
                 const balances = {};
                 for (const d of dkp) {
@@ -2608,7 +2621,7 @@
             html += `<div class="card"><h3>Export Data (CSV)</h3>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
                     <button class="btn btn-secondary btn-sm" onclick="exportCSV('members')">Members</button>
-                    <button class="btn btn-secondary btn-sm" onclick="exportCSV('dkp')">DKP</button>
+                    <button class="btn btn-secondary btn-sm" onclick="exportCSV('dkp')">${ptsName()}</button>
                     <button class="btn btn-secondary btn-sm" onclick="exportCSV('wars')">Wars</button>
                     <button class="btn btn-secondary btn-sm" onclick="exportCSV('loot')">Loot</button>
                 </div>
@@ -2942,7 +2955,7 @@
                                     </select>
                                 </div>
                                 <div class="form-group" style="max-width:100px">
-                                    <label>DKP Cost</label>
+                                    <label>${ptsName()} Cost</label>
                                     <input type="number" id="lootDkpCost" value="0" min="0">
                                 </div>
                                 <div style="align-self:flex-end"><button class="btn btn-primary" onclick="addLoot()">Log</button></div>
@@ -2962,7 +2975,7 @@
                             <div>
                                 <span class="loot-item-name">${escapeHtml(l.item_name)}</span>
                                 <span style="color:#64748b;font-size:0.8em"> from ${escapeHtml(l.boss_name)}</span>
-                                <div style="font-size:0.8em;color:#94a3b8">${l.recipient_name} ${l.dkp_cost ? `(-${l.dkp_cost} DKP)` : ''} &middot; ${date}</div>
+                                <div style="font-size:0.8em;color:#94a3b8">${l.recipient_name} ${l.dkp_cost ? `(-${l.dkp_cost} ${ptsName()})` : ''} &middot; ${date}</div>
                             </div>
                             ${canManage ? `<button class="btn btn-danger btn-sm" onclick="deleteLoot('${l.id}')" style="font-size:0.7em;padding:2px 8px">X</button>` : ''}
                         </div>
@@ -3020,7 +3033,7 @@
                 html += `
                     <div class="card">
                         <div class="collapsible-header" onclick="toggleSection('addDkpForm', this)">
-                            <h3>+ Award / Deduct DKP</h3>
+                            <h3>+ Award / Deduct ${ptsName()}</h3>
                             <span class="toggle-arrow">&#9660;</span>
                         </div>
                         <div class="collapsible-body" id="addDkpForm">
@@ -3051,9 +3064,9 @@
             }
 
             // Leaderboard
-            html += '<div class="card"><h3>DKP Standings</h3>';
+            html += '<div class="card"><h3>' + ptsName() + ' Standings</h3>';
             if (balances.length === 0) {
-                html += '<div class="empty-state">No DKP recorded yet</div>';
+                html += '<div class="empty-state">No ' + ptsName() + ' recorded yet</div>';
             } else {
                 for (let i = 0; i < balances.length; i++) {
                     const b = balances[i];
@@ -3063,7 +3076,7 @@
                             <div>
                                 <span>${medal}${b.username}</span>
                             </div>
-                            <span class="${b.balance >= 0 ? 'dkp-positive' : 'dkp-negative'}">${b.balance >= 0 ? '+' : ''}${b.balance} DKP</span>
+                            <span class="${b.balance >= 0 ? 'dkp-positive' : 'dkp-negative'}">${b.balance >= 0 ? '+' : ''}${b.balance} ${ptsName()}</span>
                         </div>
                     `;
                 }
@@ -3104,11 +3117,11 @@
                 const userIds = teamData.members.map(m => m.id);
                 const data = await api('POST', `/api/teams/${currentTeamId}/dkp/bulk`, { userIds, amount, reason });
                 if (data.error) { showToast(data.error); return; }
-                showToast(`DKP awarded to all members!`);
+                showToast(`${ptsName()} awarded to all members!`);
             } else {
                 const data = await api('POST', `/api/teams/${currentTeamId}/dkp`, { userId: memberId, amount, reason });
                 if (data.error) { showToast(data.error); return; }
-                showToast('DKP updated!');
+                showToast(ptsName() + ' updated!');
             }
             loadAndRenderDKP();
         });
@@ -3247,7 +3260,7 @@
             const auctions = data.auctions || [];
             const canManage = teamData.team.my_role !== 'member';
 
-            let html = '<div class="card"><h3>DKP Auctions</h3>';
+            let html = '<div class="card"><h3>' + ptsName() + ' Auctions</h3>';
             if (canManage) {
                 html += `<div class="form-row" style="margin-bottom:8px">
                     <div class="form-group"><input type="text" id="auctionItem" placeholder="Item name"></div>
@@ -3265,7 +3278,7 @@
                     html += `<div class="dkp-row" style="flex-wrap:wrap">
                         <div><span class="loot-item-name">${a.item_name}</span> <span style="font-size:0.8em;color:var(--text-dim)">by ${a.started_by_name} &middot; ${a.bid_count} bids</span></div>
                         <div style="display:flex;gap:6px;align-items:center">
-                            <span style="font-weight:600;color:#34d399">${a.top_bid || a.min_bid || 0} DKP</span>
+                            <span style="font-weight:600;color:#34d399">${a.top_bid || a.min_bid || 0} ${ptsName()}</span>
                             <input type="number" id="bid_${a.id}" placeholder="Your bid" min="${(a.top_bid || a.min_bid || 0) + 1}" style="width:80px;background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);padding:6px;border-radius:6px;font-size:0.85em">
                             <button class="btn btn-primary btn-sm" onclick="placeBid('${a.id}')" style="font-size:0.75em">Bid</button>
                             ${canManage ? `<button class="btn btn-secondary btn-sm" onclick="closeAuction('${a.id}')" style="font-size:0.75em">Close</button>` : ''}
@@ -3279,7 +3292,7 @@
                 for (const a of closed.slice(0, 10)) {
                     html += `<div class="dkp-row" style="opacity:0.6">
                         <span>${a.item_name}</span>
-                        <span style="font-size:0.85em">${a.winner_name ? `Won by ${a.winner_name} for ${a.winning_bid} DKP` : 'No bids'}</span>
+                        <span style="font-size:0.85em">${a.winner_name ? `Won by ${a.winner_name} for ${a.winning_bid} ${ptsName()}` : 'No bids'}</span>
                     </div>`;
                 }
             }
