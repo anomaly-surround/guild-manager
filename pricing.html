@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing - Guild Manager</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0a0e17; color: #e0e6f0; max-width: 800px; margin: 0 auto; padding: 40px 20px; line-height: 1.7; }
+        h1 { color: #a78bfa; margin-bottom: 8px; }
+        h2 { color: #60a5fa; margin-top: 28px; font-size: 1.1em; }
+        p, li { color: #94a3b8; font-size: 0.95em; }
+        a { color: #a78bfa; }
+        .updated { color: #64748b; font-size: 0.85em; }
+        .plans { display: flex; gap: 20px; margin-top: 32px; flex-wrap: wrap; }
+        .plan { flex: 1; min-width: 220px; background: #111827; border: 1px solid #1e293b; border-radius: 12px; padding: 28px; }
+        .plan.featured { border-color: #a78bfa; }
+        .plan h3 { font-size: 1.3em; margin-bottom: 4px; color: #e0e6f0; }
+        .plan .price { font-size: 1.6em; color: #a78bfa; font-weight: bold; margin: 12px 0; }
+        .plan .price span { font-size: 0.5em; color: #64748b; font-weight: normal; }
+        .plan ul { list-style: none; padding: 0; margin-top: 16px; }
+        .plan ul li { padding: 6px 0; border-bottom: 1px solid #1e293b; font-size: 0.9em; }
+        .plan ul li:last-child { border-bottom: none; }
+        .check { color: #34d399; margin-right: 6px; }
+        .cross { color: #64748b; margin-right: 6px; }
+        .cta { display: inline-block; margin-top: 20px; padding: 10px 24px; background: #a78bfa; color: #0a0e17; font-weight: 600; border-radius: 8px; text-decoration: none; font-size: 0.95em; }
+        .cta.secondary { background: #1e293b; color: #e0e6f0; }
+    </style>
+</head>
+<body>
+    <h1>Pricing</h1>
+    <p class="updated">Simple pricing for gaming teams of all sizes.</p>
+
+    <div class="plans">
+        <div class="plan">
+            <h3>Free</h3>
+            <div class="price">$0 <span>/ forever</span></div>
+            <p style="color:#94a3b8;font-size:0.85em">Great for trying things out</p>
+            <ul>
+                <li><span class="check">&#10003;</span> 1 team</li>
+                <li><span class="check">&#10003;</span> Up to 5 members</li>
+                <li><span class="check">&#10003;</span> Boss timers</li>
+                <li><span class="check">&#10003;</span> Event scheduling &amp; RSVP</li>
+                <li><span class="check">&#10003;</span> Team chat</li>
+                <li><span class="check">&#10003;</span> Member roster &amp; roles</li>
+                <li><span class="check">&#10003;</span> Announcements</li>
+                <li><span class="check">&#10003;</span> Loot tracking</li>
+                <li><span class="check">&#10003;</span> Points system (DKP)</li>
+                <li><span class="check">&#10003;</span> War log</li>
+                <li><span class="check">&#10003;</span> File sharing (100MB)</li>
+                <li><span class="cross">&#10007;</span> Chat reactions</li>
+                <li><span class="cross">&#10007;</span> Boss templates &amp; history</li>
+                <li><span class="cross">&#10007;</span> Analytics</li>
+                <li><span class="cross">&#10007;</span> Custom role colors/icons</li>
+            </ul>
+            <a href="https://anomaly-surround.github.io/guild-manager/" class="cta secondary">Get Started</a>
+        </div>
+
+        <div class="plan featured">
+            <h3>Premium Monthly</h3>
+            <div class="price">$2 <span>/ month</span></div>
+            <p style="color:#94a3b8;font-size:0.85em">For active guilds that need more</p>
+            <ul>
+                <li><span class="check">&#10003;</span> Unlimited teams</li>
+                <li><span class="check">&#10003;</span> Up to 50 members</li>
+                <li><span class="check">&#10003;</span> Everything in Free</li>
+                <li><span class="check">&#10003;</span> Chat reactions</li>
+                <li><span class="check">&#10003;</span> Boss templates &amp; history</li>
+                <li><span class="check">&#10003;</span> Loot wishlist</li>
+                <li><span class="check">&#10003;</span> Points auctions &amp; decay</li>
+                <li><span class="check">&#10003;</span> Analytics &amp; charts</li>
+                <li><span class="check">&#10003;</span> CSV export</li>
+                <li><span class="check">&#10003;</span> Custom role colors/icons</li>
+                <li><span class="check">&#10003;</span> Channel-specific webhooks</li>
+                <li><span class="check">&#10003;</span> File sharing (500MB)</li>
+                <li><span class="check">&#10003;</span> No watermark</li>
+            </ul>
+            <a href="https://anomaly-surround.github.io/guild-manager/" class="cta">Upgrade Now</a>
+        </div>
+
+        <div class="plan">
+            <h3>Premium Lifetime</h3>
+            <div class="price">$10 <span>/ forever</span></div>
+            <p style="color:#94a3b8;font-size:0.85em">Pay once, keep it forever</p>
+            <ul>
+                <li><span class="check">&#10003;</span> Everything in Premium</li>
+                <li><span class="check">&#10003;</span> One-time payment</li>
+                <li><span class="check">&#10003;</span> No recurring charges</li>
+                <li><span class="check">&#10003;</span> All future updates included</li>
+            </ul>
+            <a href="https://anomaly-surround.github.io/guild-manager/" class="cta">Buy Lifetime</a>
+        </div>
+    </div>
+
+    <h2>7-Day Free Trial</h2>
+    <p>Not sure yet? Start a free 7-day trial of Premium — no payment required. Try all features before you buy.</p>
+
+    <h2>Payments</h2>
+    <p>All payments are securely processed by <strong>Paddle</strong>, our Merchant of Record. Paddle handles billing, taxes, and invoices. See our <a href="refund.html">Refund Policy</a> for details on cancellations and refunds.</p>
+
+    <h2>Questions?</h2>
+    <p>Reach out via the Discord community or GitHub if you need help choosing a plan.</p>
+</body>
+</html>
