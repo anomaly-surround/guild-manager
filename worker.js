@@ -123,6 +123,7 @@ async function initDB(db) {
       weekly_time TEXT,
       biweekly_days TEXT,
       alert_minutes INTEGER DEFAULT 5,
+      auto_reset_minutes INTEGER DEFAULT 5,
       next_spawn INTEGER NOT NULL,
       status TEXT DEFAULT 'waiting',
       spawned_at INTEGER,
@@ -518,6 +519,7 @@ async function initDB(db) {
       'ALTER TABLE users ADD COLUMN trial_used INTEGER DEFAULT 0',
       'ALTER TABLE users ADD COLUMN google_id TEXT',
       'ALTER TABLE users ADD COLUMN auth_type TEXT DEFAULT "discord"',
+      'ALTER TABLE bosses ADD COLUMN auto_reset_minutes INTEGER DEFAULT 5',
     ];
     for (const sql of migrations) await db.exec(sql).catch(() => {});
   }
@@ -611,12 +613,13 @@ async function handleScheduled(env) {
 
     // Spawned
     if (remaining <= 0) {
+      const resetMin = boss.auto_reset_minutes || 5;
       if (!boss.spawn_notified && settings?.on_spawn && settings?.webhook_url) {
         await sendDiscord(settings.webhook_url, `${boss.name} has SPAWNED!`,
-          `**${boss.name}** is now available!\nAuto-reset in 5 minutes if not killed.`, 15548997);
+          `**${boss.name}** is now available!\nAuto-reset in ${resetMin} minute${resetMin !== 1 ? 's' : ''} if not killed.`, 15548997);
       }
       await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = ?, auto_reset_at = ?, spawn_notified = 1 WHERE id = ?')
-        .bind('spawned', now, now + 300000, boss.id).run();
+        .bind('spawned', now, now + resetMin * 60000, boss.id).run();
     }
   }
 
@@ -1432,12 +1435,12 @@ async function handleRequest(request, env) {
     const alertMs = (body.alertMinutes || 5) * 60000;
     const warned = (nextSpawn - Date.now()) <= alertMs ? 1 : 0;
 
-    await env.DB.prepare(`INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, next_spawn, warned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    await env.DB.prepare(`INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, auto_reset_minutes, next_spawn, warned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(id, teamId, body.name.trim(), body.type,
         body.intervalMs || null, body.fixedTime || null,
         body.weeklyDay ?? null, body.weeklyTime || null,
         body.biweeklyDays ? JSON.stringify(body.biweeklyDays) : null,
-        body.alertMinutes || 5, nextSpawn, warned).run();
+        body.alertMinutes || 5, body.autoResetMinutes || 5, nextSpawn, warned).run();
 
     return json({ ok: true, id });
   }

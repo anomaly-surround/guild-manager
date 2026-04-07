@@ -1590,6 +1590,10 @@
                                 <label>Alert (min)</label>
                                 <input type="number" id="bossAlert" value="5" min="1" max="60">
                             </div>
+                            <div class="form-group" style="max-width:120px">
+                                <label>Auto-reset (min)</label>
+                                <input type="number" id="bossAutoReset" value="5" min="1" max="60">
+                            </div>
                             <div><button class="btn btn-primary" onclick="addBoss()">Add Boss</button></div>
                         </div>
                     </div>
@@ -1676,7 +1680,7 @@
                     <div class="${cls}" data-boss-id="${boss.id}">
                         <div style="flex:1">
                             <div class="boss-name-text">${escapeHtml(boss.name)}</div>
-                            <div class="boss-meta-text">${meta} | Alert: ${boss.alert_minutes}m</div>
+                            <div class="boss-meta-text">${meta} | Alert: ${boss.alert_minutes}m | Reset: ${boss.auto_reset_minutes || 5}m</div>
                             ${boss.last_death ? `<div class="boss-death-text">Killed: ${new Date(boss.last_death).toLocaleString()}</div>` : ''}
                         </div>
                         <div class="${countdownCls}">${countdownText}</div>
@@ -2060,8 +2064,9 @@
             if (!name) return;
             const type = document.getElementById('bossType').value;
             const alertMinutes = parseInt(document.getElementById('bossAlert').value) || 5;
+            const autoResetMinutes = parseInt(document.getElementById('bossAutoReset').value) || 5;
 
-            const body = { name, type, alertMinutes };
+            const body = { name, type, alertMinutes, autoResetMinutes };
 
             if (type === 'interval') {
                 const h = parseInt(document.getElementById('bossHours').value) || 0;
@@ -2158,6 +2163,7 @@
                         name: b.name,
                         type: b.type,
                         alert_minutes: b.alert_minutes,
+                        auto_reset_minutes: b.auto_reset_minutes || 5,
                         last_death: b.last_death || null,
                     };
                     if (b.type === 'interval') entry.interval_ms = b.interval_ms;
@@ -2204,6 +2210,7 @@
                         name: b.name,
                         type: b.type,
                         alertMinutes: b.alert_minutes || 5,
+                        autoResetMinutes: b.auto_reset_minutes || 5,
                     };
                     if (b.type === 'interval') body.intervalMs = b.interval_ms;
                     if (b.type === 'fixed') body.fixedTime = b.fixed_time;
