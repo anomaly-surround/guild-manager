@@ -558,7 +558,9 @@ function getNextBiweeklySpawn(days, tz) {
 }
 
 function getNextTwiceDailySpawn(times, tz) {
+  if (!times) return Date.now() + 3600000;
   const parsed = typeof times === 'string' ? JSON.parse(times) : times;
+  if (!Array.isArray(parsed) || parsed.length === 0) return Date.now() + 3600000;
   const spawns = parsed.map(t => getNextFixedSpawn(t, tz));
   return Math.min(...spawns);
 }
