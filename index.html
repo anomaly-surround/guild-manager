@@ -2197,8 +2197,8 @@
                     if (b.type === 'biweekly') body.biweeklyDays = b.biweekly_days;
 
                     const result = await api('POST', `/api/teams/${currentTeamId}/bosses`, body);
-                    if (result && result.boss && b.last_death) {
-                        await api('POST', `/api/teams/${currentTeamId}/bosses/${result.boss.id}/kill`, { deathTime: b.last_death });
+                    if (result && result.id && b.last_death) {
+                        await api('POST', `/api/teams/${currentTeamId}/bosses/${result.id}/kill`, { deathTime: b.last_death });
                     }
                     added++;
                 }
