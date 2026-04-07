@@ -1601,6 +1601,9 @@
                     <button class="${bossViewMode === 'list' ? 'active' : ''}" onclick="setBossView('list')">List</button>
                     <button class="${bossViewMode === 'grid' ? 'active' : ''}" onclick="setBossView('grid')">Grid</button>
                 </div>`;
+            html += `<button class="btn btn-secondary btn-sm" onclick="exportBossTimers()">Export</button>`;
+            if (canManage) html += `<button class="btn btn-secondary btn-sm" onclick="document.getElementById('bossImportFile').click()">Import</button>
+                <input type="file" id="bossImportFile" accept=".json" style="display:none" onchange="importBossTimers(event)">`;
             if (teamData?.team?.premium_team) {
                 html += `
                     <button class="btn btn-secondary btn-sm" onclick="showBossHistory()">Kill History</button>
@@ -2130,6 +2133,82 @@
             await loadTeamBosses(currentTeamId);
             renderTeamView();
         });
+
+        function exportBossTimers() {
+            if (teamBosses.length === 0) { showToast('No bosses to export'); return; }
+            const exportData = {
+                version: 1,
+                exportedAt: Date.now(),
+                bosses: teamBosses.map(b => {
+                    const entry = {
+                        name: b.name,
+                        type: b.type,
+                        alert_minutes: b.alert_minutes,
+                        last_death: b.last_death || null,
+                    };
+                    if (b.type === 'interval') entry.interval_ms = b.interval_ms;
+                    if (b.type === 'fixed') entry.fixed_time = b.fixed_time;
+                    if (b.type === 'weekly') { entry.weekly_day = b.weekly_day; entry.weekly_time = b.weekly_time; }
+                    if (b.type === 'biweekly') entry.biweekly_days = typeof b.biweekly_days === 'string' ? JSON.parse(b.biweekly_days) : b.biweekly_days;
+                    return entry;
+                }),
+            };
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `boss-timers-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(`Exported ${teamBosses.length} boss(es)`);
+        }
+
+        async function importBossTimers(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            event.target.value = '';
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                if (!data.bosses || !Array.isArray(data.bosses)) { showToast('Invalid file format'); return; }
+                if (data.bosses.length === 0) { showToast('No bosses in file'); return; }
+
+                const existing = teamBosses.map(b => b.name.toLowerCase());
+                const dupes = data.bosses.filter(b => existing.includes(b.name.toLowerCase()));
+                let msg = `Import ${data.bosses.length} boss(es)?`;
+                if (dupes.length > 0) msg += `\n${dupes.length} already exist and will be skipped.`;
+                if (!confirm(msg)) return;
+
+                const validTypes = ['interval', 'fixed', 'weekly', 'biweekly'];
+                let added = 0;
+                for (const b of data.bosses) {
+                    if (!b.name || typeof b.name !== 'string' || !validTypes.includes(b.type)) continue;
+                    if (b.name.length > 100) continue;
+                    if (existing.includes(b.name.toLowerCase())) continue;
+
+                    const body = {
+                        name: b.name,
+                        type: b.type,
+                        alertMinutes: b.alert_minutes || 5,
+                    };
+                    if (b.type === 'interval') body.intervalMs = b.interval_ms;
+                    if (b.type === 'fixed') body.fixedTime = b.fixed_time;
+                    if (b.type === 'weekly') { body.weeklyDay = b.weekly_day; body.weeklyTime = b.weekly_time; }
+                    if (b.type === 'biweekly') body.biweeklyDays = b.biweekly_days;
+
+                    const result = await api('POST', `/api/teams/${currentTeamId}/bosses`, body);
+                    if (result && result.boss && b.last_death) {
+                        await api('POST', `/api/teams/${currentTeamId}/bosses/${result.boss.id}/kill`, { deathTime: b.last_death });
+                    }
+                    added++;
+                }
+                await loadTeamBosses(currentTeamId);
+                renderTeamView();
+                showToast(`Imported ${added} boss(es)${dupes.length ? `, skipped ${dupes.length} duplicate(s)` : ''}`);
+            } catch (e) {
+                showToast('Failed to import: ' + e.message);
+            }
+        }
 
         const saveWebhook = guard('saveWebhook', async function() {
             const url = document.getElementById('webhookUrl').value.trim();
