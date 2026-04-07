@@ -1603,7 +1603,8 @@
                 </div>`;
             html += `<button class="btn btn-secondary btn-sm" onclick="exportBossTimers()">Export</button>`;
             if (canManage) html += `<button class="btn btn-secondary btn-sm" onclick="document.getElementById('bossImportFile').click()">Import</button>
-                <input type="file" id="bossImportFile" accept=".json" style="display:none" onchange="importBossTimers(event)">`;
+                <input type="file" id="bossImportFile" accept=".json" style="display:none" onchange="importBossTimers(event)">
+                <button class="btn btn-sm" style="background:#3b1111;color:#f87171;border:1px solid #7f1d1d44" onclick="removeAllBosses()">Remove All</button>`;
             if (teamData?.team?.premium_team) {
                 html += `
                     <button class="btn btn-secondary btn-sm" onclick="showBossHistory()">Kill History</button>
@@ -2208,6 +2209,17 @@
             } catch (e) {
                 showToast('Failed to import: ' + e.message);
             }
+        }
+
+        async function removeAllBosses() {
+            if (teamBosses.length === 0) { showToast('No bosses to remove'); return; }
+            if (!confirm(`Remove ALL ${teamBosses.length} boss timer(s)? This cannot be undone.`)) return;
+            for (const b of [...teamBosses]) {
+                await api('DELETE', `/api/teams/${currentTeamId}/bosses/${b.id}`);
+            }
+            await loadTeamBosses(currentTeamId);
+            renderTeamView();
+            showToast('All boss timers removed');
         }
 
         const saveWebhook = guard('saveWebhook', async function() {
