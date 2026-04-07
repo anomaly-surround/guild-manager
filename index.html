@@ -1524,6 +1524,7 @@
                                     <option value="interval">Interval</option>
                                     <option value="fixed">Daily</option>
                                     <option value="weekly">Weekly</option>
+                                    <option value="twicedaily">Twice Daily</option>
                                     <option value="biweekly">Twice a Week</option>
                                 </select>
                             </div>
@@ -1555,6 +1556,16 @@
                             <div class="form-group" style="max-width:150px">
                                 <label>Time</label>
                                 <input type="time" id="bossWeeklyTime">
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-top:8px;display:none" id="bossTwiceDailyRow">
+                            <div class="form-group" style="max-width:150px">
+                                <label>Time 1</label>
+                                <input type="time" id="bossTwiceTime1">
+                            </div>
+                            <div class="form-group" style="max-width:150px">
+                                <label>Time 2</label>
+                                <input type="time" id="bossTwiceTime2">
                             </div>
                         </div>
                         <div style="margin-top:8px;display:none" id="bossBiweeklyRow">
@@ -1669,6 +1680,11 @@
                     meta = 'Daily at ' + boss.fixed_time;
                 } else if (boss.type === 'weekly') {
                     meta = fullDayNames[boss.weekly_day] + ' at ' + boss.weekly_time;
+                } else if (boss.type === 'twicedaily') {
+                    try {
+                        const times = typeof boss.biweekly_days === 'string' ? JSON.parse(boss.biweekly_days) : boss.biweekly_days;
+                        meta = 'Daily at ' + times.join(' & ');
+                    } catch { meta = 'Twice daily'; }
                 } else if (boss.type === 'biweekly') {
                     try {
                         const days = typeof boss.biweekly_days === 'string' ? JSON.parse(boss.biweekly_days) : boss.biweekly_days;
@@ -2051,6 +2067,7 @@
             document.getElementById('bossIntervalRow').style.display = type === 'interval' ? '' : 'none';
             document.getElementById('bossFixedRow').style.display = type === 'fixed' ? '' : 'none';
             document.getElementById('bossWeeklyRow').style.display = type === 'weekly' ? '' : 'none';
+            document.getElementById('bossTwiceDailyRow').style.display = type === 'twicedaily' ? '' : 'none';
             document.getElementById('bossBiweeklyRow').style.display = type === 'biweekly' ? '' : 'none';
         }
 
@@ -2080,6 +2097,11 @@
                 body.weeklyDay = parseInt(document.getElementById('bossWeeklyDay').value);
                 body.weeklyTime = document.getElementById('bossWeeklyTime').value;
                 if (!body.weeklyTime) return;
+            } else if (type === 'twicedaily') {
+                const t1 = document.getElementById('bossTwiceTime1').value;
+                const t2 = document.getElementById('bossTwiceTime2').value;
+                if (!t1 || !t2) return;
+                body.twiceDailyTimes = [t1, t2];
             } else if (type === 'biweekly') {
                 const time1 = document.getElementById('bossBiTime1').value;
                 const time2 = document.getElementById('bossBiTime2').value;
@@ -2169,6 +2191,7 @@
                     if (b.type === 'interval') entry.interval_ms = b.interval_ms;
                     if (b.type === 'fixed') entry.fixed_time = b.fixed_time;
                     if (b.type === 'weekly') { entry.weekly_day = b.weekly_day; entry.weekly_time = b.weekly_time; }
+                    if (b.type === 'twicedaily') { try { entry.twice_daily_times = typeof b.biweekly_days === 'string' ? JSON.parse(b.biweekly_days) : b.biweekly_days; } catch { entry.twice_daily_times = []; } }
                     if (b.type === 'biweekly') entry.biweekly_days = typeof b.biweekly_days === 'string' ? JSON.parse(b.biweekly_days) : b.biweekly_days;
                     return entry;
                 }),
@@ -2199,7 +2222,7 @@
                 if (dupes.length > 0) msg += `\n${dupes.length} already exist and will be skipped.`;
                 if (!confirm(msg)) return;
 
-                const validTypes = ['interval', 'fixed', 'weekly', 'biweekly'];
+                const validTypes = ['interval', 'fixed', 'weekly', 'twicedaily', 'biweekly'];
                 let added = 0;
                 for (const b of data.bosses) {
                     if (!b.name || typeof b.name !== 'string' || !validTypes.includes(b.type)) continue;
@@ -2215,6 +2238,7 @@
                     if (b.type === 'interval') body.intervalMs = b.interval_ms;
                     if (b.type === 'fixed') body.fixedTime = b.fixed_time;
                     if (b.type === 'weekly') { body.weeklyDay = b.weekly_day; body.weeklyTime = b.weekly_time; }
+                    if (b.type === 'twicedaily') body.twiceDailyTimes = b.twice_daily_times;
                     if (b.type === 'biweekly') body.biweeklyDays = b.biweekly_days;
 
                     const result = await api('POST', `/api/teams/${currentTeamId}/bosses`, body);

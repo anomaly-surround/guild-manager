@@ -557,11 +557,18 @@ function getNextBiweeklySpawn(days, tz) {
   return Math.min(...parsed.map(d => getNextWeeklySpawn(d.day, d.time, tz)));
 }
 
+function getNextTwiceDailySpawn(times, tz) {
+  const parsed = typeof times === 'string' ? JSON.parse(times) : times;
+  const spawns = parsed.map(t => getNextFixedSpawn(t, tz));
+  return Math.min(...spawns);
+}
+
 function calcNextSpawn(boss, fromTime, tz) {
   if (boss.type === 'interval') return fromTime + boss.interval_ms;
   if (boss.type === 'fixed') return getNextFixedSpawn(boss.fixed_time, tz);
   if (boss.type === 'weekly') return getNextWeeklySpawn(boss.weekly_day, boss.weekly_time, tz);
   if (boss.type === 'biweekly') return getNextBiweeklySpawn(boss.biweekly_days, tz);
+  if (boss.type === 'twicedaily') return getNextTwiceDailySpawn(boss.biweekly_days, tz);
   return fromTime + 3600000;
 }
 
@@ -1429,6 +1436,8 @@ async function handleRequest(request, env) {
       nextSpawn = getNextWeeklySpawn(body.weeklyDay, body.weeklyTime, tz);
     } else if (body.type === 'biweekly') {
       nextSpawn = getNextBiweeklySpawn(body.biweeklyDays, tz);
+    } else if (body.type === 'twicedaily') {
+      nextSpawn = getNextTwiceDailySpawn(body.twiceDailyTimes, tz);
     }
 
     // Suppress immediate warning if inside alert window
@@ -1442,7 +1451,7 @@ async function handleRequest(request, env) {
       .bind(id, teamId, body.name.trim(), body.type,
         body.intervalMs || null, body.fixedTime || null,
         body.weeklyDay ?? null, body.weeklyTime || null,
-        body.biweeklyDays ? JSON.stringify(body.biweeklyDays) : null,
+        body.biweeklyDays ? JSON.stringify(body.biweeklyDays) : body.twiceDailyTimes ? JSON.stringify(body.twiceDailyTimes) : null,
         body.alertMinutes || 5, body.autoResetMinutes || 5, nextSpawn, warned).run();
 
     return json({ ok: true, id });
