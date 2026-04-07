@@ -1435,22 +1435,15 @@ async function handleRequest(request, env) {
     const alertMs = (body.alertMinutes || 5) * 60000;
     const warned = (nextSpawn - Date.now()) <= alertMs ? 1 : 0;
 
-    try {
-      await env.DB.prepare(`INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, auto_reset_minutes, next_spawn, warned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .bind(id, teamId, body.name.trim(), body.type,
-          body.intervalMs || null, body.fixedTime || null,
-          body.weeklyDay ?? null, body.weeklyTime || null,
-          body.biweeklyDays ? JSON.stringify(body.biweeklyDays) : null,
-          body.alertMinutes || 5, body.autoResetMinutes || 5, nextSpawn, warned).run();
-    } catch (e) {
-      // Fallback if auto_reset_minutes column doesn't exist yet
-      await env.DB.prepare(`INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, next_spawn, warned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .bind(id, teamId, body.name.trim(), body.type,
-          body.intervalMs || null, body.fixedTime || null,
-          body.weeklyDay ?? null, body.weeklyTime || null,
-          body.biweeklyDays ? JSON.stringify(body.biweeklyDays) : null,
-          body.alertMinutes || 5, nextSpawn, warned).run();
-    }
+    // Ensure auto_reset_minutes column exists
+    await env.DB.exec('ALTER TABLE bosses ADD COLUMN auto_reset_minutes INTEGER DEFAULT 5').catch(() => {});
+
+    await env.DB.prepare(`INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, auto_reset_minutes, next_spawn, warned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, teamId, body.name.trim(), body.type,
+        body.intervalMs || null, body.fixedTime || null,
+        body.weeklyDay ?? null, body.weeklyTime || null,
+        body.biweeklyDays ? JSON.stringify(body.biweeklyDays) : null,
+        body.alertMinutes || 5, body.autoResetMinutes || 5, nextSpawn, warned).run();
 
     return json({ ok: true, id });
   }
