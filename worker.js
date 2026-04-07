@@ -1410,6 +1410,7 @@ async function handleRequest(request, env) {
     const body = await safeJson(request);
     if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.name?.trim()) return json({ error: 'Name required' }, 400);
+    if (body.name.trim().length > 100) return json({ error: 'Name too long (max 100 chars)' }, 400);
 
     const settings = await env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
     const tz = settings?.timezone || 'Asia/Manila';
@@ -1449,7 +1450,8 @@ async function handleRequest(request, env) {
     if (!member) return json({ error: 'Not a member' }, 403);
 
     const body = await request.json().catch(() => ({}));
-    const deathTime = body.deathTime || Date.now();
+    const deathTime = Number(body.deathTime) || Date.now();
+    if (deathTime < 0 || deathTime > Date.now() + 86400000) return json({ error: 'Invalid death time' }, 400);
 
     const boss = await env.DB.prepare('SELECT * FROM bosses WHERE id = ? AND team_id = ?').bind(bossId, teamId).first();
     if (!boss) return json({ error: 'Boss not found' }, 404);
