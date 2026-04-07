@@ -1610,18 +1610,31 @@
                     <button class="btn btn-secondary btn-sm" onclick="showBossHistory()">Kill History</button>
                     <button class="btn btn-secondary btn-sm" onclick="showBossTemplates()">Templates</button>`;
             }
+            html += `<input type="text" id="bossSearch" placeholder="Search bosses..." oninput="filterBossList()" style="background:var(--card-bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:0.85em;width:160px;margin-left:auto">`;
             html += '</div>';
             html += '<div id="bossListArea" class="' + (bossViewMode === 'grid' ? 'boss-grid' : '') + '">' + renderBossListOnly(canManage) + '</div>';
             return html;
+        }
+
+        function filterBossList() {
+            const area = document.getElementById('bossListArea');
+            if (!area) return;
+            const canManage = teamData?.member?.role === 'leader' || teamData?.member?.role === 'officer';
+            area.innerHTML = renderBossListOnly(canManage);
         }
 
         function renderBossListOnly(canManage) {
             if (teamBosses.length === 0) {
                 return '<div class="empty-state">No boss timers yet</div>';
             }
+            const search = (document.getElementById('bossSearch')?.value || '').toLowerCase();
+            const filtered = search ? teamBosses.filter(b => b.name.toLowerCase().includes(search)) : teamBosses;
+            if (filtered.length === 0) {
+                return '<div class="empty-state">No bosses match your search</div>';
+            }
             const fullDayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
             let html = '';
-            const sorted = [...teamBosses].sort((a, b) => {
+            const sorted = [...filtered].sort((a, b) => {
                 if (a.status === 'spawned' && b.status !== 'spawned') return -1;
                 if (b.status === 'spawned' && a.status !== 'spawned') return 1;
                 return a.next_spawn - b.next_spawn;
