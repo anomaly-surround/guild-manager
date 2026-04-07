@@ -8,6 +8,7 @@
     <meta http-equiv="Expires" content="0">
     <title>Guild Manager</title>
     <link rel="icon" type="image/svg+xml" href="icon.svg">
+    <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -1117,6 +1118,13 @@
         }
 
         const API = 'https://guild-manager.xpropics.workers.dev';
+        // Paddle client-side token (public, safe to embed)
+        const PADDLE_CLIENT_TOKEN = 'test_0123456789abcdef'; // Replace with your Paddle client-side token
+        const PADDLE_ENV = 'sandbox'; // Change to 'production' when live
+        if (typeof Paddle !== 'undefined') {
+            Paddle.Environment.set(PADDLE_ENV);
+            Paddle.Initialize({ token: PADDLE_CLIENT_TOKEN });
+        }
         let token = localStorage.getItem('gm_token') || '';
         let currentUser = null;
         let currentTeamId = null;
@@ -3883,11 +3891,24 @@
 
         const checkout = guard('checkout', async function(type) {
             const data = await api('POST', '/api/checkout', { type });
-            if (data.url) {
-                window.location.href = data.url;
-            } else {
-                showToast(data.error || 'Failed to create checkout');
-            }
+            if (data.error) { showToast(data.error); return; }
+            if (!data.priceId) { showToast('Failed to create checkout'); return; }
+
+            document.getElementById('deathModal').innerHTML = '';
+            Paddle.Checkout.open({
+                items: [{ priceId: data.priceId, quantity: 1 }],
+                customData: { user_id: data.userId },
+                successCallback: async () => {
+                    showToast('Payment successful! Activating premium...');
+                    // Wait a moment for webhook to process
+                    setTimeout(async () => {
+                        const user = await api('GET', '/auth/me');
+                        if (user && !user.error) { currentUser = user; showUserInfo(); }
+                        if (currentTeamId) openTeam(currentTeamId);
+                    }, 3000);
+                },
+                closeCallback: () => {},
+            });
         });
 
         function login() {
