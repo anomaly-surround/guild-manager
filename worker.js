@@ -7,6 +7,35 @@
  * Bindings: DB (D1), FILES (R2), DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, JWT_SECRET
  */
 
+// --- Rate Limiter ---
+const rateLimitMap = new Map();
+
+function rateLimit(key, maxRequests = 10, windowMs = 60000) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  if (!entry || now - entry.start > windowMs) {
+    rateLimitMap.set(key, { start: now, count: 1 });
+    return false; // not limited
+  }
+  entry.count++;
+  if (entry.count > maxRequests) return true; // limited
+  return false;
+}
+
+// Clean up stale entries periodically
+function cleanRateLimits() {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap) {
+    if (now - entry.start > 120000) rateLimitMap.delete(key);
+  }
+}
+
+// --- Sanitization ---
+function sanitizeStr(str) {
+  if (!str) return str;
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // --- Helpers ---
 
 function json(data, status = 200) {
@@ -58,10 +87,13 @@ async function verifyToken(token, secret) {
 async function getUser(request, env) {
   const auth = request.headers.get('Authorization') || '';
   let token = auth.replace('Bearer ', '');
-  // Also accept token via query param (for file downloads in new tabs)
+  // Accept token via query param ONLY for download/export routes (browser new tab)
   if (!token) {
     const url = new URL(request.url);
-    token = url.searchParams.get('token') || '';
+    const path = url.pathname;
+    if (path.includes('/download') || path.includes('/export')) {
+      token = url.searchParams.get('token') || '';
+    }
   }
   if (!token) return null;
   return verifyToken(token, env.JWT_SECRET);
@@ -520,6 +552,20 @@ async function initDB(db) {
       'ALTER TABLE users ADD COLUMN google_id TEXT',
       'ALTER TABLE users ADD COLUMN auth_type TEXT DEFAULT "discord"',
       'ALTER TABLE bosses ADD COLUMN auto_reset_minutes INTEGER DEFAULT 5',
+      'ALTER TABLE team_settings ADD COLUMN invites_enabled INTEGER DEFAULT 1',
+      'ALTER TABLE team_settings ADD COLUMN invite_approval INTEGER DEFAULT 0',
+      `CREATE TABLE IF NOT EXISTS join_requests (
+        id TEXT PRIMARY KEY,
+        team_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        username TEXT,
+        status TEXT DEFAULT 'pending',
+        created_at INTEGER DEFAULT (unixepoch()),
+        resolved_by TEXT,
+        resolved_at INTEGER,
+        FOREIGN KEY (team_id) REFERENCES teams(id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )`,
     ];
     for (const sql of migrations) await db.exec(sql).catch(() => {});
   }
@@ -577,7 +623,11 @@ function calcNextSpawn(boss, fromTime, tz) {
 function isValidDiscordWebhook(url) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' && (parsed.hostname === 'discord.com' || parsed.hostname === 'discordapp.com') && parsed.pathname.startsWith('/api/webhooks/');
+    if (parsed.protocol !== 'https:') return false;
+    if (parsed.hostname !== 'discord.com' && parsed.hostname !== 'discordapp.com') return false;
+    // Validate full webhook path format: /api/webhooks/{id}/{token}
+    if (!/^\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/.test(parsed.pathname)) return false;
+    return true;
   } catch { return false; }
 }
 
@@ -603,167 +653,181 @@ async function handleScheduled(env) {
   const bosses = await env.DB.prepare('SELECT * FROM bosses WHERE status = ?').bind('waiting').all();
 
   for (const boss of bosses.results) {
-    const remaining = boss.next_spawn - now;
-    const alertMs = (boss.alert_minutes || 5) * 60000;
+    try {
+      const remaining = boss.next_spawn - now;
+      const alertMs = (boss.alert_minutes || 5) * 60000;
 
-    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(boss.team_id).first();
-    const tz = settings?.timezone || 'Asia/Manila';
+      const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(boss.team_id).first();
+      const tz = settings?.timezone || 'Asia/Manila';
 
-    // Warning
-    if (remaining > 0 && remaining <= alertMs && !boss.warned) {
-      if (settings?.on_warning && settings?.webhook_url) {
-        const minLeft = Math.max(1, Math.round(remaining / 60000));
-        await sendDiscord(settings.webhook_url, `${boss.name} - Spawning Soon!`,
-          `**${boss.name}** spawns in **${minLeft} minute${minLeft !== 1 ? 's' : ''}**!`, 16760576);
+      // Warning
+      if (remaining > 0 && remaining <= alertMs && !boss.warned) {
+        if (settings?.on_warning && settings?.webhook_url) {
+          const minLeft = Math.max(1, Math.round(remaining / 60000));
+          await sendDiscord(settings.webhook_url, `${boss.name} - Spawning Soon!`,
+            `**${boss.name}** spawns in **${minLeft} minute${minLeft !== 1 ? 's' : ''}**!`, 16760576);
+        }
+        await env.DB.prepare('UPDATE bosses SET warned = 1 WHERE id = ?').bind(boss.id).run();
+        continue;
       }
-      await env.DB.prepare('UPDATE bosses SET warned = 1 WHERE id = ?').bind(boss.id).run();
-      continue;
-    }
 
-    // Spawned
-    if (remaining <= 0) {
-      const resetMin = boss.auto_reset_minutes ?? 5;
-      if (!boss.spawn_notified && settings?.on_spawn && settings?.webhook_url) {
-        await sendDiscord(settings.webhook_url, `${boss.name} has SPAWNED!`,
-          `**${boss.name}** is now available!\nAuto-reset in ${resetMin} minute${resetMin !== 1 ? 's' : ''} if not killed.`, 15548997);
+      // Spawned
+      if (remaining <= 0) {
+        const resetMin = boss.auto_reset_minutes ?? 5;
+        if (!boss.spawn_notified && settings?.on_spawn && settings?.webhook_url) {
+          await sendDiscord(settings.webhook_url, `${boss.name} has SPAWNED!`,
+            `**${boss.name}** is now available!\nAuto-reset in ${resetMin} minute${resetMin !== 1 ? 's' : ''} if not killed.`, 15548997);
+        }
+        await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = ?, auto_reset_at = ?, spawn_notified = 1 WHERE id = ?')
+          .bind('spawned', now, now + resetMin * 60000, boss.id).run();
       }
-      await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = ?, auto_reset_at = ?, spawn_notified = 1 WHERE id = ?')
-        .bind('spawned', now, now + resetMin * 60000, boss.id).run();
-    }
+    } catch (e) { console.error('Boss spawn check error:', boss.id, e); }
   }
 
   // Event reminders (configurable minutes before)
-  const upcomingEvents = await env.DB.prepare(
-    'SELECT e.*, ts.event_reminder_minutes FROM events e LEFT JOIN team_settings ts ON ts.team_id = e.team_id WHERE e.event_time > ? AND e.event_time <= ? + COALESCE(ts.event_reminder_minutes, 15) * 60000 AND e.reminder_sent = 0'
-  ).bind(now, now).all().catch(() => ({ results: [] }));
+  try {
+    const upcomingEvents = await env.DB.prepare(
+      'SELECT e.*, ts.event_reminder_minutes FROM events e LEFT JOIN team_settings ts ON ts.team_id = e.team_id WHERE e.event_time > ? AND e.event_time <= ? + COALESCE(ts.event_reminder_minutes, 15) * 60000 AND e.reminder_sent = 0'
+    ).bind(now, now).all().catch(() => ({ results: [] }));
 
-  for (const event of upcomingEvents.results) {
-    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
-    if (settings?.webhook_url && settings?.on_event !== 0) {
-      const minLeft = Math.max(1, Math.round((event.event_time - now) / 60000));
-      const rsvps = await env.DB.prepare("SELECT COUNT(*) as count FROM event_rsvps WHERE event_id = ? AND status = 'going'").bind(event.id).first();
-      await sendDiscord(settings.webhook_url, `${event.title} - Starting Soon!`,
-        `**${event.title}** starts in **${minLeft} minute${minLeft !== 1 ? 's' : ''}**!\n${rsvps.count} member${rsvps.count !== 1 ? 's' : ''} going.${event.description ? '\n\n' + event.description : ''}`,
-        16760576);
+    for (const event of upcomingEvents.results) {
+      const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
+      if (settings?.webhook_url && settings?.on_event !== 0) {
+        const minLeft = Math.max(1, Math.round((event.event_time - now) / 60000));
+        const rsvps = await env.DB.prepare("SELECT COUNT(*) as count FROM event_rsvps WHERE event_id = ? AND status = 'going'").bind(event.id).first();
+        await sendDiscord(settings.webhook_url, `${event.title} - Starting Soon!`,
+          `**${event.title}** starts in **${minLeft} minute${minLeft !== 1 ? 's' : ''}**!\n${rsvps.count} member${rsvps.count !== 1 ? 's' : ''} going.${event.description ? '\n\n' + event.description : ''}`,
+          16760576);
+      }
+      await env.DB.prepare('UPDATE events SET reminder_sent = 1 WHERE id = ?').bind(event.id).run();
     }
-    await env.DB.prepare('UPDATE events SET reminder_sent = 1 WHERE id = ?').bind(event.id).run();
-  }
+  } catch (e) { console.error('Event reminder error:', e); }
 
   // Event start notifications
-  const startingEvents = await env.DB.prepare(
-    'SELECT * FROM events WHERE event_time <= ? AND start_notified = 0'
-  ).bind(now).all();
+  try {
+    const startingEvents = await env.DB.prepare(
+      'SELECT * FROM events WHERE event_time <= ? AND start_notified = 0'
+    ).bind(now).all();
 
-  for (const event of startingEvents.results) {
-    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
-    if (settings?.webhook_url) {
-      await sendDiscord(settings.webhook_url, `${event.title} is starting NOW!`,
-        `**${event.title}** has started!${event.description ? '\n\n' + event.description : ''}`, 15548997);
+    for (const event of startingEvents.results) {
+      const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
+      if (settings?.webhook_url) {
+        await sendDiscord(settings.webhook_url, `${event.title} is starting NOW!`,
+          `**${event.title}** has started!${event.description ? '\n\n' + event.description : ''}`, 15548997);
+      }
+      await env.DB.prepare('UPDATE events SET start_notified = 1 WHERE id = ?').bind(event.id).run();
     }
-    await env.DB.prepare('UPDATE events SET start_notified = 1 WHERE id = ?').bind(event.id).run();
-  }
+  } catch (e) { console.error('Event start notification error:', e); }
 
   // Event end notifications
-  const endedEvents = await env.DB.prepare(
-    'SELECT * FROM events WHERE event_time + duration_minutes * 60000 <= ? AND start_notified = 1 AND end_notified = 0'
-  ).bind(now).all().catch(() => ({ results: [] }));
+  try {
+    const endedEvents = await env.DB.prepare(
+      'SELECT * FROM events WHERE event_time + duration_minutes * 60000 <= ? AND start_notified = 1 AND end_notified = 0'
+    ).bind(now).all().catch(() => ({ results: [] }));
 
-  for (const event of endedEvents.results) {
-    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
-    if (settings?.webhook_url) {
-      await sendDiscord(settings.webhook_url, `${event.title} has ended!`,
-        `**${event.title}** has ended. Thanks to everyone who participated!`, 5763719);
+    for (const event of endedEvents.results) {
+      const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
+      if (settings?.webhook_url) {
+        await sendDiscord(settings.webhook_url, `${event.title} has ended!`,
+          `**${event.title}** has ended. Thanks to everyone who participated!`, 5763719);
+      }
+      await env.DB.prepare('UPDATE events SET end_notified = 1 WHERE id = ?').bind(event.id).run();
     }
-    await env.DB.prepare('UPDATE events SET end_notified = 1 WHERE id = ?').bind(event.id).run();
-  }
+  } catch (e) { console.error('Event end notification error:', e); }
 
   // Auto-create next recurring event after one ends
-  const recurringEnded = await env.DB.prepare(
-    "SELECT * FROM events WHERE recurrence IS NOT NULL AND recurrence != 'none' AND event_time + duration_minutes * 60000 <= ? AND end_notified = 1"
-  ).bind(now).all().catch(() => ({ results: [] }));
+  try {
+    const recurringEnded = await env.DB.prepare(
+      "SELECT * FROM events WHERE recurrence IS NOT NULL AND recurrence != 'none' AND event_time + duration_minutes * 60000 <= ? AND end_notified = 1"
+    ).bind(now).all().catch(() => ({ results: [] }));
 
-  for (const event of recurringEnded.results) {
-    // Check if next occurrence already exists
-    const parentId = event.parent_event_id || event.id;
-    const existing = await env.DB.prepare(
-      'SELECT 1 FROM events WHERE parent_event_id = ? AND event_time > ?'
-    ).bind(parentId, event.event_time).first();
-    if (existing) continue;
+    for (const event of recurringEnded.results) {
+      const parentId = event.parent_event_id || event.id;
+      const existing = await env.DB.prepare(
+        'SELECT 1 FROM events WHERE parent_event_id = ? AND event_time > ?'
+      ).bind(parentId, event.event_time).first();
+      if (existing) continue;
 
-    let nextTime = event.event_time;
-    if (event.recurrence === 'daily') nextTime += 86400000;
-    else if (event.recurrence === 'weekly') nextTime += 7 * 86400000;
-    else if (event.recurrence === 'biweekly') nextTime += 14 * 86400000;
-    else if (event.recurrence === 'monthly') {
-      const d = new Date(event.event_time);
-      d.setMonth(d.getMonth() + 1);
-      nextTime = d.getTime();
+      let nextTime = event.event_time;
+      if (event.recurrence === 'daily') nextTime += 86400000;
+      else if (event.recurrence === 'weekly') nextTime += 7 * 86400000;
+      else if (event.recurrence === 'biweekly') nextTime += 14 * 86400000;
+      else if (event.recurrence === 'monthly') {
+        const d = new Date(event.event_time);
+        d.setMonth(d.getMonth() + 1);
+        nextTime = d.getTime();
+      }
+      if (nextTime < now - 86400000) continue;
+
+      const newId = crypto.randomUUID();
+      await env.DB.prepare(`INSERT INTO events (id, team_id, title, description, event_type, event_time, duration_minutes, created_by, recurrence, parent_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(newId, event.team_id, event.title, event.description, event.event_type, nextTime, event.duration_minutes, event.created_by, event.recurrence, parentId).run();
     }
-    // Skip if next time is too far past (stale)
-    if (nextTime < now - 86400000) continue;
-
-    const newId = crypto.randomUUID();
-    await env.DB.prepare(`INSERT INTO events (id, team_id, title, description, event_type, event_time, duration_minutes, created_by, recurrence, parent_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(newId, event.team_id, event.title, event.description, event.event_type, nextTime, event.duration_minutes, event.created_by, event.recurrence, parentId).run();
-  }
+  } catch (e) { console.error('Recurring event error:', e); }
 
   // DKP decay for premium teams
-  const decayTeams = await env.DB.prepare(
-    'SELECT ts.* FROM team_settings ts JOIN teams t ON t.id = ts.team_id JOIN users u ON u.id = t.owner_id WHERE ts.dkp_decay_enabled = 1 AND u.premium = 1 AND (ts.dkp_decay_last_run IS NULL OR ts.dkp_decay_last_run < unixepoch() - ts.dkp_decay_interval_days * 86400)'
-  ).all().catch(() => ({ results: [] }));
+  try {
+    const decayTeams = await env.DB.prepare(
+      'SELECT ts.* FROM team_settings ts JOIN teams t ON t.id = ts.team_id JOIN users u ON u.id = t.owner_id WHERE ts.dkp_decay_enabled = 1 AND u.premium = 1 AND (ts.dkp_decay_last_run IS NULL OR ts.dkp_decay_last_run < unixepoch() - ts.dkp_decay_interval_days * 86400)'
+    ).all().catch(() => ({ results: [] }));
 
-  for (const ts of decayTeams.results) {
-    const inactiveMembers = await env.DB.prepare(
-      'SELECT ma.user_id FROM member_activity ma WHERE ma.team_id = ? AND ma.last_seen < unixepoch() - ?'
-    ).bind(ts.team_id, (ts.dkp_decay_inactive_days || 14) * 86400).all();
+    for (const ts of decayTeams.results) {
+      const inactiveMembers = await env.DB.prepare(
+        'SELECT ma.user_id FROM member_activity ma WHERE ma.team_id = ? AND ma.last_seen < unixepoch() - ?'
+      ).bind(ts.team_id, (ts.dkp_decay_inactive_days || 14) * 86400).all();
 
-    for (const m of inactiveMembers.results) {
-      const bal = await env.DB.prepare('SELECT COALESCE(SUM(amount),0) as balance FROM dkp_ledger WHERE team_id = ? AND user_id = ?')
-        .bind(ts.team_id, m.user_id).first();
-      if (bal.balance > 0) {
-        const decay = Math.max(1, Math.floor(bal.balance * (ts.dkp_decay_percent || 10) / 100));
-        await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
-          .bind(crypto.randomUUID(), ts.team_id, m.user_id, -decay, 'Inactivity decay', 'system').run();
+      for (const m of inactiveMembers.results) {
+        const bal = await env.DB.prepare('SELECT COALESCE(SUM(amount),0) as balance FROM dkp_ledger WHERE team_id = ? AND user_id = ?')
+          .bind(ts.team_id, m.user_id).first();
+        if (bal.balance > 0) {
+          const decay = Math.max(1, Math.floor(bal.balance * (ts.dkp_decay_percent || 10) / 100));
+          await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+            .bind(crypto.randomUUID(), ts.team_id, m.user_id, -decay, 'Inactivity decay', 'system').run();
+        }
       }
+      await env.DB.prepare('UPDATE team_settings SET dkp_decay_last_run = unixepoch() WHERE team_id = ?').bind(ts.team_id).run();
     }
-    await env.DB.prepare('UPDATE team_settings SET dkp_decay_last_run = unixepoch() WHERE team_id = ?').bind(ts.team_id).run();
-  }
+  } catch (e) { console.error('DKP decay error:', e); }
 
   // Auto-close expired auctions
-  const expiredAuctions = await env.DB.prepare("SELECT * FROM dkp_auctions WHERE status = 'open' AND expires_at IS NOT NULL AND expires_at < ?")
-    .bind(Math.floor(now / 1000)).all().catch(() => ({ results: [] }));
+  try {
+    const expiredAuctions = await env.DB.prepare("SELECT * FROM dkp_auctions WHERE status = 'open' AND expires_at IS NOT NULL AND expires_at < ?")
+      .bind(Math.floor(now / 1000)).all().catch(() => ({ results: [] }));
 
-  for (const auction of expiredAuctions.results) {
-    const topBid = await env.DB.prepare('SELECT * FROM dkp_bids WHERE auction_id = ? ORDER BY amount DESC LIMIT 1').bind(auction.id).first();
-    if (topBid) {
-      await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(crypto.randomUUID(), auction.team_id, topBid.user_id, -topBid.amount, `Auction: ${auction.item_name}`, 'system').run();
-      await env.DB.prepare('UPDATE dkp_auctions SET status = ?, winner_id = ?, winning_bid = ? WHERE id = ?')
-        .bind('closed', topBid.user_id, topBid.amount, auction.id).run();
-    } else {
-      await env.DB.prepare("UPDATE dkp_auctions SET status = 'closed' WHERE id = ?").bind(auction.id).run();
-    }
-  }
-
-  // Auto-delete old events and chat (per team settings)
-  const allSettings = await env.DB.prepare('SELECT * FROM team_settings WHERE auto_delete_events_days > 0 OR auto_delete_chat_days > 0').all().catch(() => ({ results: [] }));
-  for (const s of allSettings.results) {
-    if (s.auto_delete_events_days > 0) {
-      const cutoff = Math.floor(now / 1000) - s.auto_delete_events_days * 86400;
-      const oldEvents = await env.DB.prepare('SELECT id FROM events WHERE team_id = ? AND event_time / 1000 < ? AND recurrence IS NULL').bind(s.team_id, cutoff).all();
-      for (const e of oldEvents.results) {
-        await env.DB.batch([
-          env.DB.prepare('DELETE FROM event_rsvps WHERE event_id = ?').bind(e.id),
-          env.DB.prepare('DELETE FROM event_attendance WHERE event_id = ?').bind(e.id),
-          env.DB.prepare('DELETE FROM events WHERE id = ?').bind(e.id),
-        ]);
+    for (const auction of expiredAuctions.results) {
+      const topBid = await env.DB.prepare('SELECT * FROM dkp_bids WHERE auction_id = ? ORDER BY amount DESC LIMIT 1').bind(auction.id).first();
+      if (topBid) {
+        await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+          .bind(crypto.randomUUID(), auction.team_id, topBid.user_id, -topBid.amount, `Auction: ${auction.item_name}`, 'system').run();
+        await env.DB.prepare('UPDATE dkp_auctions SET status = ?, winner_id = ?, winning_bid = ? WHERE id = ?')
+          .bind('closed', topBid.user_id, topBid.amount, auction.id).run();
+      } else {
+        await env.DB.prepare("UPDATE dkp_auctions SET status = 'closed' WHERE id = ?").bind(auction.id).run();
       }
     }
-    if (s.auto_delete_chat_days > 0) {
-      const cutoff = Math.floor(now / 1000) - s.auto_delete_chat_days * 86400;
-      await env.DB.prepare('DELETE FROM chat_messages WHERE team_id = ? AND created_at < ?').bind(s.team_id, cutoff).run();
+  } catch (e) { console.error('Auction close error:', e); }
+
+  // Auto-delete old events and chat (per team settings)
+  try {
+    const allSettings = await env.DB.prepare('SELECT * FROM team_settings WHERE auto_delete_events_days > 0 OR auto_delete_chat_days > 0').all().catch(() => ({ results: [] }));
+    for (const s of allSettings.results) {
+      if (s.auto_delete_events_days > 0) {
+        const cutoff = Math.floor(now / 1000) - s.auto_delete_events_days * 86400;
+        const oldEvents = await env.DB.prepare('SELECT id FROM events WHERE team_id = ? AND event_time / 1000 < ? AND recurrence IS NULL').bind(s.team_id, cutoff).all();
+        for (const e of oldEvents.results) {
+          await env.DB.batch([
+            env.DB.prepare('DELETE FROM event_rsvps WHERE event_id = ?').bind(e.id),
+            env.DB.prepare('DELETE FROM event_attendance WHERE event_id = ?').bind(e.id),
+            env.DB.prepare('DELETE FROM events WHERE id = ?').bind(e.id),
+          ]);
+        }
+      }
+      if (s.auto_delete_chat_days > 0) {
+        const cutoff = Math.floor(now / 1000) - s.auto_delete_chat_days * 86400;
+        await env.DB.prepare('DELETE FROM chat_messages WHERE team_id = ? AND created_at < ?').bind(s.team_id, cutoff).run();
+      }
     }
-  }
+  } catch (e) { console.error('Auto-delete error:', e); }
 
   // Auto-reset spawned bosses
   const spawned = await env.DB.prepare('SELECT * FROM bosses WHERE status = ? AND auto_reset_at <= ?')
@@ -775,7 +839,16 @@ async function handleScheduled(env) {
     const nextSpawn = calcNextSpawn(boss, now, tz);
     await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = NULL, auto_reset_at = NULL, warned = 0, spawn_notified = 0, next_spawn = ? WHERE id = ?')
       .bind('waiting', nextSpawn, boss.id).run();
+    if (settings?.on_kill && settings?.webhook_url) {
+      await sendDiscord(settings.webhook_url, `${boss.name} - Auto Reset`,
+        `**${boss.name}** was not killed in time and has been reset.\nNext spawn recalculated.`, 9807270);
+    }
   }
+
+  // Clean up old resolved join requests (older than 30 days)
+  try {
+    await env.DB.prepare("DELETE FROM join_requests WHERE status != 'pending' AND resolved_at < unixepoch() - 2592000").run();
+  } catch (e) { console.error('Join request cleanup error:', e); }
 }
 
 // --- Routes ---
@@ -790,6 +863,16 @@ async function handleRequest(request, env) {
 
   // Init DB on first request
   try { await initDB(env.DB); } catch(e) { console.error('initDB error:', e); }
+
+  // --- Rate limiting for auth routes ---
+  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+  cleanRateLimits();
+
+  if (path.startsWith('/auth/') && path !== '/auth/me') {
+    if (rateLimit(`auth:${clientIP}`, 10, 60000)) {
+      return json({ error: 'Too many requests. Try again later.' }, 429);
+    }
+  }
 
   // --- Auth routes ---
 
@@ -831,14 +914,15 @@ async function handleRequest(request, env) {
     const existing = await env.DB.prepare('SELECT id FROM users WHERE discord_id = ?').bind(discordUser.id).first();
 
     let finalUserId;
+    const safeName = sanitizeStr(discordUser.username);
     if (existing) {
       finalUserId = existing.id;
       await env.DB.prepare('UPDATE users SET username = ?, avatar = ? WHERE id = ?')
-        .bind(discordUser.username, discordUser.avatar, existing.id).run();
+        .bind(safeName, discordUser.avatar, existing.id).run();
     } else {
       finalUserId = userId;
       await env.DB.prepare('INSERT INTO users (id, discord_id, username, avatar) VALUES (?, ?, ?, ?)')
-        .bind(userId, discordUser.id, discordUser.username, discordUser.avatar).run();
+        .bind(userId, discordUser.id, safeName, discordUser.avatar).run();
     }
 
     // Create JWT
@@ -890,17 +974,18 @@ async function handleRequest(request, env) {
     const existing = await env.DB.prepare('SELECT id FROM users WHERE google_id = ?').bind(googleUser.id).first();
     let finalUserId;
 
+    const googleName = sanitizeStr(googleUser.name || googleUser.email);
     if (existing) {
       finalUserId = existing.id;
       await env.DB.prepare('UPDATE users SET username = ?, avatar = ? WHERE id = ?')
-        .bind(googleUser.name || googleUser.email, googleUser.picture || null, existing.id).run();
+        .bind(googleName, googleUser.picture || null, existing.id).run();
     } else {
       finalUserId = crypto.randomUUID();
       await env.DB.prepare('INSERT INTO users (id, google_id, discord_id, username, avatar, auth_type) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(finalUserId, googleUser.id, 'google_' + googleUser.id, googleUser.name || googleUser.email, googleUser.picture || null, 'google').run();
+        .bind(finalUserId, googleUser.id, 'google_' + googleUser.id, googleName, googleUser.picture || null, 'google').run();
     }
 
-    const jwt = await createToken({ userId: finalUserId, username: googleUser.name || googleUser.email }, env.JWT_SECRET);
+    const jwt = await createToken({ userId: finalUserId, username: googleName }, env.JWT_SECRET);
     return Response.redirect(`${frontendUrl}?token=${jwt}`, 302);
     } catch(e) {
       console.error('Google auth error:', e);
@@ -1315,6 +1400,12 @@ async function handleRequest(request, env) {
     const team = await env.DB.prepare('SELECT * FROM teams WHERE invite_code = ?').bind(code).first();
     if (!team) return json({ error: 'Invalid invite code' }, 404);
 
+    // Check if invites are enabled
+    const settings = await env.DB.prepare('SELECT invites_enabled, invite_approval FROM team_settings WHERE team_id = ?').bind(team.id).first();
+    if (settings && !settings.invites_enabled) {
+      return json({ error: 'This team is not accepting new members right now' }, 403);
+    }
+
     // Check if already a member
     const existing = await env.DB.prepare(
       'SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?'
@@ -1331,6 +1422,34 @@ async function handleRequest(request, env) {
       return json({ error: `Team is full (${maxMembers} members max)` }, 403);
     }
 
+    // Check if approval is required
+    if (settings?.invite_approval) {
+      // Rate limit join requests (5 per hour per user)
+      if (rateLimit(`join-req:${user.userId}`, 5, 3600000)) {
+        return json({ error: 'Too many join requests. Try again later.' }, 429);
+      }
+      // Check if already has a pending request
+      const pendingReq = await env.DB.prepare(
+        "SELECT 1 FROM join_requests WHERE team_id = ? AND user_id = ? AND status = 'pending'"
+      ).bind(team.id, user.userId).first();
+      if (pendingReq) return json({ error: 'You already have a pending request for this team', pending: true }, 400);
+
+      // Create join request
+      const reqId = crypto.randomUUID();
+      const dbUser = await env.DB.prepare('SELECT username FROM users WHERE id = ?').bind(user.userId).first();
+      await env.DB.prepare('INSERT INTO join_requests (id, team_id, user_id, username) VALUES (?, ?, ?, ?)')
+        .bind(reqId, team.id, user.userId, dbUser?.username || 'Unknown').run();
+
+      // Notify via webhook if available
+      const fullSettings = await env.DB.prepare('SELECT webhook_url FROM team_settings WHERE team_id = ?').bind(team.id).first();
+      if (fullSettings?.webhook_url) {
+        await sendDiscord(fullSettings.webhook_url, 'Join Request',
+          `**${dbUser?.username || 'Someone'}** wants to join **${team.name}**.\nApprove or deny in team settings.`, 16760576);
+      }
+
+      return json({ ok: true, pending: true, message: 'Join request sent! Waiting for approval.' });
+    }
+
     await env.DB.prepare('INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)')
       .bind(team.id, user.userId, 'member').run();
 
@@ -1342,10 +1461,88 @@ async function handleRequest(request, env) {
     const code = inviteMatch[1];
     const team = await env.DB.prepare('SELECT id, name FROM teams WHERE invite_code = ?').bind(code).first();
     if (!team) return json({ error: 'Invalid invite code' }, 404);
+    const settings = await env.DB.prepare('SELECT invites_enabled, invite_approval FROM team_settings WHERE team_id = ?').bind(team.id).first();
+    if (settings && !settings.invites_enabled) {
+      return json({ error: 'This team is not accepting new members' }, 403);
+    }
     const count = await env.DB.prepare(
       'SELECT COUNT(*) as count FROM team_members WHERE team_id = ?'
     ).bind(team.id).first();
-    return json({ team: { name: team.name, members: count.count } });
+    return json({ team: { name: team.name, members: count.count, requiresApproval: !!(settings?.invite_approval) } });
+  }
+
+  // === JOIN REQUEST ROUTES ===
+
+  const joinReqMatch = path.match(/^\/api\/teams\/([^/]+)\/join-requests$/);
+  const joinReqActionMatch = path.match(/^\/api\/teams\/([^/]+)\/join-requests\/([^/]+)\/(approve|deny)$/);
+
+  // GET /api/teams/:id/join-requests — list pending requests (leader/officer)
+  if (joinReqMatch && request.method === 'GET') {
+    const teamId = joinReqMatch[1];
+    const member = await env.DB.prepare('SELECT role FROM team_members WHERE team_id = ? AND user_id = ?')
+      .bind(teamId, user.userId).first();
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const requests = await env.DB.prepare(
+      "SELECT id, user_id, username, status, created_at FROM join_requests WHERE team_id = ? AND status = 'pending' ORDER BY created_at DESC"
+    ).bind(teamId).all();
+
+    return json({ requests: requests.results });
+  }
+
+  // POST /api/teams/:id/join-requests/:reqId/approve
+  if (joinReqActionMatch && request.method === 'POST') {
+    const teamId = joinReqActionMatch[1];
+    const reqId = joinReqActionMatch[2];
+    const action = joinReqActionMatch[3];
+
+    const member = await env.DB.prepare('SELECT role FROM team_members WHERE team_id = ? AND user_id = ?')
+      .bind(teamId, user.userId).first();
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const req = await env.DB.prepare("SELECT * FROM join_requests WHERE id = ? AND team_id = ? AND status = 'pending'")
+      .bind(reqId, teamId).first();
+    if (!req) return json({ error: 'Request not found or already resolved' }, 404);
+
+    if (action === 'approve') {
+      // Check member limit
+      const team = await env.DB.prepare('SELECT * FROM teams WHERE id = ?').bind(teamId).first();
+      const owner = await env.DB.prepare('SELECT premium FROM users WHERE id = ?').bind(team.owner_id).first();
+      const maxMembers = owner?.premium ? 50 : 5;
+      const count = await env.DB.prepare('SELECT COUNT(*) as count FROM team_members WHERE team_id = ?').bind(teamId).first();
+      if (count.count >= maxMembers) {
+        return json({ error: `Team is full (${maxMembers} members max)` }, 403);
+      }
+
+      // Check not already a member (could have joined another way)
+      const alreadyMember = await env.DB.prepare('SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?')
+        .bind(teamId, req.user_id).first();
+      if (alreadyMember) {
+        await env.DB.prepare("UPDATE join_requests SET status = 'approved', resolved_by = ?, resolved_at = unixepoch() WHERE id = ?")
+          .bind(user.userId, reqId).run();
+        return json({ error: 'User is already a member' }, 400);
+      }
+
+      await env.DB.batch([
+        env.DB.prepare('INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)').bind(teamId, req.user_id, 'member'),
+        env.DB.prepare("UPDATE join_requests SET status = 'approved', resolved_by = ?, resolved_at = unixepoch() WHERE id = ?").bind(user.userId, reqId),
+      ]);
+
+      // Notify via webhook
+      const settings = await env.DB.prepare('SELECT webhook_url FROM team_settings WHERE team_id = ?').bind(teamId).first();
+      if (settings?.webhook_url) {
+        await sendDiscord(settings.webhook_url, 'Member Joined',
+          `**${req.username}** has been approved and joined the team!`, 5763719);
+      }
+
+      return json({ ok: true, message: `${req.username} approved and added to the team` });
+    } else {
+      // Deny
+      await env.DB.prepare("UPDATE join_requests SET status = 'denied', resolved_by = ?, resolved_at = unixepoch() WHERE id = ?")
+        .bind(user.userId, reqId).run();
+
+      return json({ ok: true, message: `${req.username}'s request denied` });
+    }
   }
 
   // === BOSS TIMER ROUTES ===
@@ -1518,6 +1715,8 @@ async function handleRequest(request, env) {
       dkpDecayIntervalDays: settings?.dkp_decay_interval_days ?? 7,
       accentColor: settings?.accent_color || '',
       teamIcon: settings?.team_icon || '',
+      invitesEnabled: settings?.invites_enabled ?? true,
+      inviteApproval: !!(settings?.invite_approval),
     });
   }
 
@@ -1549,12 +1748,29 @@ async function handleRequest(request, env) {
       if (body.inactiveDays !== undefined) { sets.push('inactive_days = ?'); vals.push(body.inactiveDays); }
       if (body.defaultEventDuration !== undefined) { sets.push('default_event_duration = ?'); vals.push(body.defaultEventDuration); }
       if (body.teamDescription !== undefined) { sets.push('team_description = ?'); vals.push(body.teamDescription || null); }
+      if (body.invitesEnabled !== undefined) {
+        if (member.role !== 'leader') return json({ error: 'Only the leader can change invite settings' }, 403);
+        sets.push('invites_enabled = ?'); vals.push(body.invitesEnabled ? 1 : 0);
+      }
+      if (body.inviteApproval !== undefined) {
+        if (member.role !== 'leader') return json({ error: 'Only the leader can change invite settings' }, 403);
+        sets.push('invite_approval = ?'); vals.push(body.inviteApproval ? 1 : 0);
+      }
       if (body.membersCreateEvents !== undefined) { sets.push('members_create_events = ?'); vals.push(body.membersCreateEvents ? 1 : 0); }
       if (body.autoDeleteEventsDays !== undefined) { sets.push('auto_delete_events_days = ?'); vals.push(body.autoDeleteEventsDays); }
       if (body.autoDeleteChatDays !== undefined) { sets.push('auto_delete_chat_days = ?'); vals.push(body.autoDeleteChatDays); }
       if (body.startingDkp !== undefined) { sets.push('starting_dkp = ?'); vals.push(body.startingDkp); }
       if (body.timezone !== undefined) { sets.push('timezone = ?'); vals.push(body.timezone); }
-      // Premium fields
+      // Premium fields — require premium team
+      const hasPremiumFields = body.webhookBoss !== undefined || body.webhookEvents !== undefined ||
+        body.webhookWars !== undefined || body.webhookAnnouncements !== undefined ||
+        body.dkpDecayEnabled !== undefined || body.dkpDecayPercent !== undefined ||
+        body.dkpDecayInactiveDays !== undefined || body.dkpDecayIntervalDays !== undefined;
+
+      if (hasPremiumFields && !(await isPremiumTeam(teamId))) {
+        return json({ error: 'Premium required', premiumRequired: true }, 403);
+      }
+
       if (body.webhookBoss !== undefined) {
         if (body.webhookBoss && !isValidDiscordWebhook(body.webhookBoss)) return json({ error: 'Invalid Discord webhook URL' }, 400);
         sets.push('webhook_boss = ?'); vals.push(body.webhookBoss || null);
@@ -1572,9 +1788,9 @@ async function handleRequest(request, env) {
         sets.push('webhook_announcements = ?'); vals.push(body.webhookAnnouncements || null);
       }
       if (body.dkpDecayEnabled !== undefined) { sets.push('dkp_decay_enabled = ?'); vals.push(body.dkpDecayEnabled ? 1 : 0); }
-      if (body.dkpDecayPercent !== undefined) { sets.push('dkp_decay_percent = ?'); vals.push(body.dkpDecayPercent); }
-      if (body.dkpDecayInactiveDays !== undefined) { sets.push('dkp_decay_inactive_days = ?'); vals.push(body.dkpDecayInactiveDays); }
-      if (body.dkpDecayIntervalDays !== undefined) { sets.push('dkp_decay_interval_days = ?'); vals.push(body.dkpDecayIntervalDays); }
+      if (body.dkpDecayPercent !== undefined) { sets.push('dkp_decay_percent = ?'); vals.push(Math.min(100, Math.max(0, parseInt(body.dkpDecayPercent) || 10))); }
+      if (body.dkpDecayInactiveDays !== undefined) { sets.push('dkp_decay_inactive_days = ?'); vals.push(Math.min(365, Math.max(1, parseInt(body.dkpDecayInactiveDays) || 14))); }
+      if (body.dkpDecayIntervalDays !== undefined) { sets.push('dkp_decay_interval_days = ?'); vals.push(Math.min(90, Math.max(1, parseInt(body.dkpDecayIntervalDays) || 7))); }
       if (body.accentColor !== undefined) { sets.push('accent_color = ?'); vals.push(body.accentColor || null); }
       if (body.teamIcon !== undefined) { sets.push('team_icon = ?'); vals.push(body.teamIcon || null); }
       if (sets.length > 0) {
@@ -1618,6 +1834,9 @@ async function handleRequest(request, env) {
   // POST /api/teams/:id/settings/test — test webhook (leader/officer only)
   const settingsTestMatch = path.match(/^\/api\/teams\/([^/]+)\/settings\/test$/);
   if (settingsTestMatch && request.method === 'POST') {
+    if (rateLimit(`webhook-test:${user.userId}`, 3, 60000)) {
+      return json({ error: 'Too many test requests. Try again in a minute.' }, 429);
+    }
     const teamId = settingsTestMatch[1];
     const member = await requireTeamMember(teamId, user.userId);
     if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
@@ -3125,7 +3344,7 @@ async function handleRequest(request, env) {
     return new Response(object.body, {
       headers: {
         'Content-Type': fileMeta.content_type,
-        'Content-Disposition': `attachment; filename="${fileMeta.file_name}"`,
+        'Content-Disposition': `attachment; filename="${sanitizeStr(fileMeta.file_name).replace(/[^a-zA-Z0-9._-]/g, '_')}"`,
         ...corsHeaders(),
       },
     });
