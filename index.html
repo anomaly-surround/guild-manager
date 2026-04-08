@@ -1383,6 +1383,46 @@
         let teamTab = 'timers';
         let bossViewMode = localStorage.getItem('gm_boss_view') || 'list';
 
+        // Desktop notifications
+        let dndMode = localStorage.getItem('gm_dnd') === 'true';
+        const notifiedBosses = new Set(); // track which bosses we already notified
+
+        function requestNotifPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        }
+
+        function sendDesktopNotif(title, body, tag) {
+            if (dndMode) return;
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            if (notifiedBosses.has(tag)) return;
+            notifiedBosses.add(tag);
+            // Auto-clear tag after 10 minutes so it can re-notify next cycle
+            setTimeout(() => notifiedBosses.delete(tag), 600000);
+            try {
+                const n = new Notification(title, { body, icon: 'icon.svg', tag, requireInteraction: true });
+                n.onclick = () => { window.focus(); n.close(); };
+            } catch(e) {}
+        }
+
+        function toggleDND() {
+            dndMode = !dndMode;
+            localStorage.setItem('gm_dnd', dndMode);
+            updateDNDBadge();
+        }
+
+        function updateDNDBadge() {
+            const el = document.getElementById('dndBtn');
+            if (el) {
+                el.textContent = dndMode ? '🔕 DND On' : '🔔 Alerts On';
+                el.style.background = dndMode ? '#7f1d1d' : '#16653466';
+                el.style.color = dndMode ? '#fca5a5' : '#4ade80';
+            }
+        }
+
+        requestNotifPermission();
+
         async function openTeam(teamId) {
             currentTeamId = teamId;
             const content = document.getElementById('mainContent');
@@ -1458,6 +1498,7 @@
                         <span style="color:#64748b;font-size:0.85em">Invite Code:</span>
                         <span class="invite-code">${team.invite_code}</span>
                         <button class="btn btn-sm btn-secondary" onclick="copyInvite('${team.invite_code}')">Copy</button>
+                        <button class="btn btn-sm" id="dndBtn" onclick="toggleDND()" style="margin-left:8px;border-radius:12px;padding:4px 10px;font-size:0.8em"></button>
                     </div>
                 </div>
 
@@ -1510,6 +1551,7 @@
             `;
 
             content.innerHTML = html;
+            updateDNDBadge();
         }
 
         function renderTimersTab(team, canManage) {
@@ -3857,20 +3899,31 @@
             return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
         }
 
-        // Tick — update countdown text only, don't re-render
+        // Tick — update countdown text + desktop notifications
         setInterval(() => {
-            if (!currentTeamId || teamTab !== 'timers') return;
+            if (!currentTeamId) return;
             for (const boss of teamBosses) {
-                const el = document.querySelector(`[data-boss-id="${boss.id}"] .boss-countdown`);
-                if (!el) continue;
                 const remaining = boss.next_spawn - Date.now();
                 const isSpawned = remaining <= 0 || boss.status === 'spawned';
+                const alertMs = (boss.alert_minutes || 5) * 60000;
+
+                // Desktop notifications (work even when not on timers tab)
+                if (isSpawned) {
+                    sendDesktopNotif('Boss Spawned!', `${boss.name} is now available!`, `spawn-${boss.id}`);
+                } else if (remaining > 0 && remaining <= alertMs) {
+                    const minLeft = Math.max(1, Math.round(remaining / 60000));
+                    sendDesktopNotif('Boss Spawning Soon', `${boss.name} spawns in ${minLeft} min`, `warn-${boss.id}`);
+                }
+
+                // Update UI (only if on timers tab)
+                if (teamTab !== 'timers') continue;
+                const el = document.querySelector(`[data-boss-id="${boss.id}"] .boss-countdown`);
+                if (!el) continue;
                 if (isSpawned) {
                     el.textContent = 'SPAWNED';
                     el.className = 'boss-countdown spawned';
                 } else {
                     el.textContent = formatTime(remaining);
-                    const alertMs = boss.alert_minutes * 60000;
                     el.className = remaining <= alertMs ? 'boss-countdown warning-text' : 'boss-countdown active';
                 }
             }
