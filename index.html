@@ -2363,7 +2363,7 @@
         });
 
         async function saveNotifSettings() {
-            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
+            const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, {
                 onWarning: document.getElementById('onWarning').checked,
                 onSpawn: document.getElementById('onSpawn').checked,
                 onAnnouncement: document.getElementById('onAnnouncement').checked,
@@ -2371,34 +2371,43 @@
                 onWar: document.getElementById('onWar').checked,
                 eventReminderMinutes: parseInt(document.getElementById('eventReminderMin').value) || 15,
             });
+            if (res.error) { showToast(res.error); await renderTeamSettings(); return; }
             showToast('Notification settings saved');
         }
 
         const saveTeamInfo = guard('saveTeamInfo', async function() {
-            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
+            const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, {
                 teamDescription: document.getElementById('teamDesc').value.trim(),
                 timezone: document.getElementById('teamTimezone').value,
             });
+            if (res.error) { showToast(res.error); return; }
             showToast('Team info saved');
         });
 
         const saveTeamRules = guard('saveTeamRules', async function() {
-            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
+            const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, {
                 membersCreateEvents: document.getElementById('membersCreateEvents').checked,
                 defaultEventDuration: parseInt(document.getElementById('defaultEventDuration').value) || 60,
                 inactiveDays: parseInt(document.getElementById('inactiveDays').value) || 7,
                 startingDkp: parseInt(document.getElementById('startingDkp').value) || 0,
                 pointsName: (document.getElementById('pointsName').value.trim() || 'DKP').substring(0, 20),
             });
+            if (res.error) { showToast(res.error); await renderTeamSettings(); return; }
             _pointsName = (document.getElementById('pointsName').value.trim() || 'DKP').substring(0, 20);
             showToast('Rules saved');
         });
 
         const saveInviteSettings = guard('saveInviteSettings', async function() {
-            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
+            const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, {
                 invitesEnabled: document.getElementById('invitesEnabled').checked,
                 inviteApproval: document.getElementById('inviteApproval').checked,
             });
+            if (res.error) {
+                showToast(res.error);
+                // Revert UI to match DB state by re-rendering from fresh settings
+                await renderTeamSettings();
+                return;
+            }
             showToast('Invite settings saved');
             loadJoinRequests();
         });
