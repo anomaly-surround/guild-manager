@@ -1872,11 +1872,12 @@
                     <h3>Discord Notifications</h3>
                     <div class="form-row" style="margin-top:8px">
                         <div class="form-group">
-                            <label>Webhook URL</label>
-                            <input type="text" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookUrl || ''}">
+                            <label>Webhook URL ${(settings.webhookUrlSet || settings.webhookUrl) ? '<span style="color:#34d399;font-size:0.85em">✓ saved</span>' : ''}</label>
+                            <input type="text" id="webhookUrl" placeholder="${(settings.webhookUrlSet || settings.webhookUrl) ? '(saved — paste a new URL to replace)' : 'https://discord.com/api/webhooks/...'}" value="">
                         </div>
                         <div><button class="btn btn-primary btn-sm" onclick="saveWebhook()">Save</button></div>
                         <div><button class="btn btn-secondary btn-sm" onclick="testWebhook()">Test</button></div>
+                        <div><button class="btn btn-secondary btn-sm" style="background:#7f1d1d;color:#fca5a5" onclick="clearWebhook()">Clear</button></div>
                     </div>
                     <div style="margin-top:12px;display:flex;gap:12px 20px;flex-wrap:wrap;font-size:0.85em;color:var(--text-muted)">
                         <label><input type="checkbox" id="onWarning" ${settings.onWarning ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Boss warning</label>
@@ -1942,22 +1943,34 @@
                 ${premiumGate(`
                 <div class="card">
                     <h3>Channel-Specific Webhooks</h3>
-                    <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">Override the default webhook for specific notification types.</p>
+                    <p style="font-size:0.8em;color:var(--text-dim);margin-bottom:8px">Override the default webhook for specific notification types. Leave empty to keep the existing saved value.</p>
                     <div class="form-group" style="margin-top:8px">
-                        <label>Boss Alerts Webhook</label>
-                        <input type="text" id="webhookBoss" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookBoss || ''}">
+                        <label>Boss Alerts Webhook ${settings.webhookBossSet ? '<span style="color:#34d399;font-size:0.85em">✓ saved</span>' : ''}</label>
+                        <div style="display:flex;gap:6px">
+                            <input type="text" id="webhookBoss" placeholder="${settings.webhookBossSet ? '(saved — paste a new URL to replace)' : 'https://discord.com/api/webhooks/...'}" value="">
+                            ${settings.webhookBossSet ? '<button class="btn btn-sm btn-secondary" onclick="clearChannelWebhook(\'Boss\')">Clear</button>' : ''}
+                        </div>
                     </div>
                     <div class="form-group" style="margin-top:6px">
-                        <label>Events Webhook</label>
-                        <input type="text" id="webhookEvents" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookEvents || ''}">
+                        <label>Events Webhook ${settings.webhookEventsSet ? '<span style="color:#34d399;font-size:0.85em">✓ saved</span>' : ''}</label>
+                        <div style="display:flex;gap:6px">
+                            <input type="text" id="webhookEvents" placeholder="${settings.webhookEventsSet ? '(saved — paste a new URL to replace)' : 'https://discord.com/api/webhooks/...'}" value="">
+                            ${settings.webhookEventsSet ? '<button class="btn btn-sm btn-secondary" onclick="clearChannelWebhook(\'Events\')">Clear</button>' : ''}
+                        </div>
                     </div>
                     <div class="form-group" style="margin-top:6px">
-                        <label>War Results Webhook</label>
-                        <input type="text" id="webhookWars" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookWars || ''}">
+                        <label>War Results Webhook ${settings.webhookWarsSet ? '<span style="color:#34d399;font-size:0.85em">✓ saved</span>' : ''}</label>
+                        <div style="display:flex;gap:6px">
+                            <input type="text" id="webhookWars" placeholder="${settings.webhookWarsSet ? '(saved — paste a new URL to replace)' : 'https://discord.com/api/webhooks/...'}" value="">
+                            ${settings.webhookWarsSet ? '<button class="btn btn-sm btn-secondary" onclick="clearChannelWebhook(\'Wars\')">Clear</button>' : ''}
+                        </div>
                     </div>
                     <div class="form-group" style="margin-top:6px">
-                        <label>Announcements Webhook</label>
-                        <input type="text" id="webhookAnnouncements" placeholder="https://discord.com/api/webhooks/..." value="${settings.webhookAnnouncements || ''}">
+                        <label>Announcements Webhook ${settings.webhookAnnouncementsSet ? '<span style="color:#34d399;font-size:0.85em">✓ saved</span>' : ''}</label>
+                        <div style="display:flex;gap:6px">
+                            <input type="text" id="webhookAnnouncements" placeholder="${settings.webhookAnnouncementsSet ? '(saved — paste a new URL to replace)' : 'https://discord.com/api/webhooks/...'}" value="">
+                            ${settings.webhookAnnouncementsSet ? '<button class="btn btn-sm btn-secondary" onclick="clearChannelWebhook(\'Announcements\')">Clear</button>' : ''}
+                        </div>
                     </div>
                     <button class="btn btn-primary btn-sm" onclick="saveChannelWebhooks()" style="margin-top:8px">Save</button>
                 </div>
@@ -2329,8 +2342,19 @@
 
         const saveWebhook = guard('saveWebhook', async function() {
             const url = document.getElementById('webhookUrl').value.trim();
-            await api('PUT', `/api/teams/${currentTeamId}/settings`, { webhookUrl: url });
-            showToast(url ? 'Webhook saved' : 'Webhook removed');
+            if (!url) { showToast('Paste a webhook URL first, or click Clear to remove'); return; }
+            const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, { webhookUrl: url });
+            if (res.error) { showToast(res.error); return; }
+            showToast('Webhook saved');
+            await renderTeamSettings();
+        });
+
+        const clearWebhook = guard('clearWebhook', async function() {
+            if (!confirm('Remove the default webhook for this team?')) return;
+            const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, { webhookUrl: '' });
+            if (res.error) { showToast(res.error); return; }
+            showToast('Webhook removed');
+            await renderTeamSettings();
         });
 
         const testWebhook = guard('testWebhook', async function() {
@@ -2430,13 +2454,29 @@
 
         // Premium settings save functions
         const saveChannelWebhooks = guard('saveChannelWebhooks', async function() {
-            await api('PUT', `/api/teams/${currentTeamId}/settings`, {
-                webhookBoss: document.getElementById('webhookBoss').value.trim(),
-                webhookEvents: document.getElementById('webhookEvents').value.trim(),
-                webhookWars: document.getElementById('webhookWars').value.trim(),
-                webhookAnnouncements: document.getElementById('webhookAnnouncements').value.trim(),
-            });
+            // Only send fields the user actually typed into — empty inputs mean "don't touch".
+            const body = {};
+            const boss = document.getElementById('webhookBoss').value.trim();
+            const events = document.getElementById('webhookEvents').value.trim();
+            const wars = document.getElementById('webhookWars').value.trim();
+            const ann = document.getElementById('webhookAnnouncements').value.trim();
+            if (boss) body.webhookBoss = boss;
+            if (events) body.webhookEvents = events;
+            if (wars) body.webhookWars = wars;
+            if (ann) body.webhookAnnouncements = ann;
+            if (Object.keys(body).length === 0) { showToast('Nothing to save — paste a webhook URL first'); return; }
+            const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, body);
+            if (res.error) { showToast(res.error); return; }
             showToast('Channel webhooks saved');
+            await renderTeamSettings();
+        });
+
+        const clearChannelWebhook = guard('clearChannelWebhook', async function(which) {
+            if (!confirm(`Clear the ${which} webhook override?`)) return;
+            const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, { ['webhook' + which]: '' });
+            if (res.error) { showToast(res.error); return; }
+            showToast(`${which} webhook cleared`);
+            await renderTeamSettings();
         });
 
         function previewTeamIcon(input) {

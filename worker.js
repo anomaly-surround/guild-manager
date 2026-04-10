@@ -647,100 +647,148 @@ async function sendDiscord(webhookUrl, title, description, color) {
 // --- Cron handler ---
 
 async function handleScheduled(env) {
-  try { await initDB(env.DB); } catch(e) { console.error('initDB error in cron:', e); }
+  // NOTE: initDB intentionally NOT called here. Schema is created by handleRequest
+  // on first user request. Running initDB on every cron tick was burning ~30ms CPU
+  // on ~40 CREATE TABLE IF NOT EXISTS + migration probes, blowing the Workers Free
+  // 10ms budget. Cron assumes tables exist.
   const now = Date.now();
 
-  const bosses = await env.DB.prepare('SELECT * FROM bosses WHERE status = ?').bind('waiting').all();
+  const dbWrites = [];
+  const discordSends = [];
 
-  for (const boss of bosses.results) {
-    try {
-      const remaining = boss.next_spawn - now;
-      const alertMs = (boss.alert_minutes || 5) * 60000;
-
-      const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(boss.team_id).first();
-      const tz = settings?.timezone || 'Asia/Manila';
-
-      // Warning
-      if (remaining > 0 && remaining <= alertMs && !boss.warned) {
-        if (settings?.on_warning && settings?.webhook_url) {
-          const minLeft = Math.max(1, Math.round(remaining / 60000));
-          await sendDiscord(settings.webhook_url, `${boss.name} - Spawning Soon!`,
-            `**${boss.name}** spawns in **${minLeft} minute${minLeft !== 1 ? 's' : ''}**!`, 16760576);
-        }
-        await env.DB.prepare('UPDATE bosses SET warned = 1 WHERE id = ?').bind(boss.id).run();
-        continue;
-      }
-
-      // Spawned
-      if (remaining <= 0) {
-        const resetMin = boss.auto_reset_minutes ?? 5;
-        if (!boss.spawn_notified && settings?.on_spawn && settings?.webhook_url) {
-          await sendDiscord(settings.webhook_url, `${boss.name} has SPAWNED!`,
-            `**${boss.name}** is now available!\nAuto-reset in ${resetMin} minute${resetMin !== 1 ? 's' : ''} if not killed.`, 15548997);
-        }
-        await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = ?, auto_reset_at = ?, spawn_notified = 1 WHERE id = ?')
-          .bind('spawned', now, now + resetMin * 60000, boss.id).run();
-      }
-    } catch (e) { console.error('Boss spawn check error:', boss.id, e); }
-  }
-
-  // Event reminders (configurable minutes before)
+  // --- BOSSES: merge 'waiting' (warn/spawn) + 'spawned' (auto-reset) into one
+  //     query with team_settings JOINed, eliminating per-boss N+1 settings lookups. ---
   try {
-    const upcomingEvents = await env.DB.prepare(
-      'SELECT e.*, ts.event_reminder_minutes FROM events e LEFT JOIN team_settings ts ON ts.team_id = e.team_id WHERE e.event_time > ? AND e.event_time <= ? + COALESCE(ts.event_reminder_minutes, 15) * 60000 AND e.reminder_sent = 0'
-    ).bind(now, now).all().catch(() => ({ results: [] }));
+    const bosses = await env.DB.prepare(`
+      SELECT b.*,
+             ts.webhook_url, ts.webhook_boss, ts.on_warning, ts.on_spawn, ts.timezone
+      FROM bosses b
+      LEFT JOIN team_settings ts ON ts.team_id = b.team_id
+      WHERE b.status IN ('waiting', 'spawned')
+    `).all();
+
+    for (const boss of bosses.results) {
+      try {
+        const bossHook = boss.webhook_boss || boss.webhook_url;
+        if (boss.status === 'waiting') {
+          const remaining = boss.next_spawn - now;
+          const alertMs = (boss.alert_minutes || 5) * 60000;
+
+          if (remaining > 0 && remaining <= alertMs && !boss.warned) {
+            if (boss.on_warning && bossHook) {
+              const minLeft = Math.max(1, Math.round(remaining / 60000));
+              discordSends.push(sendDiscord(bossHook, `${boss.name} - Spawning Soon!`,
+                `**${boss.name}** spawns in **${minLeft} minute${minLeft !== 1 ? 's' : ''}**!`, 16760576));
+            }
+            dbWrites.push(env.DB.prepare('UPDATE bosses SET warned = 1 WHERE id = ?').bind(boss.id));
+            continue;
+          }
+
+          if (remaining <= 0) {
+            const resetMin = boss.auto_reset_minutes ?? 5;
+            if (!boss.spawn_notified && boss.on_spawn && bossHook) {
+              discordSends.push(sendDiscord(bossHook, `${boss.name} has SPAWNED!`,
+                `**${boss.name}** is now available!\nAuto-reset in ${resetMin} minute${resetMin !== 1 ? 's' : ''} if not killed.`, 15548997));
+            }
+            dbWrites.push(env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = ?, auto_reset_at = ?, spawn_notified = 1 WHERE id = ?')
+              .bind('spawned', now, now + resetMin * 60000, boss.id));
+          }
+        } else if (boss.status === 'spawned' && boss.auto_reset_at != null && boss.auto_reset_at <= now) {
+          const tz = boss.timezone || 'Asia/Manila';
+          const nextSpawn = calcNextSpawn(boss, now, tz);
+          dbWrites.push(env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = NULL, auto_reset_at = NULL, warned = 0, spawn_notified = 0, next_spawn = ? WHERE id = ?')
+            .bind('waiting', nextSpawn, boss.id));
+          if (boss.on_spawn && bossHook) {
+            discordSends.push(sendDiscord(bossHook, `${boss.name} - Auto Reset`,
+              `**${boss.name}** was not killed in time and has been reset.\nNext spawn recalculated.`, 9807270));
+          }
+        }
+      } catch (e) { console.error('Boss processing error:', boss.id, e); }
+    }
+  } catch (e) { console.error('Boss query error:', e); }
+
+  // --- EVENT REMINDERS: JOIN settings + aggregate rsvp count in one query. ---
+  try {
+    const upcomingEvents = await env.DB.prepare(`
+      SELECT e.*,
+             ts.webhook_url, ts.webhook_events, ts.on_event, ts.event_reminder_minutes,
+             (SELECT COUNT(*) FROM event_rsvps WHERE event_id = e.id AND status = 'going') as rsvp_count
+      FROM events e
+      LEFT JOIN team_settings ts ON ts.team_id = e.team_id
+      WHERE e.reminder_sent = 0
+        AND e.event_time > ?
+        AND e.event_time <= ? + COALESCE(ts.event_reminder_minutes, 15) * 60000
+    `).bind(now, now).all();
 
     for (const event of upcomingEvents.results) {
-      const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
-      if (settings?.webhook_url && settings?.on_event !== 0) {
+      const eventHook = event.webhook_events || event.webhook_url;
+      if (eventHook && event.on_event !== 0) {
         const minLeft = Math.max(1, Math.round((event.event_time - now) / 60000));
-        const rsvps = await env.DB.prepare("SELECT COUNT(*) as count FROM event_rsvps WHERE event_id = ? AND status = 'going'").bind(event.id).first();
-        await sendDiscord(settings.webhook_url, `${event.title} - Starting Soon!`,
-          `**${event.title}** starts in **${minLeft} minute${minLeft !== 1 ? 's' : ''}**!\n${rsvps.count} member${rsvps.count !== 1 ? 's' : ''} going.${event.description ? '\n\n' + event.description : ''}`,
-          16760576);
+        discordSends.push(sendDiscord(eventHook, `${event.title} - Starting Soon!`,
+          `**${event.title}** starts in **${minLeft} minute${minLeft !== 1 ? 's' : ''}**!\n${event.rsvp_count} member${event.rsvp_count !== 1 ? 's' : ''} going.${event.description ? '\n\n' + event.description : ''}`,
+          16760576));
       }
-      await env.DB.prepare('UPDATE events SET reminder_sent = 1 WHERE id = ?').bind(event.id).run();
+      dbWrites.push(env.DB.prepare('UPDATE events SET reminder_sent = 1 WHERE id = ?').bind(event.id));
     }
   } catch (e) { console.error('Event reminder error:', e); }
 
-  // Event start notifications
+  // --- EVENT START: JOIN settings. ---
   try {
-    const startingEvents = await env.DB.prepare(
-      'SELECT * FROM events WHERE event_time <= ? AND start_notified = 0'
-    ).bind(now).all();
+    const startingEvents = await env.DB.prepare(`
+      SELECT e.*, ts.webhook_url, ts.webhook_events
+      FROM events e
+      LEFT JOIN team_settings ts ON ts.team_id = e.team_id
+      WHERE e.event_time <= ? AND e.start_notified = 0
+    `).bind(now).all();
 
     for (const event of startingEvents.results) {
-      const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
-      if (settings?.webhook_url) {
-        await sendDiscord(settings.webhook_url, `${event.title} is starting NOW!`,
-          `**${event.title}** has started!${event.description ? '\n\n' + event.description : ''}`, 15548997);
+      const eventHook = event.webhook_events || event.webhook_url;
+      if (eventHook) {
+        discordSends.push(sendDiscord(eventHook, `${event.title} is starting NOW!`,
+          `**${event.title}** has started!${event.description ? '\n\n' + event.description : ''}`, 15548997));
       }
-      await env.DB.prepare('UPDATE events SET start_notified = 1 WHERE id = ?').bind(event.id).run();
+      dbWrites.push(env.DB.prepare('UPDATE events SET start_notified = 1 WHERE id = ?').bind(event.id));
     }
   } catch (e) { console.error('Event start notification error:', e); }
 
-  // Event end notifications
+  // --- EVENT END: JOIN settings. ---
   try {
-    const endedEvents = await env.DB.prepare(
-      'SELECT * FROM events WHERE event_time + duration_minutes * 60000 <= ? AND start_notified = 1 AND end_notified = 0'
-    ).bind(now).all().catch(() => ({ results: [] }));
+    const endedEvents = await env.DB.prepare(`
+      SELECT e.*, ts.webhook_url, ts.webhook_events
+      FROM events e
+      LEFT JOIN team_settings ts ON ts.team_id = e.team_id
+      WHERE e.event_time + e.duration_minutes * 60000 <= ?
+        AND e.start_notified = 1 AND e.end_notified = 0
+    `).bind(now).all();
 
     for (const event of endedEvents.results) {
-      const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(event.team_id).first();
-      if (settings?.webhook_url) {
-        await sendDiscord(settings.webhook_url, `${event.title} has ended!`,
-          `**${event.title}** has ended. Thanks to everyone who participated!`, 5763719);
+      const eventHook = event.webhook_events || event.webhook_url;
+      if (eventHook) {
+        discordSends.push(sendDiscord(eventHook, `${event.title} has ended!`,
+          `**${event.title}** has ended. Thanks to everyone who participated!`, 5763719));
       }
-      await env.DB.prepare('UPDATE events SET end_notified = 1 WHERE id = ?').bind(event.id).run();
+      dbWrites.push(env.DB.prepare('UPDATE events SET end_notified = 1 WHERE id = ?').bind(event.id));
     }
   } catch (e) { console.error('Event end notification error:', e); }
 
-  // Auto-create next recurring event after one ends
+  // --- Flush primary batch: all boss/event updates land in ONE D1 roundtrip,
+  //     all Discord webhooks fire in parallel (network wait, not CPU). ---
+  if (dbWrites.length > 0) {
+    try { await env.DB.batch(dbWrites); } catch (e) { console.error('Primary batch write error:', e); }
+    dbWrites.length = 0;
+  }
+  if (discordSends.length > 0) {
+    await Promise.allSettled(discordSends);
+    discordSends.length = 0;
+  }
+
+  // --- Recurring event auto-create. ---
   try {
     const recurringEnded = await env.DB.prepare(
       "SELECT * FROM events WHERE recurrence IS NOT NULL AND recurrence != 'none' AND event_time + duration_minutes * 60000 <= ? AND end_notified = 1"
-    ).bind(now).all().catch(() => ({ results: [] }));
+    ).bind(now).all();
 
+    const insertStmts = [];
     for (const event of recurringEnded.results) {
       const parentId = event.parent_event_id || event.id;
       const existing = await env.DB.prepare(
@@ -760,92 +808,93 @@ async function handleScheduled(env) {
       if (nextTime < now - 86400000) continue;
 
       const newId = crypto.randomUUID();
-      await env.DB.prepare(`INSERT INTO events (id, team_id, title, description, event_type, event_time, duration_minutes, created_by, recurrence, parent_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .bind(newId, event.team_id, event.title, event.description, event.event_type, nextTime, event.duration_minutes, event.created_by, event.recurrence, parentId).run();
+      insertStmts.push(env.DB.prepare(`INSERT INTO events (id, team_id, title, description, event_type, event_time, duration_minutes, created_by, recurrence, parent_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(newId, event.team_id, event.title, event.description, event.event_type, nextTime, event.duration_minutes, event.created_by, event.recurrence, parentId));
     }
+    if (insertStmts.length > 0) await env.DB.batch(insertStmts);
   } catch (e) { console.error('Recurring event error:', e); }
 
-  // DKP decay for premium teams
+  // --- DKP decay: JOIN ledger balance into the inactive-members query
+  //     to eliminate per-member balance lookup. ---
   try {
     const decayTeams = await env.DB.prepare(
       'SELECT ts.* FROM team_settings ts JOIN teams t ON t.id = ts.team_id JOIN users u ON u.id = t.owner_id WHERE ts.dkp_decay_enabled = 1 AND u.premium = 1 AND (ts.dkp_decay_last_run IS NULL OR ts.dkp_decay_last_run < unixepoch() - ts.dkp_decay_interval_days * 86400)'
-    ).all().catch(() => ({ results: [] }));
+    ).all();
 
-    for (const ts of decayTeams.results) {
-      const inactiveMembers = await env.DB.prepare(
-        'SELECT ma.user_id FROM member_activity ma WHERE ma.team_id = ? AND ma.last_seen < unixepoch() - ?'
-      ).bind(ts.team_id, (ts.dkp_decay_inactive_days || 14) * 86400).all();
+    if (decayTeams.results.length > 0) {
+      const decayWrites = [];
+      for (const ts of decayTeams.results) {
+        const inactiveWithBal = await env.DB.prepare(`
+          SELECT ma.user_id, COALESCE(SUM(dl.amount), 0) as balance
+          FROM member_activity ma
+          LEFT JOIN dkp_ledger dl ON dl.team_id = ma.team_id AND dl.user_id = ma.user_id
+          WHERE ma.team_id = ? AND ma.last_seen < unixepoch() - ?
+          GROUP BY ma.user_id
+          HAVING balance > 0
+        `).bind(ts.team_id, (ts.dkp_decay_inactive_days || 14) * 86400).all();
 
-      for (const m of inactiveMembers.results) {
-        const bal = await env.DB.prepare('SELECT COALESCE(SUM(amount),0) as balance FROM dkp_ledger WHERE team_id = ? AND user_id = ?')
-          .bind(ts.team_id, m.user_id).first();
-        if (bal.balance > 0) {
-          const decay = Math.max(1, Math.floor(bal.balance * (ts.dkp_decay_percent || 10) / 100));
-          await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
-            .bind(crypto.randomUUID(), ts.team_id, m.user_id, -decay, 'Inactivity decay', 'system').run();
+        for (const m of inactiveWithBal.results) {
+          const decay = Math.max(1, Math.floor(m.balance * (ts.dkp_decay_percent || 10) / 100));
+          decayWrites.push(env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+            .bind(crypto.randomUUID(), ts.team_id, m.user_id, -decay, 'Inactivity decay', 'system'));
         }
+        decayWrites.push(env.DB.prepare('UPDATE team_settings SET dkp_decay_last_run = unixepoch() WHERE team_id = ?').bind(ts.team_id));
       }
-      await env.DB.prepare('UPDATE team_settings SET dkp_decay_last_run = unixepoch() WHERE team_id = ?').bind(ts.team_id).run();
+      if (decayWrites.length > 0) await env.DB.batch(decayWrites);
     }
   } catch (e) { console.error('DKP decay error:', e); }
 
-  // Auto-close expired auctions
+  // --- Auctions: JOIN top bid into the expired auctions query. ---
   try {
-    const expiredAuctions = await env.DB.prepare("SELECT * FROM dkp_auctions WHERE status = 'open' AND expires_at IS NOT NULL AND expires_at < ?")
-      .bind(Math.floor(now / 1000)).all().catch(() => ({ results: [] }));
+    const expiredAuctions = await env.DB.prepare(`
+      SELECT a.*,
+             (SELECT user_id FROM dkp_bids WHERE auction_id = a.id ORDER BY amount DESC LIMIT 1) as top_user,
+             (SELECT amount FROM dkp_bids WHERE auction_id = a.id ORDER BY amount DESC LIMIT 1) as top_amount
+      FROM dkp_auctions a
+      WHERE a.status = 'open' AND a.expires_at IS NOT NULL AND a.expires_at < ?
+    `).bind(Math.floor(now / 1000)).all();
 
-    for (const auction of expiredAuctions.results) {
-      const topBid = await env.DB.prepare('SELECT * FROM dkp_bids WHERE auction_id = ? ORDER BY amount DESC LIMIT 1').bind(auction.id).first();
-      if (topBid) {
-        await env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
-          .bind(crypto.randomUUID(), auction.team_id, topBid.user_id, -topBid.amount, `Auction: ${auction.item_name}`, 'system').run();
-        await env.DB.prepare('UPDATE dkp_auctions SET status = ?, winner_id = ?, winning_bid = ? WHERE id = ?')
-          .bind('closed', topBid.user_id, topBid.amount, auction.id).run();
-      } else {
-        await env.DB.prepare("UPDATE dkp_auctions SET status = 'closed' WHERE id = ?").bind(auction.id).run();
+    if (expiredAuctions.results.length > 0) {
+      const auctionWrites = [];
+      for (const auction of expiredAuctions.results) {
+        if (auction.top_user) {
+          auctionWrites.push(env.DB.prepare('INSERT INTO dkp_ledger (id, team_id, user_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+            .bind(crypto.randomUUID(), auction.team_id, auction.top_user, -auction.top_amount, `Auction: ${auction.item_name}`, 'system'));
+          auctionWrites.push(env.DB.prepare('UPDATE dkp_auctions SET status = ?, winner_id = ?, winning_bid = ? WHERE id = ?')
+            .bind('closed', auction.top_user, auction.top_amount, auction.id));
+        } else {
+          auctionWrites.push(env.DB.prepare("UPDATE dkp_auctions SET status = 'closed' WHERE id = ?").bind(auction.id));
+        }
       }
+      if (auctionWrites.length > 0) await env.DB.batch(auctionWrites);
     }
   } catch (e) { console.error('Auction close error:', e); }
 
-  // Auto-delete old events and chat (per team settings)
+  // --- Auto-delete old events and chat. Collect all deletes into one batch. ---
   try {
-    const allSettings = await env.DB.prepare('SELECT * FROM team_settings WHERE auto_delete_events_days > 0 OR auto_delete_chat_days > 0').all().catch(() => ({ results: [] }));
-    for (const s of allSettings.results) {
-      if (s.auto_delete_events_days > 0) {
-        const cutoff = Math.floor(now / 1000) - s.auto_delete_events_days * 86400;
-        const oldEvents = await env.DB.prepare('SELECT id FROM events WHERE team_id = ? AND event_time / 1000 < ? AND recurrence IS NULL').bind(s.team_id, cutoff).all();
-        for (const e of oldEvents.results) {
-          await env.DB.batch([
-            env.DB.prepare('DELETE FROM event_rsvps WHERE event_id = ?').bind(e.id),
-            env.DB.prepare('DELETE FROM event_attendance WHERE event_id = ?').bind(e.id),
-            env.DB.prepare('DELETE FROM events WHERE id = ?').bind(e.id),
-          ]);
+    const allSettings = await env.DB.prepare('SELECT team_id, auto_delete_events_days, auto_delete_chat_days FROM team_settings WHERE auto_delete_events_days > 0 OR auto_delete_chat_days > 0').all();
+    if (allSettings.results.length > 0) {
+      const deleteWrites = [];
+      for (const s of allSettings.results) {
+        if (s.auto_delete_events_days > 0) {
+          const cutoff = Math.floor(now / 1000) - s.auto_delete_events_days * 86400;
+          const oldEvents = await env.DB.prepare('SELECT id FROM events WHERE team_id = ? AND event_time / 1000 < ? AND recurrence IS NULL').bind(s.team_id, cutoff).all();
+          for (const e of oldEvents.results) {
+            deleteWrites.push(env.DB.prepare('DELETE FROM event_rsvps WHERE event_id = ?').bind(e.id));
+            deleteWrites.push(env.DB.prepare('DELETE FROM event_attendance WHERE event_id = ?').bind(e.id));
+            deleteWrites.push(env.DB.prepare('DELETE FROM events WHERE id = ?').bind(e.id));
+          }
+        }
+        if (s.auto_delete_chat_days > 0) {
+          const cutoff = Math.floor(now / 1000) - s.auto_delete_chat_days * 86400;
+          deleteWrites.push(env.DB.prepare('DELETE FROM chat_messages WHERE team_id = ? AND created_at < ?').bind(s.team_id, cutoff));
         }
       }
-      if (s.auto_delete_chat_days > 0) {
-        const cutoff = Math.floor(now / 1000) - s.auto_delete_chat_days * 86400;
-        await env.DB.prepare('DELETE FROM chat_messages WHERE team_id = ? AND created_at < ?').bind(s.team_id, cutoff).run();
-      }
+      if (deleteWrites.length > 0) await env.DB.batch(deleteWrites);
     }
   } catch (e) { console.error('Auto-delete error:', e); }
 
-  // Auto-reset spawned bosses
-  const spawned = await env.DB.prepare('SELECT * FROM bosses WHERE status = ? AND auto_reset_at <= ?')
-    .bind('spawned', now).all();
-
-  for (const boss of spawned.results) {
-    const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(boss.team_id).first();
-    const tz = settings?.timezone || 'Asia/Manila';
-    const nextSpawn = calcNextSpawn(boss, now, tz);
-    await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = NULL, auto_reset_at = NULL, warned = 0, spawn_notified = 0, next_spawn = ? WHERE id = ?')
-      .bind('waiting', nextSpawn, boss.id).run();
-    if (settings?.on_kill && settings?.webhook_url) {
-      await sendDiscord(settings.webhook_url, `${boss.name} - Auto Reset`,
-        `**${boss.name}** was not killed in time and has been reset.\nNext spawn recalculated.`, 9807270);
-    }
-  }
-
-  // Clean up old resolved join requests (older than 30 days)
+  // --- Join request cleanup: single statement, already optimal. ---
   try {
     await env.DB.prepare("DELETE FROM join_requests WHERE status != 'pending' AND resolved_at < unixepoch() - 2592000").run();
   } catch (e) { console.error('Join request cleanup error:', e); }
@@ -1689,7 +1738,7 @@ async function handleRequest(request, env) {
 
     const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(teamId).first();
     return json({
-      webhookUrl: settings?.webhook_url ? '...' + settings.webhook_url.slice(-8) : '',
+      webhookUrlSet: !!settings?.webhook_url,
       onWarning: settings?.on_warning ?? true,
       onSpawn: settings?.on_spawn ?? true,
       onAnnouncement: settings?.on_announcement ?? true,
@@ -1704,11 +1753,11 @@ async function handleRequest(request, env) {
       autoDeleteChatDays: settings?.auto_delete_chat_days ?? 0,
       startingDkp: settings?.starting_dkp ?? 0,
       timezone: settings?.timezone || 'Asia/Manila',
-      // Premium settings
-      webhookBoss: settings?.webhook_boss ? '...' + settings.webhook_boss.slice(-8) : '',
-      webhookEvents: settings?.webhook_events ? '...' + settings.webhook_events.slice(-8) : '',
-      webhookWars: settings?.webhook_wars ? '...' + settings.webhook_wars.slice(-8) : '',
-      webhookAnnouncements: settings?.webhook_announcements ? '...' + settings.webhook_announcements.slice(-8) : '',
+      // Premium settings — only return "set" flags, never leak the URL (even partially)
+      webhookBossSet: !!settings?.webhook_boss,
+      webhookEventsSet: !!settings?.webhook_events,
+      webhookWarsSet: !!settings?.webhook_wars,
+      webhookAnnouncementsSet: !!settings?.webhook_announcements,
       dkpDecayEnabled: !!(settings?.dkp_decay_enabled),
       dkpDecayPercent: settings?.dkp_decay_percent ?? 10,
       dkpDecayInactiveDays: settings?.dkp_decay_inactive_days ?? 14,
@@ -1898,9 +1947,10 @@ async function handleRequest(request, env) {
 
     // Discord notification
     const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(teamId).first();
-    if (settings?.webhook_url) {
+    const eventHook = settings?.webhook_events || settings?.webhook_url;
+    if (eventHook) {
       const date = new Date(body.eventTime).toLocaleString('en-US', { timeZone: settings.timezone || 'Asia/Manila' });
-      await sendDiscord(settings.webhook_url, `New Event: ${body.title}`,
+      await sendDiscord(eventHook, `New Event: ${body.title}`,
         `**${body.title}** scheduled for **${date}**\nCreated by ${user.username}${body.description ? '\n\n' + body.description : ''}`,
         5793266);
     }
@@ -2044,8 +2094,9 @@ async function handleRequest(request, env) {
       .bind(id, teamId, body.title.trim(), body.body || null, body.pinned ? 1 : 0, user.userId).run();
 
     const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(teamId).first();
-    if (settings?.webhook_url && settings?.on_announcement !== 0) {
-      await sendDiscord(settings.webhook_url, `Announcement: ${body.title.trim()}`,
+    const announceHook = settings?.webhook_announcements || settings?.webhook_url;
+    if (announceHook && settings?.on_announcement !== 0) {
+      await sendDiscord(announceHook, `Announcement: ${body.title.trim()}`,
         `**${body.title.trim()}**${body.body ? '\n\n' + body.body.substring(0, 1500) : ''}\n\n— ${user.username}`, 5793266);
     }
 
@@ -2410,10 +2461,11 @@ async function handleRequest(request, env) {
 
     // Discord notification
     const settings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(teamId).first();
-    if (settings?.webhook_url && settings?.on_war !== 0) {
+    const warHook = settings?.webhook_wars || settings?.webhook_url;
+    if (warHook && settings?.on_war !== 0) {
       const emoji = body.result === 'win' ? '🏆' : body.result === 'loss' ? '❌' : '🤝';
       const scoreText = body.scoreUs !== undefined && body.scoreThem !== undefined ? ` (${body.scoreUs}-${body.scoreThem})` : '';
-      await sendDiscord(settings.webhook_url, `War Result: ${body.result.toUpperCase()}`,
+      await sendDiscord(warHook, `War Result: ${body.result.toUpperCase()}`,
         `${emoji} **${body.result.toUpperCase()}** vs **${body.opponent.trim()}**${scoreText}${body.notes ? '\n' + body.notes : ''}`,
         body.result === 'win' ? 5763719 : body.result === 'loss' ? 15548997 : 16760576);
     }
@@ -3430,8 +3482,9 @@ async function handleRequest(request, env) {
 
     // Notify opponent via webhook
     const oppSettings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(body.opponentTeamId).first();
-    if (oppSettings?.webhook_url) {
-      await sendDiscord(oppSettings.webhook_url, 'New Match Challenge!',
+    const oppWarHook = oppSettings?.webhook_wars || oppSettings?.webhook_url;
+    if (oppWarHook) {
+      await sendDiscord(oppWarHook, 'New Match Challenge!',
         `**${myTeam.name}** has challenged your team to a **${body.matchType || 'gvg'}**!${body.message ? '\n> ' + body.message : ''}${body.scheduledTime ? '\nScheduled: <t:' + Math.floor(body.scheduledTime / 1000) + ':F>' : ''}`, 16760576);
     }
 
@@ -3452,8 +3505,9 @@ async function handleRequest(request, env) {
 
     // Notify challenger
     const challengerSettings = await env.DB.prepare('SELECT * FROM team_settings WHERE team_id = ?').bind(match.challenger_team_id).first();
-    if (challengerSettings?.webhook_url) {
-      await sendDiscord(challengerSettings.webhook_url, 'Challenge Accepted!',
+    const challengerWarHook = challengerSettings?.webhook_wars || challengerSettings?.webhook_url;
+    if (challengerWarHook) {
+      await sendDiscord(challengerWarHook, 'Challenge Accepted!',
         `**${match.challenged_name}** accepted your match challenge!`, 5763719);
     }
 
