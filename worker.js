@@ -511,11 +511,15 @@ async function initDB(db) {
     )`),
   ]);
 
-  // Run migrations (each one is idempotent via catch)
+  // Run migrations (each one is idempotent via catch).
+  // Probes MUST include the newest added column/table — otherwise DBs that passed
+  // older probes will silently miss newer migrations forever.
   const needsMigrations = await db.prepare("SELECT premium FROM users LIMIT 1").first().then(() => false).catch(() => true)
     || await db.prepare("SELECT accent_color FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
     || await db.prepare("SELECT trial_started FROM users LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT google_id FROM users LIMIT 1").first().then(() => false).catch(() => true);
+    || await db.prepare("SELECT google_id FROM users LIMIT 1").first().then(() => false).catch(() => true)
+    || await db.prepare("SELECT invites_enabled FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
+    || await db.prepare("SELECT 1 FROM join_requests LIMIT 1").first().then(() => false).catch(() => true);
   if (needsMigrations) {
     const migrations = [
       'ALTER TABLE users ADD COLUMN premium INTEGER DEFAULT 0',
