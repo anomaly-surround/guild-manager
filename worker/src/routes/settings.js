@@ -1,4 +1,4 @@
-// Team settings, webhook test, custom role names (protected routes)
+// Team settings + webhook test (protected routes). Every field returned here has a consumer; dead ones were cut in M8.
 
 import { json, safeJson } from '../lib/http.js';
 import { rateLimit } from '../lib/ratelimit.js';
@@ -20,13 +20,12 @@ export const routes = [
       onWarning: settings?.on_warning ?? true,
       onSpawn: settings?.on_spawn ?? true,
       onEvent: settings?.on_event ?? true,
+      onLoot: settings?.on_loot ?? true,
       eventReminderMinutes: settings?.event_reminder_minutes ?? 15,
-      inactiveDays: settings?.inactive_days ?? 7,
-      defaultEventDuration: settings?.default_event_duration ?? 60,
       teamDescription: settings?.team_description || '',
       membersCreateEvents: settings?.members_create_events ?? true,
       autoDeleteEventsDays: settings?.auto_delete_events_days ?? 0,
-      startingDkp: settings?.starting_dkp ?? 0,
+      pointsName: settings?.points_name || 'DKP',
       timezone: settings?.timezone || 'Asia/Manila',
       // Premium settings — only return "set" flags, never leak the URL (even partially)
       webhookBossSet: !!settings?.webhook_boss,
@@ -35,7 +34,6 @@ export const routes = [
       dkpDecayPercent: settings?.dkp_decay_percent ?? 10,
       dkpDecayInactiveDays: settings?.dkp_decay_inactive_days ?? 14,
       dkpDecayIntervalDays: settings?.dkp_decay_interval_days ?? 7,
-      accentColor: settings?.accent_color || '',
       teamIcon: settings?.team_icon || '',
       invitesEnabled: settings?.invites_enabled ?? true,
       inviteApproval: !!(settings?.invite_approval),
@@ -74,9 +72,8 @@ export const routes = [
       if (body.onWarning !== undefined) { sets.push('on_warning = ?'); vals.push(body.onWarning ? 1 : 0); }
       if (body.onSpawn !== undefined) { sets.push('on_spawn = ?'); vals.push(body.onSpawn ? 1 : 0); }
       if (body.onEvent !== undefined) { sets.push('on_event = ?'); vals.push(body.onEvent ? 1 : 0); }
+      if (body.onLoot !== undefined) { sets.push('on_loot = ?'); vals.push(body.onLoot ? 1 : 0); }
       if (body.eventReminderMinutes !== undefined) { sets.push('event_reminder_minutes = ?'); vals.push(body.eventReminderMinutes); }
-      if (body.inactiveDays !== undefined) { sets.push('inactive_days = ?'); vals.push(body.inactiveDays); }
-      if (body.defaultEventDuration !== undefined) { sets.push('default_event_duration = ?'); vals.push(body.defaultEventDuration); }
       if (body.teamDescription !== undefined) { sets.push('team_description = ?'); vals.push(body.teamDescription || null); }
       if (body.invitesEnabled !== undefined) {
         if (member.role !== 'leader') return json({ error: 'Only the leader can change invite settings' }, 403);
@@ -106,7 +103,7 @@ export const routes = [
       }
       if (body.membersCreateEvents !== undefined) { sets.push('members_create_events = ?'); vals.push(body.membersCreateEvents ? 1 : 0); }
       if (body.autoDeleteEventsDays !== undefined) { sets.push('auto_delete_events_days = ?'); vals.push(body.autoDeleteEventsDays); }
-      if (body.startingDkp !== undefined) { sets.push('starting_dkp = ?'); vals.push(body.startingDkp); }
+      if (body.pointsName !== undefined) { const n = String(body.pointsName).trim().slice(0, 20); sets.push('points_name = ?'); vals.push(n || null); }
       if (body.timezone !== undefined) { sets.push('timezone = ?'); vals.push(body.timezone); }
       // Premium fields — require premium team
       const hasPremiumFields = body.webhookBoss !== undefined || body.webhookEvents !== undefined ||
@@ -129,7 +126,6 @@ export const routes = [
       if (body.dkpDecayPercent !== undefined) { sets.push('dkp_decay_percent = ?'); vals.push(Math.min(100, Math.max(0, parseInt(body.dkpDecayPercent) || 10))); }
       if (body.dkpDecayInactiveDays !== undefined) { sets.push('dkp_decay_inactive_days = ?'); vals.push(Math.min(365, Math.max(1, parseInt(body.dkpDecayInactiveDays) || 14))); }
       if (body.dkpDecayIntervalDays !== undefined) { sets.push('dkp_decay_interval_days = ?'); vals.push(Math.min(90, Math.max(1, parseInt(body.dkpDecayIntervalDays) || 7))); }
-      if (body.accentColor !== undefined) { sets.push('accent_color = ?'); vals.push(body.accentColor || null); }
       if (body.teamIcon !== undefined) { sets.push('team_icon = ?'); vals.push(body.teamIcon || null); }
       if (sets.length > 0) {
         vals.push(teamId);
@@ -151,36 +147,6 @@ export const routes = [
     const settings = await env.DB.prepare('SELECT webhook_url FROM team_settings WHERE team_id = ?').bind(teamId).first();
     if (!settings?.webhook_url) return json({ error: 'No webhook' }, 400);
     await sendDiscord(settings.webhook_url, 'Test Notification', 'Guild Manager webhook is working!', 5793266);
-    return json({ ok: true });
-  } },
-
-  { method: 'GET', pattern: /^\/api\/teams\/([^/]+)\/roles$/, handler: async ({ env, user, params }) => {
-    const teamId = params[1];
-    const member = await requireTeamMember(env, teamId, user.userId);
-    if (!member) return json({ error: 'Not a member' }, 403);
-
-    const roles = await env.DB.prepare('SELECT * FROM custom_roles WHERE team_id = ?').bind(teamId).all();
-    const roleMap = {};
-    for (const r of roles.results) roleMap[r.base_role] = { displayName: r.display_name, color: r.color };
-    return json({ roles: roleMap });
-  } },
-
-  { method: 'PUT', pattern: /^\/api\/teams\/([^/]+)\/roles$/, handler: async ({ request, env, user, params }) => {
-    const teamId = params[1];
-    const member = await requireTeamMember(env, teamId, user.userId);
-    if (!member || member.role !== 'leader') return json({ error: 'Leader only' }, 403);
-    if (!(await isPremiumTeam(env, teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
-
-    const body = await safeJson(request);
-    if (!body) return json({ error: "Invalid request body" }, 400);
-    // body.roles = { leader: {displayName, color}, officer: {...}, member: {...} }
-    await env.DB.prepare('DELETE FROM custom_roles WHERE team_id = ?').bind(teamId).run();
-    for (const [role, data] of Object.entries(body.roles || {})) {
-      if (['leader', 'officer', 'member'].includes(role) && data.displayName?.trim()) {
-        await env.DB.prepare('INSERT INTO custom_roles (team_id, base_role, display_name, color) VALUES (?, ?, ?, ?)')
-          .bind(teamId, role, data.displayName.trim(), data.color || null).run();
-      }
-    }
     return json({ ok: true });
   } },
 ];

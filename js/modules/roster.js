@@ -1,7 +1,7 @@
 // Roster module: Members (game role, team role, activity, notes, kick), Availability (weekly grid +
 // my slots), Requests (pending join requests). ES module; uses shell globals by name. window.Roster.
 
-import { esc } from './timer-cards.js?v=20260923c';
+import { esc } from './timer-cards.js?v=20260923d';
 
 export const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_IDX = [1, 2, 3, 4, 5, 6, 0]; // display order → JS getDay()

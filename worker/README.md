@@ -48,7 +48,7 @@ src/
     teams.js          teams CRUD, member game role, roles, kick/leave/transfer
     invites.js        invite codes, join requests
     bosses.js         bosses (+window/location), kill, edit, templates, history
-    settings.js       settings, webhook test, custom roles, modules, RSVP roles, public timers
+    settings.js       settings (incl. modules, loot mode, RSVP roles, public timers, points name), webhook test
     events.js         events, RSVP by role, caps, lineup, attendance, templates, report, iCal
     members.js        officer notes, heartbeat, availability
     loot.js  dkp.js   Loot & Points (optional module): loot log, wishlist, points, auctions

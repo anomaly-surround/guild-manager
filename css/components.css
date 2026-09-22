@@ -99,7 +99,7 @@
 .tf-wide { grid-column: 1 / -1; }
 .tf-field > span { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
 .tf-field > span em { font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-dim); margin-left: 4px; }
-.tform input, .tform select {
+.tform input, .tform select, .tform textarea {
     width: 100%;
     padding: 9px 11px;
     border: 1px solid var(--border-strong);
@@ -108,7 +108,8 @@
     color: var(--text);
     font-size: 0.95rem;
 }
-.tform input:focus, .tform select:focus { outline: none; border-color: var(--accent); }
+.tform input:focus, .tform select:focus, .tform textarea:focus { outline: none; border-color: var(--accent); }
+.tform textarea { font: inherit; font-size: 0.95rem; resize: vertical; }
 .tf-inline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tf-inline input[type="number"] { width: 72px; }
 .tf-inline input[type="time"] { width: auto; }

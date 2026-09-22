@@ -24,7 +24,7 @@ Guild Manager wins by being the best at these three, not by having seventeen tab
 | **Events** | create, RSVP, attendance, recurrence, reminders, start/end notices, event templates, attendance report | **RSVP by role** (tank / healer / DPS / support, editable labels), sign-up caps, week view, iCal export |
 | **Roster** | members, roles, kick/leave/transfer, notes, availability grid, join requests, invite settings | **game role / class field** per member, availability shown next to events |
 | **Loot & Points** (optional, off by default) | loot log, DKP ledger, awards, decay, wishlist, auctions | nothing new; toggled per team in Settings so guilds that don't run DKP never see it |
-| **Settings** | webhooks, notifications, rules, cleanup, customization | module toggles |
+| **Settings** | webhooks, notifications, rules, cleanup, customization | module toggles, loot mode; dead fields cut (M8) |
 
 ## Cut
 
@@ -58,7 +58,7 @@ first pass, the tabs just disappear.
 | Boss templates, kill history | – | ✓ |
 | Public timer page | – | ✓ |
 | Event templates, attendance report, calendar feed | – | ✓ |
-| Custom role names, no watermark | – | ✓ |
+| Team icon, no watermark | – | ✓ |
 
 Loot & Points stays free so no existing team loses access to its data. Premium is $2/month or $10
 lifetime with a 7-day trial (unchanged).
@@ -100,5 +100,6 @@ lifetime with a 7-day trial (unchanged).
 | M6 | **Cleanup**: delete cut front-end files and worker routes, drop cut tables' data export path, final polish | DONE 2026-09-23: 9 route files deleted, chat auto-delete out of the cron, cut fields out of Settings, 93 dead CSS rules removed, shared styles in `css/components.css`, spinner finally styled |
 | M6.5 | **Shell polish** (user request 2026-09-23): login screen, Your Teams list, header strip, help modal, logo | DONE 2026-09-23: login = hero + sign-in card (card first on phones); teams = dense rows + inline Join/New + empty state; header = brand, help/theme icon buttons, account chip menu (plan chip, Upgrade, Pricing, Log out); Create/Join/Help modals on components.css; help text rewritten (8 sections, stale Dashboard entry gone); new flat logo; dropdowns close on outside click/Esc; join now refreshes the list |
 | M7 | **Loot rotation** (decided 2026-09-23): an ordered member list, take a drop → move to the bottom; officers can bump for attendance. Default loot mode for new teams; DKP stays as the alternative mode | DONE 2026-09-23: `team_settings.loot_mode` (rotation default; teams with a DKP ledger stay on dkp) + `team_members.loot_pos`; `lib/rotation.js` + `routes/rotation.js` (GET order, officer move top/bottom/up/down, leader reset); logging loot moves the recipient down unless keepPosition; Rotation sub-view in points.js (Next chip, last drop, Took loot prefilled, ⋯ menu); mode switch in Settings → Modules; 28-check API test + Chrome desktop/phone walkthrough |
+| M8 | **Post-overhaul candidates** (user: "keep going through the candidates") | (a) DONE 2026-09-23: Discord ping when loot is logged (`on_loot`, general webhook, names the next in rotation). (b) DONE 2026-09-23: Settings rebuilt as `js/modules/settings.js` on the shared form classes; dead fields cut (starting DKP, default event duration, inactive days, accent color, custom role names — none had a consumer); points name now really stored (`points_name`); the garbled transfer-leadership select fixed. (c) drop cut D1 tables — see below |
 
 Each milestone is one push (page) and, when needed, one `wrangler deploy` (worker).

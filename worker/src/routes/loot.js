@@ -2,7 +2,8 @@
 
 import { json, safeJson } from '../lib/http.js';
 import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
-import { lootModeFor, moveMember } from '../lib/rotation.js';
+import { lootModeFor, moveMember, ROTATION_ORDER_SQL } from '../lib/rotation.js';
+import { sendDiscord } from '../lib/discord.js';
 
 export const routes = [
   { method: 'GET', pattern: /^\/api\/teams\/([^/]+)\/loot$/, handler: async ({ env, user, params }) => {
@@ -37,8 +38,24 @@ export const routes = [
       .bind(id, teamId, body.bossId || null, body.bossName || 'Unknown', body.itemName.trim(), body.recipientId, body.dkpCost || 0, user.userId).run();
 
     // Rotation mode: taking a drop sends you to the bottom (unless the officer says it doesn't count)
-    if (body.keepPosition !== true && (await lootModeFor(env, teamId)) === 'rotation') {
+    const mode = await lootModeFor(env, teamId);
+    if (body.keepPosition !== true && mode === 'rotation') {
       await moveMember(env, teamId, body.recipientId, 'bottom');
+    }
+
+    // Discord: "X received Y" (+ who is next in the rotation). on_loot defaults to on; general webhook only.
+    const settings = await env.DB.prepare('SELECT webhook_url, on_loot FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    if (settings?.webhook_url && (settings.on_loot ?? 1)) {
+      const recipient = await env.DB.prepare('SELECT username FROM users WHERE id = ?').bind(body.recipientId).first();
+      const bossPart = body.bossName && body.bossName !== 'Unknown' ? ` from **${body.bossName}**` : '';
+      let next = '';
+      if (mode === 'rotation') {
+        const top = await env.DB.prepare(`SELECT u.username FROM team_members tm JOIN users u ON u.id = tm.user_id WHERE tm.team_id = ? ${ROTATION_ORDER_SQL} LIMIT 1`).bind(teamId).first();
+        if (top?.username) next = `\nNext in the rotation: **${top.username}**`;
+      } else if (body.dkpCost > 0) {
+        next = `\nCost: ${body.dkpCost} points`;
+      }
+      await sendDiscord(settings.webhook_url, `Loot: ${body.itemName.trim()}`, `**${recipient?.username || 'Someone'}** received **${body.itemName.trim()}**${bossPart}.${next}`, 10181046);
     }
 
     // Deduct DKP if cost > 0

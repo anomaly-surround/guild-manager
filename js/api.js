@@ -6,13 +6,12 @@
 // back-navigation. Mutations invalidate by resource bucket. Cleared
 // on logout / token change so user A never sees user B's data.
 const _apiCache = new Map();
-const _resourceWords = ['bosses','events','announcements','wars','loot','dkp','polls','availability','performance','recruitment','files','matches','settings','roles','chat','analytics','wishlist','join-requests','members','rosters','transfer'];
+const _resourceWords = ['bosses','events','announcements','wars','loot','dkp','polls','availability','performance','recruitment','files','matches','settings','chat','analytics','wishlist','join-requests','members','rosters','transfer'];
 const _ttlRules = [
     { match: /\/chat(\?|$)/, ttl: 0 },
     { match: /\/rotation(\?|$)/, ttl: 0 },   // order changes on every loot write; always fresh
     { match: /\/analytics/, ttl: 30000 },
     { match: /\/settings(\?|$)/, ttl: 300000 },
-    { match: /\/roles(\?|$)/, ttl: 300000 },
     { match: /\/auth\/me/, ttl: 300000 },
     { match: /\/api\/teams\/[^/?]+(\?|$)/, ttl: 300000 },
     { match: /\/api\/teams(\?|$)/, ttl: 300000 },

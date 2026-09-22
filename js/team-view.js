@@ -22,7 +22,7 @@ const MODULES = [
     { id: 'events',   label: 'Events',        tabs: ['events'],                  open: () => window.Events ? window.Events.open() : setTimeout(() => openModule('events'), 50) },
     { id: 'roster',   label: 'Roster',        tabs: ['members', 'availability', 'requests'], open: () => window.Roster ? window.Roster.open('members') : setTimeout(() => openModule('roster'), 50) },
     { id: 'points',   label: 'Loot & Points', short: 'Points', tabs: ['rotation', 'loot', 'dkp'], open: () => window.Points ? window.Points.open(teamData?.team?.loot_mode === 'dkp' ? 'loot' : 'rotation') : setTimeout(() => openModule('points'), 50) },
-    { id: 'settings', label: 'Settings',      tabs: ['settings'],                open: () => renderTeamSettings() },
+    { id: 'settings', label: 'Settings',      tabs: ['settings'],                open: () => window.Settings ? window.Settings.open() : setTimeout(() => openModule('settings'), 50) },
 ];
 
 const SUB_VIEWS = {

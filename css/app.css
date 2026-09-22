@@ -80,44 +80,6 @@
         margin-bottom: 12px;
     }
 
-    /* Form */
-    .form-row {
-        display: flex;
-        gap: 10px;
-        align-items: flex-end;
-    }
-
-    .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        flex: 1;
-    }
-
-    .form-group label {
-        font-size: 0.75em;
-        color: var(--text-label);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .form-group input, .form-group select, .form-group textarea {
-        background: var(--bg-input);
-        border: 1px solid var(--border-input);
-        color: var(--text);
-        padding: 10px 14px;
-        border-radius: 8px;
-        font-size: 0.95em;
-        outline: none;
-        color-scheme: var(--color-scheme);
-        font-family: inherit;
-    }
-
-    .form-group input:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 2px rgba(167,139,250,0.2);
-    }
-
     /* Team list */
     
 
@@ -364,7 +326,6 @@
     
     
     @media (max-width: 600px) {
-        /* Header */
         
         
         
@@ -374,29 +335,9 @@
         
         
         
-        #upgradeBtn {
-            padding: 4px 8px !important;
-            font-size: 0.75em !important;
-        }
-        #themeBtn {
-            padding: 4px 8px !important;
-            font-size: 1em !important;
-        }
 
         /* Container */
         
-
-        /* Forms */
-        .form-row {
-            flex-direction: column;
-        }
-        .form-row .form-group {
-            max-width: 100% !important;
-            width: 100% !important;
-        }
-        .form-group input, .form-group select {
-            width: 100%;
-        }
 
         /* Cards & modals */
         .card {
