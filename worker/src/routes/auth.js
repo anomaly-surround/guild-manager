@@ -62,7 +62,7 @@ export const routes = [
 
     // Redirect to frontend with token
     const frontendUrl = 'https://anomaly-surround.github.io/guild-manager';
-    return Response.redirect(`${frontendUrl}?token=${jwt}`, 302);
+    return Response.redirect(`${frontendUrl}?token=${encodeURIComponent(jwt)}`, 302);
   } },
 
   // GET /auth/google — redirect to Google OAuth
@@ -114,7 +114,7 @@ export const routes = [
     }
 
     const jwt = await createToken({ userId: finalUserId, username: googleName }, env.JWT_SECRET);
-    return Response.redirect(`${frontendUrl}?token=${jwt}`, 302);
+    return Response.redirect(`${frontendUrl}?token=${encodeURIComponent(jwt)}`, 302);
     } catch(e) {
       console.error('Google auth error:', e);
       return Response.redirect(frontendUrl, 302);
