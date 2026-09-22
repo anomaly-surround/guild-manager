@@ -1,0 +1,15 @@
+name = "guild-manager"
+main = "src/index.js"
+compatibility_date = "2026-04-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "guild-manager"
+database_id = "1938b20b-8771-47e4-ad55-b9fe5752ef3d"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "guild-manager-files"
