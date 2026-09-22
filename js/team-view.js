@@ -18,7 +18,7 @@ const ICONS = {
 // `tabs` are the legacy teamTab keys each module mounts under; `open` renders its default view.
 const MODULES = [
     { id: 'home',     label: 'Home',          tabs: ['home'],                    open: () => loadAndRenderHome() },
-    { id: 'timers',   label: 'Timers',        tabs: ['timers'],                  open: () => { teamTab = 'timers'; loadTeamBosses(currentTeamId).then(renderTeamView); } },
+    { id: 'timers',   label: 'Timers',        tabs: ['timers'],                  open: () => window.Timers ? window.Timers.open() : setTimeout(() => openModule('timers'), 50) },
     { id: 'events',   label: 'Events',        tabs: ['events'],                  open: () => loadAndRenderEvents() },
     { id: 'roster',   label: 'Roster',        tabs: ['members', 'availability'], open: () => { teamTab = 'members'; renderTeamView(); } },
     { id: 'points',   label: 'Loot & Points', short: 'Points', tabs: ['loot', 'dkp'], open: () => loadAndRenderLoot() },
@@ -78,7 +78,7 @@ function renderTeamView() {
     let tabContent = '';
     switch (teamTab) {
         case 'home':         tabContent = spinner('homeContent'); break;
-        case 'timers':       tabContent = renderTimersTab(team, canManage); break;
+        case 'timers':       tabContent = spinner('timersContent'); break;
         case 'events':       tabContent = spinner('eventsContent'); break;
         case 'members':      tabContent = renderMembersTab(team, members, canManage); break;
         case 'availability': tabContent = spinner('availabilityContent'); break;

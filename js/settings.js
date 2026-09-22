@@ -55,6 +55,18 @@ async function renderTeamSettings() {
             <div id="joinRequestsArea" style="margin-top:12px"></div>
         </div>
 
+        <!-- Public timer page -->
+        <div class="card">
+            <h3>Public timer page</h3>
+            <p style="font-size:0.85em;color:var(--text-muted);margin:6px 0 10px">A read-only page of your boss timers that anyone with the link can open. Pin it in Discord.</p>
+            <label style="font-size:0.85em;color:var(--text-muted)"><input type="checkbox" id="publicTimers" ${settings.publicToken ? 'checked' : ''} onchange="savePublicTimers()" style="accent-color:#5865F2"> Enable public timer page</label>
+            ${settings.publicToken ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+                <code id="publicTimersUrl" style="font-size:0.78em;padding:6px 8px;background:var(--surface-2);border-radius:6px;word-break:break-all">${location.origin}${location.pathname.replace(/[^/]*$/, '')}timers.html?t=${settings.publicToken}</code>
+                <button class="btn btn-sm btn-secondary" onclick="copyPublicTimersUrl()">Copy link</button>
+                <a class="btn btn-sm btn-secondary" href="timers.html?t=${settings.publicToken}" target="_blank" rel="noopener">Open</a>
+            </div>` : ''}
+        </div>
+
         <!-- Discord Notifications -->
         <div class="card">
             <h3>Discord Notifications</h3>
@@ -457,3 +469,16 @@ const saveDkpDecay = guard('saveDkpDecay', async function() {
     });
     showToast(ptsName() + ' decay settings saved');
 });
+
+const savePublicTimers = guard('savePublicTimers', async function() {
+    const on = document.getElementById('publicTimers').checked;
+    const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, { publicTimers: on });
+    if (res.error) { showToast(res.error); return; }
+    showToast(on ? 'Public timer page enabled' : 'Public timer page disabled');
+    await renderTeamSettings();
+});
+
+function copyPublicTimersUrl() {
+    navigator.clipboard.writeText(document.getElementById('publicTimersUrl').textContent);
+    showToast('Link copied');
+}

@@ -25,7 +25,7 @@ Load order matters only for code that runs at load time:
 | `home.js` | Home module (next spawns, upcoming events, roster) |
 | `main.js` | `init()` — always last |
 
-Modules (see OVERHAUL.md): `home`, `bosses` (Timers), `events`, `members` + `availability` (Roster),
+Modules (see OVERHAUL.md): `home`, `modules/timers.js` (Timers, ES module; shares `modules/timer-cards.js` with the public `timers.html`), `events`, `members` + `availability` (Roster),
 `loot` + `dkp` (Loot & Points), `settings`. Shared screens: `auth`, `billing`, `teams`, `team-view`
 (module nav + sub-views: `MODULES` / `SUB_VIEWS`, `openModule()`, `openSubView()`).
 Cut tabs (chat, announcements, polls, files, wars, matches, performance, recruitment, analytics,

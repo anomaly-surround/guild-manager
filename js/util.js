@@ -46,3 +46,9 @@ function showToast(message) {
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 4000);
 }
+
+// Collapsible card sections (used by several tabs)
+function toggleSection(id, el) {
+    document.getElementById(id).classList.toggle('open');
+    el.querySelector('.toggle-arrow').classList.toggle('open');
+}

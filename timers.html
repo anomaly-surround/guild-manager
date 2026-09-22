@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Boss Timers — Guild Manager</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/tokens.css?v=20260922c">
+    <link rel="stylesheet" href="css/shell.css?v=20260922c">
+    <link rel="stylesheet" href="css/timers.css?v=20260922c">
+</head>
+<body>
+    <header class="app-header">
+        <a class="brand" href="./"><img src="icon.svg" alt=""><span>Guild Manager</span></a>
+        <div class="header-spacer"></div>
+        <span class="chip chip-accent">Shared timers</span>
+    </header>
+
+    <main class="container app-main">
+        <div id="pub"><div class="empty-state"><div class="spinner"></div></div></div>
+        <div class="module-footer">Read-only view · Powered by <a href="./">Guild Manager</a></div>
+    </main>
+
+    <script type="module">
+        import { cardHtml, updateCard, sortBosses, bossState, esc, fmtDuration } from './js/modules/timer-cards.js?v=20260922c';
+        const API = 'https://guild-manager.xpropics.workers.dev';
+        const token = new URLSearchParams(location.search).get('t') || '';
+        const pub = document.getElementById('pub');
+        let team = null, bosses = [];
+
+        function summary(now) {
+            if (!bosses.length) return 'No timers yet';
+            const up = bosses.filter(b => ['spawned', 'window'].includes(bossState(b, now).key)).length;
+            const next = sortBosses(bosses.filter(b => !['spawned', 'window'].includes(bossState(b, now).key)), now)[0];
+            const parts = [`${bosses.length} timer${bosses.length !== 1 ? 's' : ''}`];
+            if (up) parts.push(`<span class="t-up">${up} up now</span>`);
+            if (next) parts.push(`next: <b>${esc(next.name)}</b> in ${fmtDuration(Math.max(60000, next.next_spawn - now))}`);
+            return parts.join(' · ');
+        }
+
+        function render() {
+            const now = Date.now();
+            document.title = `${team.name} — Boss Timers`;
+            pub.innerHTML = `
+                <div class="pub-head"><h1>${esc(team.name)}</h1><span class="t-dim" data-role="summary">${summary(now)}</span></div>
+                <div class="tcards">${sortBosses(bosses, now).map(b => cardHtml(b, { readOnly: true }, now)).join('') || '<div class="t-empty card"><div class="t-empty-title">No timers yet</div></div>'}</div>`;
+        }
+
+        async function load() {
+            if (!token) { pub.innerHTML = '<div class="pub-error">This link is missing its token.</div>'; return; }
+            try {
+                const r = await fetch(`${API}/public/timers/${encodeURIComponent(token)}`);
+                const data = await r.json();
+                if (!r.ok || data.error) { pub.innerHTML = `<div class="pub-error">${esc(data.error || 'This timer page is not available.')}<br><span class="t-dim">The team may have disabled sharing.</span></div>`; return; }
+                team = data.team; bosses = data.bosses || [];
+                render();
+            } catch (e) {
+                pub.innerHTML = '<div class="pub-error">Could not load timers. Check your connection and retry.</div>';
+            }
+        }
+
+        setInterval(() => {
+            if (!team) return;
+            const now = Date.now();
+            for (const b of bosses) { const el = pub.querySelector(`[data-boss-id="${b.id}"]`); if (el) updateCard(el, b, now); }
+            const s = pub.querySelector('[data-role="summary"]'); if (s) s.innerHTML = summary(now);
+        }, 1000);
+        setInterval(load, 30000);
+        load();
+    </script>
+</body>
+</html>

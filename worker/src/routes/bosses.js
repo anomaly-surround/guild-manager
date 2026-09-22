@@ -52,15 +52,14 @@ export const routes = [
     const alertMs = (body.alertMinutes || 5) * 60000;
     const warned = (nextSpawn - Date.now()) <= alertMs ? 1 : 0;
 
-    // Ensure auto_reset_minutes column exists
-    await env.DB.exec('ALTER TABLE bosses ADD COLUMN auto_reset_minutes INTEGER DEFAULT 5').catch(() => {});
-
-    await env.DB.prepare(`INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, auto_reset_minutes, next_spawn, warned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    const windowMs = Math.max(0, Math.min(86400000, parseInt(body.windowMs) || 0));
+    const location = body.location ? String(body.location).trim().slice(0, 80) : null;
+    await env.DB.prepare(`INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, auto_reset_minutes, next_spawn, warned, window_ms, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(id, teamId, body.name.trim(), body.type,
         body.intervalMs || null, body.fixedTime || null,
         body.weeklyDay ?? null, body.weeklyTime || null,
         body.biweeklyDays ? JSON.stringify(body.biweeklyDays) : body.twiceDailyTimes ? JSON.stringify(body.twiceDailyTimes) : null,
-        body.alertMinutes || 5, body.autoResetMinutes || 5, nextSpawn, warned).run();
+        body.alertMinutes || 5, body.autoResetMinutes || 5, nextSpawn, warned, windowMs, location).run();
 
     return json({ ok: true, id });
   } },
@@ -89,6 +88,59 @@ export const routes = [
     await env.DB.prepare('INSERT INTO boss_kill_log (id, team_id, boss_id, boss_name, killed_at, killed_by) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(crypto.randomUUID(), teamId, bossId, boss.name, deathTime, user.userId).run();
 
+    return json({ ok: true });
+  } },
+
+  // PUT /api/teams/:id/bosses/:bossId — edit a boss (officers+). Schedule changes recompute next_spawn.
+  { method: 'PUT', pattern: /^\/api\/teams\/([^/]+)\/bosses\/([^/]+)$/, handler: async ({ request, env, user, params }) => {
+    const [, teamId, bossId] = params;
+    const member = await requireTeamMember(env, teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
+    const boss = await env.DB.prepare('SELECT * FROM bosses WHERE id = ? AND team_id = ?').bind(bossId, teamId).first();
+    if (!boss) return json({ error: 'Boss not found' }, 404);
+
+    const sets = [], vals = [];
+    if (body.name !== undefined) {
+      const name = String(body.name).trim();
+      if (!name) return json({ error: 'Name required' }, 400);
+      if (name.length > 100) return json({ error: 'Name too long (max 100 chars)' }, 400);
+      sets.push('name = ?'); vals.push(name);
+    }
+    if (body.location !== undefined) { sets.push('location = ?'); vals.push(body.location ? String(body.location).trim().slice(0, 80) : null); }
+    if (body.alertMinutes !== undefined) { sets.push('alert_minutes = ?'); vals.push(Math.max(1, Math.min(1440, parseInt(body.alertMinutes) || 5))); }
+    if (body.autoResetMinutes !== undefined) { sets.push('auto_reset_minutes = ?'); vals.push(Math.max(1, Math.min(1440, parseInt(body.autoResetMinutes) || 5))); }
+    if (body.windowMs !== undefined) { sets.push('window_ms = ?'); vals.push(Math.max(0, Math.min(86400000, parseInt(body.windowMs) || 0))); }
+
+    const scheduleChanged = body.type !== undefined || body.intervalMs !== undefined || body.fixedTime !== undefined ||
+      body.weeklyDay !== undefined || body.weeklyTime !== undefined || body.biweeklyDays !== undefined || body.twiceDailyTimes !== undefined;
+    if (scheduleChanged) {
+      const type = body.type || boss.type;
+      const settings = await env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
+      const tz = settings?.timezone || 'Asia/Manila';
+      const intervalMs = body.intervalMs ?? boss.interval_ms;
+      const fixedTime = body.fixedTime ?? boss.fixed_time;
+      const weeklyDay = body.weeklyDay ?? boss.weekly_day;
+      const weeklyTime = body.weeklyTime ?? boss.weekly_time;
+      const days = body.biweeklyDays ? JSON.stringify(body.biweeklyDays) : body.twiceDailyTimes ? JSON.stringify(body.twiceDailyTimes) : boss.biweekly_days;
+      let nextSpawn;
+      if (type === 'interval') {
+        if (!intervalMs) return json({ error: 'Interval required' }, 400);
+        nextSpawn = (boss.last_death || Date.now()) + intervalMs;
+        if (nextSpawn < Date.now()) nextSpawn = Date.now() + intervalMs;
+      } else if (type === 'fixed') nextSpawn = getNextFixedSpawn(fixedTime, tz);
+      else if (type === 'weekly') nextSpawn = getNextWeeklySpawn(weeklyDay, weeklyTime, tz);
+      else if (type === 'biweekly') nextSpawn = getNextBiweeklySpawn(days, tz);
+      else if (type === 'twicedaily') nextSpawn = getNextTwiceDailySpawn(days, tz);
+      else return json({ error: 'Invalid type' }, 400);
+      sets.push('type = ?', 'interval_ms = ?', 'fixed_time = ?', 'weekly_day = ?', 'weekly_time = ?', 'biweekly_days = ?', 'next_spawn = ?', "status = 'waiting'", 'spawned_at = NULL', 'auto_reset_at = NULL', 'warned = 0', 'spawn_notified = 0');
+      vals.push(type, type === 'interval' ? intervalMs : null, type === 'fixed' ? fixedTime : null, type === 'weekly' ? weeklyDay : null, type === 'weekly' ? weeklyTime : null, (type === 'biweekly' || type === 'twicedaily') ? days : null, nextSpawn);
+    }
+    if (sets.length === 0) return json({ ok: true });
+    vals.push(bossId);
+    await env.DB.prepare(`UPDATE bosses SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
     return json({ ok: true });
   } },
 

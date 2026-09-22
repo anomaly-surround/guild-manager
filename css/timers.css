@@ -1,0 +1,180 @@
+/* Timers module: toolbar, timer cards with countdown ring, modals/forms. Shared with timers.html. */
+
+.timers-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.timers-search {
+    flex: 1;
+    min-width: 0;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.9rem;
+}
+.timers-search:focus { outline: none; border-color: var(--accent); }
+.timers-summary { font-size: 0.8rem; color: var(--text-muted); margin: 0 2px 12px; min-height: 1em; }
+.timers-summary b { color: var(--text); }
+.t-up { color: var(--danger); font-weight: 600; }
+.t-dim { color: var(--text-dim); font-size: 0.8rem; }
+
+/* dropdown menu */
+.menu { position: relative; }
+.menu > summary { list-style: none; padding: 9px 12px; }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu-list {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 30;
+    min-width: 200px;
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+.menu-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+.menu-item:hover { background: var(--surface-2); }
+.menu-item-danger { color: var(--danger); }
+
+/* rows (dense: 20+ bosses is the normal case) */
+.tcards { display: flex; flex-direction: column; gap: 6px; }
+.tcard {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    grid-template-areas: "ring body right" "actions actions actions";
+    gap: 4px 10px;
+    align-items: center;
+    padding: 8px 10px 8px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: border-color 0.2s, background 0.2s;
+}
+.tcard.state-soon { border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+.tcard.state-window, .tcard.state-spawned { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); }
+.tcard.state-spawned { background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
+
+.tcard-ring { grid-area: ring; position: relative; width: 40px; height: 40px; }
+.tcard-ring svg { width: 40px; height: 40px; transform: rotate(-90deg); }
+.tcard-ring .ring-bg { fill: none; stroke: var(--surface-3); stroke-width: 5; }
+.tcard-ring .ring-fg { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 0.9s linear, stroke 0.3s; }
+.state-soon .ring-fg { stroke: var(--warn); }
+.state-window .ring-fg, .state-spawned .ring-fg { stroke: var(--danger); }
+.tcard-icon { position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; color: var(--danger); }
+.state-spawned .tcard-icon { animation: t-pulse 1.2s ease-in-out infinite; }
+@keyframes t-pulse { 50% { opacity: 0.35; } }
+
+.tcard-body { grid-area: body; min-width: 0; }
+.tcard-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tcard-name { margin: 0; font-size: 0.95rem; font-weight: 700; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcard-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcard-sub { display: none; }
+
+.tcard-right { grid-area: right; text-align: right; }
+.tcard-countdown { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 1.1rem; font-weight: 700; color: var(--success); line-height: 1.1; }
+.state-soon .tcard-countdown { color: var(--warn); }
+.state-window .tcard-countdown, .state-spawned .tcard-countdown { color: var(--danger); }
+.tcard-at { font-size: 0.68rem; color: var(--text-dim); margin-top: 1px; white-space: nowrap; }
+
+.tcard-actions { grid-area: actions; display: flex; align-items: center; gap: 4px; }
+.tcard-secondary { display: none; gap: 4px; }
+.tcard.open .tcard-secondary { display: flex; }
+.tbtn-kill { padding: 5px 10px; font-size: 0.78rem; background: var(--success-soft); color: var(--success); border-color: transparent; }
+.tbtn-kill:hover { background: color-mix(in srgb, var(--success) 28%, transparent); }
+.tbtn-icon {
+    width: 30px; height: 30px; display: grid; place-items: center;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface-2); color: var(--text-muted); cursor: pointer;
+}
+.tbtn-icon svg { width: 15px; height: 15px; }
+.tbtn-icon:hover { color: var(--text); border-color: var(--border-strong); }
+.tbtn-icon-danger:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+
+@media (min-width: 640px) {
+    .tcard { grid-template-columns: 40px minmax(0, 1fr) auto auto; grid-template-areas: "ring body right actions"; padding: 8px 12px; }
+    .tcard-sub { display: block; font-size: 0.72rem; color: var(--text-dim); margin-top: 1px; }
+    .tcard-actions { margin-left: 8px; }
+    .tcard-more { display: none; }
+    .tcard-secondary { display: flex; }
+}
+
+/* empty state */
+.t-empty { grid-column: 1 / -1; padding: 28px 20px; text-align: center; }
+.t-empty-title { font-weight: 700; font-size: 1.05rem; margin-bottom: 6px; }
+.t-empty-sub { color: var(--text-muted); font-size: 0.875rem; max-width: 420px; margin: 0 auto 14px; }
+
+/* modals + forms */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 0;
+}
+.modal-card {
+    width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    margin: 0;
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.modal-card h2 { font-size: 1.15rem; margin: 0 0 10px; }
+@media (min-width: 640px) {
+    .modal-backdrop { align-items: center; padding: 20px; }
+    .modal-card { width: 520px; max-width: 100%; border-radius: var(--radius-lg); padding: 22px; }
+    .modal-card.modal-wide { width: 620px; }
+}
+.tform { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tf-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.tf-wide { grid-column: 1 / -1; }
+.tf-field > span { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.tf-field > span em { font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-dim); margin-left: 4px; }
+.tform input, .tform select {
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.95rem;
+}
+.tform input:focus, .tform select:focus { outline: none; border-color: var(--accent); }
+.tf-inline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tf-inline input[type="number"] { width: 72px; }
+.tf-inline input[type="time"] { width: auto; }
+.tf-inline b { color: var(--text-muted); font-weight: 600; }
+.tf-amp { color: var(--text-dim); padding: 0 2px; }
+.tf-help { grid-column: 1 / -1; font-size: 0.78rem; color: var(--text-dim); margin: 0; line-height: 1.4; }
+.tf-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+@media (max-width: 480px) { .tform { grid-template-columns: 1fr; } }
+
+.t-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+.t-row-sm { font-size: 0.82rem; }
+.t-h3 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 14px 0 4px; }
+
+/* public page */
+.pub-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 6px 0 14px; flex-wrap: wrap; }
+.pub-head h1 { font-size: 1.3rem; margin: 0; letter-spacing: -0.01em; }
+.pub-head .t-dim { font-size: 0.8rem; }
+.pub-error { text-align: center; padding: 40px 16px; color: var(--text-muted); }

@@ -54,6 +54,7 @@ custom role names, CSV export). Premium needs redefining; proposal, to decide be
 - Free: 1 team, 5 members, up to 10 timers, 1 webhook.
 - Premium: unlimited teams and members, per-channel webhooks, boss templates, public timer page,
   kill history, attendance report, iCal, Loot & Points module.
+- Until M5 the public timer page is ungated (it shipped in M2 without a premium check).
 
 ## Visual direction
 
@@ -85,7 +86,7 @@ custom role names, CSV export). Premium needs redefining; proposal, to decide be
 |---|---|---|
 | M0 | Plan locked (this file), cut list confirmed | committed |
 | M1 | **Shell + design system**: tokens, components, top nav, team switcher, Home; cut tabs hidden | DONE 2026-09-22: new shell renders every kept tab; verified desktop + 390/360px |
-| M2 | **Timers rebuild**: module, new cards, spawn windows, next-up ordering, public timer page | works on phone width and desktop; webhook + alerts unchanged |
+| M2 | **Timers rebuild**: module, new cards, spawn windows, next-up ordering, public timer page | DONE 2026-09-22: `js/modules/timers.js` (ES module), dense rows w/ countdown ring, location, spawn windows, edit endpoint, `timers.html` public page; verified desktop + phone with 20 bosses |
 | M3 | **Events rebuild**: module, RSVP by role, caps, week view, iCal | as above |
 | M4 | **Roster rebuild**: members + game role + availability; Settings with module toggles | as above |
 | M5 | **Loot & Points** as an optional module; premium redefinition | toggle works; premium gates moved |

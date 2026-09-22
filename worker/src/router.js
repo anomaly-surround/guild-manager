@@ -10,6 +10,7 @@ import { ensureSchema } from './db/schema.js';
 
 import { routes as authRoutes } from './routes/auth.js';
 import { routes as billingRoutes } from './routes/billing.js';
+import { routes as publicRoutes } from './routes/public.js';
 import { routes as teamRoutes } from './routes/teams.js';
 import { routes as inviteRoutes } from './routes/invites.js';
 import { routes as bossRoutes } from './routes/bosses.js';
@@ -28,7 +29,7 @@ import { routes as performanceRoutes } from './routes/performance.js';
 import { routes as recruitmentRoutes } from './routes/recruitment.js';
 import { routes as fileRoutes } from './routes/files.js';
 
-const PUBLIC_ROUTES = [...authRoutes, ...billingRoutes];
+const PUBLIC_ROUTES = [...authRoutes, ...billingRoutes, ...publicRoutes];
 const PROTECTED_ROUTES = [
   ...teamRoutes, ...inviteRoutes, ...bossRoutes, ...settingsRoutes, ...eventRoutes,
   ...announcementRoutes, ...memberRoutes, ...chatRoutes, ...lootRoutes, ...dkpRoutes,

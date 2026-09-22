@@ -15,8 +15,8 @@ setInterval(() => {
             sendDesktopNotif('Boss Spawning Soon', `${boss.name} spawns in ${minLeft} min`, `warn-${boss.id}`);
         }
 
-        // Update UI (only if on timers tab)
-        if (teamTab !== 'timers' && teamTab !== 'home') continue;
+        // Update Home rows (the Timers module runs its own tick)
+        if (teamTab !== 'home') continue;
         const el = document.querySelector(`[data-boss-id="${boss.id}"] .boss-countdown`);
         if (!el) continue;
         if (isSpawned) {
@@ -28,19 +28,6 @@ setInterval(() => {
         }
     }
 }, 1000);
-
-// Refresh boss data from server every 15 seconds
-setInterval(async () => {
-    if (!currentTeamId || teamTab !== 'timers') return;
-    await loadTeamBosses(currentTeamId);
-    // Only update boss list area, not the add form
-    const bossList = document.getElementById('bossListArea');
-    if (bossList) {
-        const team = teamData.team;
-        const canManage = team.my_role === 'leader' || team.my_role === 'officer';
-        bossList.innerHTML = renderBossListOnly(canManage);
-    }
-}, 15000);
 
 // Tick — update event countdowns every second
 setInterval(() => {

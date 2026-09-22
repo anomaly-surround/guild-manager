@@ -43,12 +43,15 @@ export async function handleScheduled(env) {
 
           if (remaining <= 0) {
             const resetMin = boss.auto_reset_minutes ?? 5;
+            const resetMs = boss.window_ms > 0 ? boss.window_ms : resetMin * 60000;
             if (!boss.spawn_notified && boss.on_spawn && bossHook) {
               discordSends.push(sendDiscord(bossHook, `${boss.name} has SPAWNED!`,
-                `**${boss.name}** is now available!\nAuto-reset in ${resetMin} minute${resetMin !== 1 ? 's' : ''} if not killed.`, 15548997));
+                boss.window_ms > 0
+                  ? `**${boss.name}**'s spawn window is open for the next ${Math.round(boss.window_ms / 60000)} minutes.`
+                  : `**${boss.name}** is now available!\nAuto-reset in ${resetMin} minute${resetMin !== 1 ? 's' : ''} if not killed.`, 15548997));
             }
             dbWrites.push(env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = ?, auto_reset_at = ?, spawn_notified = 1 WHERE id = ?')
-              .bind('spawned', now, now + resetMin * 60000, boss.id));
+              .bind('spawned', now, now + resetMs, boss.id));
           }
         } else if (boss.status === 'spawned' && boss.auto_reset_at != null && boss.auto_reset_at <= now) {
           const tz = boss.timezone || 'Asia/Manila';

@@ -42,6 +42,7 @@ export const routes = [
       teamIcon: settings?.team_icon || '',
       invitesEnabled: settings?.invites_enabled ?? true,
       inviteApproval: !!(settings?.invite_approval),
+      publicToken: settings?.public_token || null,
     });
   } },
 
@@ -55,7 +56,12 @@ export const routes = [
 
     const body = await safeJson(request);
     if (!body) return json({ error: "Invalid request body" }, 400);
-    const existing = await env.DB.prepare('SELECT 1 FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    let existing = await env.DB.prepare('SELECT 1 FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    if (!existing) {
+      // First save for this team: create the row, then apply every field through the update path below.
+      await env.DB.prepare('INSERT INTO team_settings (team_id, timezone) VALUES (?, ?)').bind(teamId, body.timezone || 'Asia/Manila').run();
+      existing = true;
+    }
 
     if (existing) {
       const sets = [];
@@ -81,6 +87,7 @@ export const routes = [
         if (member.role !== 'leader') return json({ error: 'Only the leader can change invite settings' }, 403);
         sets.push('invite_approval = ?'); vals.push(body.inviteApproval ? 1 : 0);
       }
+      if (body.publicTimers !== undefined) { sets.push('public_token = ?'); vals.push(body.publicTimers ? crypto.randomUUID().replace(/-/g, '') : null); }
       if (body.membersCreateEvents !== undefined) { sets.push('members_create_events = ?'); vals.push(body.membersCreateEvents ? 1 : 0); }
       if (body.autoDeleteEventsDays !== undefined) { sets.push('auto_delete_events_days = ?'); vals.push(body.autoDeleteEventsDays); }
       if (body.autoDeleteChatDays !== undefined) { sets.push('auto_delete_chat_days = ?'); vals.push(body.autoDeleteChatDays); }
