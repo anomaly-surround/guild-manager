@@ -39,6 +39,20 @@ button, input, select, textarea { font-family: inherit; }
     user-select: none;
 }
 .brand img { height: 24px; width: 24px; border-radius: 6px; }
+.header-spacer { flex: 1; }
+.icon-btn {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
 .icon-btn:hover { background: var(--surface-3); border-color: var(--border-strong); }
 
 /* ---------- Layout ---------- */
