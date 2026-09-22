@@ -19,7 +19,7 @@ const ICONS = {
 const MODULES = [
     { id: 'home',     label: 'Home',          tabs: ['home'],                    open: () => loadAndRenderHome() },
     { id: 'timers',   label: 'Timers',        tabs: ['timers'],                  open: () => window.Timers ? window.Timers.open() : setTimeout(() => openModule('timers'), 50) },
-    { id: 'events',   label: 'Events',        tabs: ['events'],                  open: () => loadAndRenderEvents() },
+    { id: 'events',   label: 'Events',        tabs: ['events'],                  open: () => window.Events ? window.Events.open() : setTimeout(() => openModule('events'), 50) },
     { id: 'roster',   label: 'Roster',        tabs: ['members', 'availability'], open: () => { teamTab = 'members'; renderTeamView(); } },
     { id: 'points',   label: 'Loot & Points', short: 'Points', tabs: ['loot', 'dkp'], open: () => loadAndRenderLoot() },
     { id: 'settings', label: 'Settings',      tabs: ['settings'],                open: () => renderTeamSettings() },

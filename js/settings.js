@@ -67,6 +67,16 @@ async function renderTeamSettings() {
             </div>` : ''}
         </div>
 
+        <!-- RSVP roles -->
+        <div class="card">
+            <h3>Event RSVP roles</h3>
+            <p style="font-size:0.85em;color:var(--text-muted);margin:6px 0 10px">Members pick one of these when they RSVP, so you can see the tank / healer / DPS split at a glance. Comma-separated, up to 8.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <input type="text" id="rsvpRoles" value="${escapeHtml((settings.rsvpRoles || ['Tank','Healer','DPS','Support']).join(', '))}" maxlength="200" style="flex:1;min-width:220px">
+                <button class="btn btn-primary btn-sm" onclick="saveRsvpRoles()">Save</button>
+            </div>
+        </div>
+
         <!-- Discord Notifications -->
         <div class="card">
             <h3>Discord Notifications</h3>
@@ -482,3 +492,11 @@ function copyPublicTimersUrl() {
     navigator.clipboard.writeText(document.getElementById('publicTimersUrl').textContent);
     showToast('Link copied');
 }
+
+const saveRsvpRoles = guard('saveRsvpRoles', async function() {
+    const list = document.getElementById('rsvpRoles').value.split(',').map(s => s.trim()).filter(Boolean).slice(0, 8);
+    const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, { rsvpRoles: list });
+    if (res.error) { showToast(res.error); return; }
+    showToast('RSVP roles saved');
+    await renderTeamSettings();
+});

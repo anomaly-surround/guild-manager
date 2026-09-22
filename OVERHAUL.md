@@ -87,7 +87,7 @@ custom role names, CSV export). Premium needs redefining; proposal, to decide be
 | M0 | Plan locked (this file), cut list confirmed | committed |
 | M1 | **Shell + design system**: tokens, components, top nav, team switcher, Home; cut tabs hidden | DONE 2026-09-22: new shell renders every kept tab; verified desktop + 390/360px |
 | M2 | **Timers rebuild**: module, new cards, spawn windows, next-up ordering, public timer page | DONE 2026-09-22: `js/modules/timers.js` (ES module), dense rows w/ countdown ring, location, spawn windows, edit endpoint, `timers.html` public page; verified desktop + phone with 20 bosses |
-| M3 | **Events rebuild**: module, RSVP by role, caps, week view, iCal | as above |
+| M3 | **Events rebuild**: module, RSVP by role, caps, week view, iCal | DONE 2026-09-22: `js/modules/events.js`, dense rows, RSVP roles (team-editable), caps w/ 409, week view, per-event lineup (replaces Rosters), attendance modal, iCal feed, edit endpoint |
 | M4 | **Roster rebuild**: members + game role + availability; Settings with module toggles | as above |
 | M5 | **Loot & Points** as an optional module; premium redefinition | toggle works; premium gates moved |
 | M6 | **Cleanup**: delete cut front-end files and worker routes, drop cut tables' data export path, final polish | repo has no dead code; README updated |

@@ -29,33 +29,6 @@ setInterval(() => {
     }
 }, 1000);
 
-// Tick — update event countdowns every second
-setInterval(() => {
-    if (!currentTeamId || teamTab !== 'events') return;
-    for (const e of teamEvents) {
-        const el = document.querySelector(`[data-event-id="${e.id}"] .event-countdown`);
-        if (!el) continue;
-        const remaining = e.event_time - Date.now();
-        const isLive = remaining <= 0 && remaining > -(e.duration_minutes || 60) * 60000;
-        if (isLive) {
-            el.innerHTML = '<span style="color:#ef4444;font-weight:600"> LIVE NOW</span>';
-        } else if (remaining > 0) {
-            el.textContent = ` (in ${formatTimeLong(remaining)})`;
-        } else {
-            el.textContent = '';
-        }
-    }
-}, 1000);
-
-// Refresh event data from server every 30 seconds
-setInterval(async () => {
-    if (!currentTeamId || teamTab !== 'events') return;
-    const data = await api('GET', `/api/teams/${currentTeamId}/events`);
-    teamEvents = data.events || [];
-    const el = document.getElementById('eventsListArea');
-    if (el) el.innerHTML = renderEventsListOnly();
-}, 30000);
-
 // Activity heartbeat every 5 minutes
 setInterval(async () => {
     if (!currentTeamId) return;

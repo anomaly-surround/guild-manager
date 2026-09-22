@@ -414,7 +414,8 @@ async function initDB(db) {
     || await db.prepare("SELECT google_id FROM users LIMIT 1").first().then(() => false).catch(() => true)
     || await db.prepare("SELECT invites_enabled FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
     || await db.prepare("SELECT 1 FROM join_requests LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT public_token FROM team_settings LIMIT 1").first().then(() => false).catch(() => true);
+    || await db.prepare("SELECT public_token FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
+    || await db.prepare("SELECT rsvp_roles FROM team_settings LIMIT 1").first().then(() => false).catch(() => true);
   if (needsMigrations) {
     const migrations = [
       'ALTER TABLE users ADD COLUMN premium INTEGER DEFAULT 0',
@@ -456,6 +457,10 @@ async function initDB(db) {
       'ALTER TABLE bosses ADD COLUMN window_ms INTEGER DEFAULT 0',
       'ALTER TABLE bosses ADD COLUMN location TEXT',
       'ALTER TABLE team_settings ADD COLUMN public_token TEXT',
+      'ALTER TABLE events ADD COLUMN max_going INTEGER DEFAULT 0',
+      'ALTER TABLE events ADD COLUMN lineup TEXT',
+      'ALTER TABLE event_rsvps ADD COLUMN role TEXT',
+      'ALTER TABLE team_settings ADD COLUMN rsvp_roles TEXT',
       `CREATE TABLE IF NOT EXISTS join_requests (
         id TEXT PRIMARY KEY,
         team_id TEXT NOT NULL,

@@ -3,7 +3,7 @@
 // (teamBosses, teamData, teamTab, currentTeamId, api, showToast, guard, loadTeamBosses, renderTeamView).
 // Exposed to the shell as window.Timers.
 
-import { cardHtml, updateCard, bossState, sortBosses, esc, DAY, fmtDuration } from './timer-cards.js?v=20260922c';
+import { cardHtml, updateCard, bossState, sortBosses, esc, DAY, fmtDuration } from './timer-cards.js?v=20260922d';
 
 let search = '';
 let tickTimer = null;
