@@ -26,7 +26,7 @@ export async function open(which = 'members') {
     tab = which;
     teamTab = which;
     renderTeamView();
-    await load();
+    await Promise.all([reloadTeam(), load()]);
     if (!['members', 'availability', 'requests'].includes(teamTab)) return;
     render();
     startLoop();
