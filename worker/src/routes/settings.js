@@ -45,6 +45,7 @@ export const routes = [
       inviteApproval: !!(settings?.invite_approval),
       publicToken: settings?.public_token || null,
       rsvpRoles: parseRoles(settings?.rsvp_roles),
+      modules: (() => { try { return settings?.modules ? JSON.parse(settings.modules) : {}; } catch { return {}; } })(),
     });
   } },
 
@@ -58,7 +59,8 @@ export const routes = [
 
     const body = await safeJson(request);
     if (!body) return json({ error: "Invalid request body" }, 400);
-    let existing = await env.DB.prepare('SELECT 1 FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    let existingRow = await env.DB.prepare('SELECT modules FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    let existing = existingRow;
     if (!existing) {
       // First save for this team: create the row, then apply every field through the update path below.
       await env.DB.prepare('INSERT INTO team_settings (team_id, timezone) VALUES (?, ?)').bind(teamId, body.timezone || 'Asia/Manila').run();
@@ -88,6 +90,12 @@ export const routes = [
       if (body.inviteApproval !== undefined) {
         if (member.role !== 'leader') return json({ error: 'Only the leader can change invite settings' }, 403);
         sets.push('invite_approval = ?'); vals.push(body.inviteApproval ? 1 : 0);
+      }
+      if (body.modules !== undefined && typeof body.modules === 'object') {
+        const cur = (() => { try { return JSON.parse(existingRow?.modules || '{}'); } catch { return {}; } })();
+        const next = { ...cur };
+        if (body.modules.points !== undefined) next.points = !!body.modules.points;
+        sets.push('modules = ?'); vals.push(JSON.stringify(next));
       }
       if (body.rsvpRoles !== undefined) {
         const list = Array.isArray(body.rsvpRoles) ? body.rsvpRoles.map(r => String(r).trim().slice(0, 20)).filter(Boolean).slice(0, 8) : [];

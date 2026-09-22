@@ -20,15 +20,16 @@ const MODULES = [
     { id: 'home',     label: 'Home',          tabs: ['home'],                    open: () => loadAndRenderHome() },
     { id: 'timers',   label: 'Timers',        tabs: ['timers'],                  open: () => window.Timers ? window.Timers.open() : setTimeout(() => openModule('timers'), 50) },
     { id: 'events',   label: 'Events',        tabs: ['events'],                  open: () => window.Events ? window.Events.open() : setTimeout(() => openModule('events'), 50) },
-    { id: 'roster',   label: 'Roster',        tabs: ['members', 'availability'], open: () => { teamTab = 'members'; renderTeamView(); } },
+    { id: 'roster',   label: 'Roster',        tabs: ['members', 'availability', 'requests'], open: () => window.Roster ? window.Roster.open('members') : setTimeout(() => openModule('roster'), 50) },
     { id: 'points',   label: 'Loot & Points', short: 'Points', tabs: ['loot', 'dkp'], open: () => loadAndRenderLoot() },
     { id: 'settings', label: 'Settings',      tabs: ['settings'],                open: () => renderTeamSettings() },
 ];
 
 const SUB_VIEWS = {
     roster: [
-        { tab: 'members',      label: () => `Members (${teamData?.members?.length ?? 0})`, open: () => { teamTab = 'members'; renderTeamView(); } },
-        { tab: 'availability', label: () => 'Availability',                                open: () => loadAndRenderAvailability() },
+        { tab: 'members',      label: () => `Members (${teamData?.members?.length ?? 0})`, open: () => window.Roster.open('members') },
+        { tab: 'availability', label: () => 'Availability',                                open: () => window.Roster.open('availability') },
+        { tab: 'requests',     label: () => { const n = window.Roster?.pendingCount() || 0; return n ? `Requests (${n})` : 'Requests'; }, officer: true, open: () => window.Roster.open('requests') },
     ],
     points: [
         { tab: 'loot', label: () => 'Loot',      open: () => loadAndRenderLoot() },
@@ -72,7 +73,8 @@ function renderTeamView() {
     const team = teamData.team;
     const members = teamData.members;
     const canManage = team.my_role === 'leader' || team.my_role === 'officer';
-    const mod = MODULES.find(m => m.tabs.includes(teamTab)) || MODULES[0];
+    const enabled = MODULES.filter(m => m.id !== 'points' || team.modules?.points !== false);
+    const mod = enabled.find(m => m.tabs.includes(teamTab)) || MODULES[0];
 
     const spinner = (id) => `<div id="${id}"><div class="empty-state"><div class="spinner"></div></div></div>`;
     let tabContent = '';
@@ -80,15 +82,16 @@ function renderTeamView() {
         case 'home':         tabContent = spinner('homeContent'); break;
         case 'timers':       tabContent = spinner('timersContent'); break;
         case 'events':       tabContent = spinner('eventsContent'); break;
-        case 'members':      tabContent = renderMembersTab(team, members, canManage); break;
-        case 'availability': tabContent = spinner('availabilityContent'); break;
+        case 'members':
+        case 'availability':
+        case 'requests':     tabContent = spinner('rosterContent'); break;
         case 'loot':         tabContent = spinner('lootContent'); break;
         case 'dkp':          tabContent = spinner('dkpContent'); break;
         case 'settings':     tabContent = spinner('settingsContent'); break;
     }
 
-    const subs = SUB_VIEWS[mod.id];
-    const subNav = subs ? `<div class="sub-nav">${subs.map(s =>
+    const subs = (SUB_VIEWS[mod.id] || []).filter(s => !s.officer || canManage);
+    const subNav = subs.length ? `<div class="sub-nav">${subs.map(s =>
         `<button class="${s.tab === teamTab ? 'active' : ''}" onclick="openSubView('${mod.id}','${s.tab}')">${escapeHtml(s.label())}</button>`
     ).join('')}</div>` : '';
 
@@ -105,7 +108,7 @@ function renderTeamView() {
             </div>
         </div>
         <nav class="module-nav" aria-label="Team sections">
-            ${MODULES.map(m => `<button class="${m.id === mod.id ? 'active' : ''}" onclick="openModule('${m.id}')">${ICONS[m.id]}<span class="lbl-full">${m.label}</span><span class="lbl-short">${m.short || m.label}</span></button>`).join('')}
+            ${enabled.map(m => `<button class="${m.id === mod.id ? 'active' : ''}" onclick="openModule('${m.id}')">${ICONS[m.id]}<span class="lbl-full">${m.label}</span><span class="lbl-short">${m.short || m.label}</span></button>`).join('')}
         </nav>
         ${subNav}
         <section class="module-content">${tabContent}</section>

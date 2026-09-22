@@ -52,7 +52,14 @@ async function renderTeamSettings() {
                 <label><input type="checkbox" id="invitesEnabled" ${settings.invitesEnabled !== false ? 'checked' : ''} onchange="saveInviteSettings()" style="accent-color:#5865F2"> Accept new members</label>
                 <label><input type="checkbox" id="inviteApproval" ${settings.inviteApproval ? 'checked' : ''} onchange="saveInviteSettings()" style="accent-color:#5865F2"> Require approval to join</label>
             </div>
-            <div id="joinRequestsArea" style="margin-top:12px"></div>
+            <p style="font-size:0.8em;color:var(--text-dim);margin-top:8px">Pending join requests are reviewed under Roster → Requests.</p>
+        </div>
+
+        <!-- Modules -->
+        <div class="card">
+            <h3>Modules</h3>
+            <p style="font-size:0.85em;color:var(--text-muted);margin:6px 0 10px">Timers, Events and Roster are always on. Turn on extras your guild actually uses.</p>
+            <label style="font-size:0.85em;color:var(--text-muted)"><input type="checkbox" id="modPoints" ${teamData?.team?.modules?.points !== false ? 'checked' : ''} onchange="saveModules()" style="accent-color:#5865F2"> Loot &amp; Points (loot log, ${escapeHtml(ptsName())} ledger, auctions, wishlist)</label>
         </div>
 
         <!-- Public timer page -->
@@ -285,7 +292,6 @@ async function renderTeamSettings() {
     renderTeamView();
     const el = document.getElementById('settingsContent');
     if (el) el.innerHTML = settingsContent;
-    loadJoinRequests();
 }
 
 const saveWebhook = guard('saveWebhook', async function() {
@@ -357,39 +363,8 @@ const saveInviteSettings = guard('saveInviteSettings', async function() {
         return;
     }
     showToast('Invite settings saved');
-    loadJoinRequests();
 });
 
-async function loadJoinRequests() {
-    const area = document.getElementById('joinRequestsArea');
-    if (!area) return;
-    const approval = document.getElementById('inviteApproval')?.checked;
-    if (!approval) { area.innerHTML = ''; return; }
-
-    const data = await api('GET', `/api/teams/${currentTeamId}/join-requests`);
-    const requests = data.requests || [];
-    if (requests.length === 0) {
-        area.innerHTML = '<p style="color:var(--text-dim);font-size:0.85em">No pending requests.</p>';
-        return;
-    }
-    area.innerHTML = '<p style="font-size:0.85em;color:var(--text-dim);margin-bottom:8px"><strong>' + requests.length + '</strong> pending request(s):</p>' +
-        requests.map(r => `
-            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-                <span style="flex:1;font-weight:500">${r.username}</span>
-                <span style="font-size:0.75em;color:var(--text-dim)">${new Date(r.created_at * 1000).toLocaleDateString()}</span>
-                <button class="btn btn-sm" style="background:#22c55e;color:#fff;padding:4px 10px" onclick="handleJoinRequest('${r.id}','approve')">Approve</button>
-                <button class="btn btn-sm" style="background:#ef4444;color:#fff;padding:4px 10px" onclick="handleJoinRequest('${r.id}','deny')">Deny</button>
-            </div>
-        `).join('');
-}
-
-const handleJoinRequest = guard('handleJoinRequest', async function(reqId, action) {
-    const data = await api('POST', `/api/teams/${currentTeamId}/join-requests/${reqId}/${action}`);
-    if (data.error) { showToast(data.error); return; }
-    showToast(data.message);
-    loadJoinRequests();
-    openTeam(currentTeamId);
-});
 
 const saveCleanup = guard('saveCleanup', async function() {
     await api('PUT', `/api/teams/${currentTeamId}/settings`, {
@@ -498,5 +473,14 @@ const saveRsvpRoles = guard('saveRsvpRoles', async function() {
     const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, { rsvpRoles: list });
     if (res.error) { showToast(res.error); return; }
     showToast('RSVP roles saved');
+    await renderTeamSettings();
+});
+
+const saveModules = guard('saveModules', async function() {
+    const points = document.getElementById('modPoints').checked;
+    const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, { modules: { points } });
+    if (res.error) { showToast(res.error); return; }
+    if (teamData?.team) teamData.team.modules = { ...(teamData.team.modules || {}), points };
+    showToast(points ? 'Loot & Points enabled' : 'Loot & Points hidden');
     await renderTeamSettings();
 });

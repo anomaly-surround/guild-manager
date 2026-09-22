@@ -3,13 +3,13 @@
 // ES module. Uses shell globals by name (teamData, teamTab, currentTeamId, currentUser, api, token,
 // showToast, guard, renderTeamView, API). Exposed as window.Events.
 
-import { esc } from './timer-cards.js?v=20260922d';
+import { esc } from './timer-cards.js?v=20260922e';
 
 const DEFAULT_ROLES = ['Tank', 'Healer', 'DPS', 'Support'];
 const TYPE_LABEL = { raid: 'Raid', scrim: 'Scrim', gvg: 'GvG', dungeon: 'Dungeon', meeting: 'Meeting', other: 'Event' };
 const REPEAT_LABEL = { daily: 'Daily', weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly' };
 
-let events = [], rsvps = [], roles = DEFAULT_ROLES;
+let events = [], rsvps = [], roles = DEFAULT_ROLES, avail = [];
 let view = localStorage.getItem('gm_events_view') || 'list';
 let weekAnchor = Date.now();
 let expanded = new Set();
@@ -38,12 +38,14 @@ export async function open() {
 }
 
 async function load() {
-    const [d, s] = await Promise.all([
+    const [d, s, a] = await Promise.all([
         api('GET', `/api/teams/${currentTeamId}/events`),
         api('GET', `/api/teams/${currentTeamId}/settings`).catch(() => ({})),
+        api('GET', `/api/teams/${currentTeamId}/availability`).catch(() => ({})),
     ]);
     events = d.events || [];
     rsvps = d.rsvps || [];
+    avail = a?.slots || [];
     roles = Array.isArray(s?.rsvpRoles) && s.rsvpRoles.length ? s.rsvpRoles : DEFAULT_ROLES;
 }
 
@@ -99,6 +101,14 @@ function roleCounts(id) {
     const counts = {};
     for (const r of rsvpsFor(id)) if (r.status === 'going') counts[r.role || 'Unassigned'] = (counts[r.role || 'Unassigned'] || 0) + 1;
     return counts;
+}
+function usuallyFree(e) {
+    const d = new Date(e.event_time);
+    const day = d.getDay();
+    const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const names = new Set();
+    for (const s of avail) if (s.day === day && s.start_time <= hm && hm < s.end_time) names.add(s.username);
+    return [...names];
 }
 function parseLineup(e) { try { return e.lineup ? JSON.parse(e.lineup) : []; } catch { return []; } }
 function memberName(userId) { return teamData?.members?.find(m => m.id === userId)?.username || '—'; }
@@ -230,6 +240,7 @@ function detailsHtml(e, now = Date.now()) {
             </div>
         </div>
         ${lineupHtml ? `<div class="t-h3">Lineup</div>${lineupHtml}` : ''}
+        ${(() => { const f = usuallyFree(e); return avail.length ? `<div class="e-avail-hint">Usually free at this time: <b>${f.length}</b>${f.length ? ' · ' + f.map(esc).join(', ') : ''}</div>` : ''; })()}
         <div class="e-detail-foot"><span class="e-dim">${dateStr(e.event_time)} · created by ${esc(e.creator_name || '')}</span><div class="e-actions">${actions}</div></div>`;
 }
 

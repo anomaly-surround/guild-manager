@@ -1,0 +1,73 @@
+/* Roster module: member rows, availability grid, notes. Reuses toolbar/modal/form classes from timers.css. */
+
+.t-ok { color: var(--success); font-weight: 600; }
+.t-warnish { color: var(--warn); }
+
+.rrows { display: flex; flex-direction: column; gap: 6px; }
+.rrow {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    grid-template-areas: "avatar body role" "actions actions actions";
+    gap: 4px 10px;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.r-avatar { grid-area: avatar; width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: var(--surface-2); }
+.r-initials { display: grid; place-items: center; font-size: 0.75rem; font-weight: 700; color: var(--accent); background: var(--accent-soft); }
+.rrow-body { grid-area: body; min-width: 0; }
+.rrow-top { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.rrow-name { font-weight: 700; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rrow-meta { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
+.r-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+.r-dot.online { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+.r-dot.away { background: var(--warn); }
+.rrow-role { grid-area: role; }
+.r-gamerole {
+    padding: 4px 10px; border-radius: 999px; border: 1px solid transparent;
+    background: var(--accent-soft); color: var(--accent); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; cursor: default; white-space: nowrap;
+}
+.r-gamerole.editable { cursor: pointer; }
+.r-gamerole.editable:hover { border-color: var(--accent); }
+.r-gamerole-empty { background: transparent; border: 1px dashed var(--border-strong); color: var(--text-dim); font-weight: 500; cursor: pointer; }
+.r-gamerole-empty:hover { color: var(--text); border-color: var(--text-muted); }
+.rrow-actions { grid-area: actions; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.rrow-actions:empty { display: none; }
+.r-roleselect { padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: 0.75rem; }
+
+@media (min-width: 640px) {
+    .rrow { grid-template-columns: 36px minmax(0, 1fr) auto auto; grid-template-areas: "avatar body role actions"; }
+    .rrow-actions { margin-left: 6px; }
+}
+
+/* notes */
+.r-notes { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 12px; max-height: 40vh; overflow-y: auto; }
+.r-note { padding: 8px 10px; background: var(--surface-2); border-radius: var(--radius-sm); font-size: 0.875rem; }
+.r-note .e-dim { margin-top: 3px; }
+.r-note-del { background: none; border: 0; color: var(--danger); font-size: 0.75rem; cursor: pointer; padding: 0 2px; }
+
+/* availability */
+.av-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.av-day { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; min-height: 48px; }
+.av-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-bottom: 4px; font-size: 0.8rem; }
+.av-head b { font-size: 0.85rem; }
+.av-best { font-size: 0.7rem; color: var(--success); font-weight: 700; font-family: var(--mono); }
+.av-person { display: flex; justify-content: space-between; gap: 8px; font-size: 0.78rem; padding: 2px 0; border-top: 1px solid var(--border); }
+.av-person:first-of-type { border-top: 0; }
+.av-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.av-ranges { color: var(--text-muted); font-family: var(--mono); font-size: 0.72rem; white-space: nowrap; }
+.av-empty { color: var(--text-dim); font-size: 0.8rem; }
+@media (min-width: 900px) {
+    .av-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .av-person { flex-direction: column; gap: 0; }
+    .av-ranges { white-space: normal; }
+}
+.av-edit { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+.av-edit-row { display: grid; grid-template-columns: auto 1fr auto 1fr auto; gap: 6px; align-items: center; }
+.av-edit-row select, .av-edit-row input { padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: 0.85rem; min-width: 0; }
+
+/* availability hint inside event details */
+.e-avail-hint { margin-top: 8px; font-size: 0.8rem; color: var(--text-muted); }
+.e-avail-hint b { color: var(--text); }

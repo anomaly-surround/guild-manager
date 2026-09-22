@@ -71,7 +71,7 @@ export const routes = [
     const premiumTeam = await isPremiumTeam(env, teamId);
 
     const members = await env.DB.prepare(`
-      SELECT u.id, u.username, u.avatar, u.discord_id, u.premium, tm.role, tm.joined_at,
+      SELECT u.id, u.username, u.avatar, u.discord_id, u.premium, tm.role, tm.joined_at, tm.game_role,
         ma.last_seen
       FROM team_members tm
       JOIN users u ON u.id = tm.user_id
@@ -82,8 +82,17 @@ export const routes = [
         tm.joined_at ASC
     `).bind(teamId).all();
 
+    // Module toggles: Loot & Points is off by default, unless the team already has loot/points data.
+    const settingsRow = await env.DB.prepare('SELECT modules FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    let modules = null;
+    try { modules = settingsRow?.modules ? JSON.parse(settingsRow.modules) : null; } catch {}
+    if (!modules || modules.points === undefined) {
+      const used = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM dkp_ledger WHERE team_id = ?) + (SELECT COUNT(*) FROM boss_loot WHERE team_id = ?) AS n').bind(teamId, teamId).first();
+      modules = { ...(modules || {}), points: (used?.n || 0) > 0 };
+    }
+
     return json({
-      team: { ...team, my_role: membership.role, premium_team: premiumTeam },
+      team: { ...team, my_role: membership.role, premium_team: premiumTeam, modules },
       members: members.results,
     });
   } },
@@ -141,6 +150,21 @@ export const routes = [
       t('DELETE FROM team_members WHERE team_id = ?'),
       t('DELETE FROM teams WHERE id = ?'),
     ]);
+    return json({ ok: true });
+  } },
+
+  // PUT /api/teams/:id/members/:userId — game role (self, or officers+ for anyone)
+  { method: 'PUT', pattern: /^\/api\/teams\/([^/]+)\/members\/([^/]+)$/, handler: async ({ request, env, user, params }) => {
+    const [, teamId, targetId] = params;
+    const member = await requireTeamMember(env, teamId, user.userId);
+    if (!member) return json({ error: 'Not a member' }, 403);
+    if (targetId !== user.userId && member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+    const body = await safeJson(request);
+    if (!body) return json({ error: "Invalid request body" }, 400);
+    if (body.gameRole === undefined) return json({ ok: true });
+    const gameRole = body.gameRole ? String(body.gameRole).trim().slice(0, 30) : null;
+    const res = await env.DB.prepare('UPDATE team_members SET game_role = ? WHERE team_id = ? AND user_id = ?').bind(gameRole, teamId, targetId).run();
+    if (!res.meta?.changes) return json({ error: 'User not in team' }, 404);
     return json({ ok: true });
   } },
 

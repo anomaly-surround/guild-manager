@@ -85,14 +85,19 @@ export const routes = [
     const body = await safeJson(request);
     if (!body) return json({ error: "Invalid request body" }, 400);
     // body.slots = [{day: 0-6, startTime: "HH:MM", endTime: "HH:MM"}, ...]
-    await env.DB.prepare('DELETE FROM member_availability WHERE team_id = ? AND user_id = ?')
-      .bind(teamId, user.userId).run();
-
-    for (const slot of (body.slots || [])) {
-      if (slot.day === undefined || !slot.startTime || !slot.endTime) continue;
-      await env.DB.prepare('INSERT INTO member_availability (team_id, user_id, day, start_time, end_time) VALUES (?, ?, ?, ?, ?)')
-        .bind(teamId, user.userId, slot.day, slot.startTime, slot.endTime).run();
+    const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const stmts = [env.DB.prepare('DELETE FROM member_availability WHERE team_id = ? AND user_id = ?').bind(teamId, user.userId)];
+    const seen = new Set();
+    for (const slot of (body.slots || []).slice(0, 21)) {
+      const day = parseInt(slot.day);
+      if (!(day >= 0 && day <= 6) || !hhmm.test(slot.startTime || '') || !hhmm.test(slot.endTime || '') || slot.startTime >= slot.endTime) continue;
+      const key = `${day}|${slot.startTime}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      stmts.push(env.DB.prepare('INSERT INTO member_availability (team_id, user_id, day, start_time, end_time) VALUES (?, ?, ?, ?, ?)')
+        .bind(teamId, user.userId, day, slot.startTime, slot.endTime));
     }
+    await env.DB.batch(stmts);
 
     return json({ ok: true });
   } },
