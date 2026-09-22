@@ -1165,7 +1165,7 @@
             window.history.replaceState({}, '', window.location.pathname);
         }
 
-        init();
+        // init() is called after the api() cache block below is set up (const/TDZ).
 
         async function init() {
             if (!token) {
@@ -1261,6 +1261,8 @@
                 return { error: 'Network error' };
             }
         }
+
+        init();
 
         // --- Views ---
 
