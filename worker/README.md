@@ -40,6 +40,7 @@ src/
     spawn.js          boss spawn-time math
     discord.js        webhook validation + embed sender
     team.js           requireTeamMember(env, teamId, userId), isPremiumTeam(env, teamId)
+    rotation.js       lootModeFor(), ensurePositions(), moveMember() — loot rotation math
   routes/             one module per resource; each exports `routes = [{ method, pattern, handler }]`
     auth.js           /auth/*                     (public)
     billing.js        /paddle/webhook, start-trial, checkout   (public)
@@ -50,7 +51,8 @@ src/
     settings.js       settings, webhook test, custom roles, modules, RSVP roles, public timers
     events.js         events, RSVP by role, caps, lineup, attendance, templates, report, iCal
     members.js        officer notes, heartbeat, availability
-    loot.js  dkp.js   Loot & Points (optional module): loot, wishlist, points, auctions
+    loot.js  dkp.js   Loot & Points (optional module): loot log, wishlist, points, auctions
+    rotation.js       loot rotation order, officer moves, leader reset
   lib/limits.js       plan limits (Free / Premium)
 ```
 

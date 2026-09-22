@@ -114,6 +114,9 @@
 .tf-inline input[type="time"] { width: auto; }
 .tf-inline b { color: var(--text-muted); font-weight: 600; }
 .tf-amp { color: var(--text-dim); padding: 0 2px; }
+.tf-check { flex-direction: row; align-items: center; gap: 8px; }
+.tf-check input { width: auto; accent-color: var(--accent); }
+.tf-check span { text-transform: none; letter-spacing: 0; font-size: 0.85rem; font-weight: 500; color: var(--text); }
 .tf-help { grid-column: 1 / -1; font-size: 0.78rem; color: var(--text-dim); margin: 0; line-height: 1.4; }
 .tf-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 @media (max-width: 480px) { .tform { grid-template-columns: 1fr; } }

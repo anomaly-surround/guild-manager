@@ -416,7 +416,7 @@ async function initDB(db) {
     || await db.prepare("SELECT 1 FROM join_requests LIMIT 1").first().then(() => false).catch(() => true)
     || await db.prepare("SELECT public_token FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
     || await db.prepare("SELECT rsvp_roles FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT game_role FROM team_members LIMIT 1").first().then(() => false).catch(() => true);
+    || await db.prepare("SELECT loot_pos FROM team_members LIMIT 1").first().then(() => false).catch(() => true);
   if (needsMigrations) {
     const migrations = [
       'ALTER TABLE users ADD COLUMN premium INTEGER DEFAULT 0',
@@ -464,6 +464,8 @@ async function initDB(db) {
       'ALTER TABLE team_settings ADD COLUMN rsvp_roles TEXT',
       'ALTER TABLE team_members ADD COLUMN game_role TEXT',
       'ALTER TABLE team_settings ADD COLUMN modules TEXT',
+      'ALTER TABLE team_settings ADD COLUMN loot_mode TEXT',
+      'ALTER TABLE team_members ADD COLUMN loot_pos INTEGER',
       `CREATE TABLE IF NOT EXISTS join_requests (
         id TEXT PRIMARY KEY,
         team_id TEXT NOT NULL,

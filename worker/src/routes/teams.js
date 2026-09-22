@@ -4,6 +4,7 @@ import { json, safeJson } from '../lib/http.js';
 import { generateInviteCode } from '../lib/ids.js';
 import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
 import { limitsFor, limitsJson } from '../lib/limits.js';
+import { lootModeFor } from '../lib/rotation.js';
 
 export const routes = [
   // GET /api/teams — list user's teams
@@ -94,7 +95,7 @@ export const routes = [
     }
 
     return json({
-      team: { ...team, my_role: membership.role, premium_team: premiumTeam, modules, max_members: limitsJson(premiumTeam).members, limits: limitsJson(premiumTeam) },
+      team: { ...team, my_role: membership.role, premium_team: premiumTeam, modules, loot_mode: await lootModeFor(env, teamId), max_members: limitsJson(premiumTeam).members, limits: limitsJson(premiumTeam) },
       members: members.results,
     });
   } },

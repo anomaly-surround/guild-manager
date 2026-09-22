@@ -59,7 +59,12 @@ async function renderTeamSettings() {
         <div class="card">
             <h3>Modules</h3>
             <p style="font-size:0.85em;color:var(--text-muted);margin:6px 0 10px">Timers, Events and Roster are always on. Turn on extras your guild actually uses.</p>
-            <label style="font-size:0.85em;color:var(--text-muted)"><input type="checkbox" id="modPoints" ${teamData?.team?.modules?.points !== false ? 'checked' : ''} onchange="saveModules()" style="accent-color:#5865F2"> Loot &amp; Points (loot log, ${escapeHtml(ptsName())} ledger, auctions, wishlist)</label>
+            <label style="font-size:0.85em;color:var(--text-muted)"><input type="checkbox" id="modPoints" ${teamData?.team?.modules?.points !== false ? 'checked' : ''} onchange="saveModules()" style="accent-color:#5865F2"> Loot &amp; Points (loot log, rotation or ${escapeHtml(ptsName())} ledger, wishlist, auctions)</label>
+            <div class="loot-mode">
+                <div class="loot-mode-title">Loot mode</div>
+                <label class="loot-mode-opt"><input type="radio" name="lootMode" value="rotation" ${settings.lootMode !== 'dkp' ? 'checked' : ''} onchange="saveLootMode('rotation')"><span><b>Rotation</b> <span class="chip chip-success">Simple</span><br>An ordered list. Whoever is on top gets the next drop, then moves to the bottom. Officers can nudge people for attendance.</span></label>
+                <label class="loot-mode-opt"><input type="radio" name="lootMode" value="dkp" ${settings.lootMode === 'dkp' ? 'checked' : ''} onchange="saveLootMode('dkp')"><span><b>Points (${escapeHtml(ptsName())})</b><br>Members earn points for attendance and kills and spend them on drops. Supports auctions and decay (Premium).</span></label>
+            </div>
         </div>
 
         <!-- Public timer page -->
@@ -447,6 +452,13 @@ const saveRsvpRoles = guard('saveRsvpRoles', async function() {
     if (res.error) { showToast(res.error); return; }
     showToast('RSVP roles saved');
     await renderTeamSettings();
+});
+
+const saveLootMode = guard('saveLootMode', async function(mode) {
+    const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, { lootMode: mode });
+    if (res.error) { showToast(res.error); await renderTeamSettings(); return; }
+    if (teamData?.team) teamData.team.loot_mode = mode;
+    showToast(mode === 'dkp' ? `Loot mode: ${ptsName()} points` : 'Loot mode: rotation');
 });
 
 const saveModules = guard('saveModules', async function() {

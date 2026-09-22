@@ -375,3 +375,11 @@ button, input, select, textarea { font-family: inherit; }
 .help-chev { margin-left: auto; color: var(--text-dim); font-size: 0.8rem; transition: transform 0.15s; }
 .help-item[open] .help-chev { transform: rotate(180deg); }
 .help-body { padding: 10px 12px; font-size: 0.85rem; color: var(--text-muted); line-height: 1.55; }
+
+/* ---------- Settings: loot mode ---------- */
+.loot-mode { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.loot-mode-title { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.loot-mode-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.85rem; color: var(--text-muted); cursor: pointer; line-height: 1.45; }
+.loot-mode-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.loot-mode-opt input { margin-top: 3px; accent-color: var(--accent); }
+.loot-mode-opt b { color: var(--text); }

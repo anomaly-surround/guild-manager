@@ -19,11 +19,13 @@ import { routes as eventRoutes } from './routes/events.js';
 import { routes as memberRoutes } from './routes/members.js';
 import { routes as lootRoutes } from './routes/loot.js';
 import { routes as dkpRoutes } from './routes/dkp.js';
+import { routes as rotationRoutes } from './routes/rotation.js';
 
 const PUBLIC_ROUTES = [...authRoutes, ...billingRoutes, ...publicRoutes];
 const PROTECTED_ROUTES = [
   ...teamRoutes, ...inviteRoutes, ...bossRoutes, ...settingsRoutes, ...eventRoutes,
   ...memberRoutes, ...lootRoutes, ...dkpRoutes,
+  ...rotationRoutes,
 ];
 
 function matchRoute(routes, method, path) {

@@ -40,3 +40,17 @@
     .prow { grid-template-columns: 36px minmax(0, 1fr) auto; }
     .p-bid { grid-column: 1 / -1; }
 }
+
+/* rotation */
+.rot-row { grid-template-columns: 28px 28px minmax(0, 1fr) auto; }
+.rot-row.rot-next { border-color: color-mix(in srgb, var(--success) 55%, var(--border)); background: color-mix(in srgb, var(--success) 6%, var(--surface)); }
+.rot-row.mine:not(.rot-next) { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.rot-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--surface-2); }
+.rot-actions { display: flex; align-items: center; gap: 6px; }
+.rot-actions .menu-list { right: 0; }
+.rot-explain { font-size: 0.8rem; color: var(--text-dim); margin: -4px 0 10px; line-height: 1.45; }
+@media (max-width: 639px) {
+    .rot-row { grid-template-columns: 24px 28px minmax(0, 1fr); gap: 6px 8px; padding: 8px 10px; }
+    .rot-actions { grid-column: 1 / -1; justify-content: flex-end; }
+    .rot-actions .btn { padding: 6px 10px; font-size: 0.78rem; }
+}

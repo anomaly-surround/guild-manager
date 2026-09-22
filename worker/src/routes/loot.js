@@ -2,6 +2,7 @@
 
 import { json, safeJson } from '../lib/http.js';
 import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
+import { lootModeFor, moveMember } from '../lib/rotation.js';
 
 export const routes = [
   { method: 'GET', pattern: /^\/api\/teams\/([^/]+)\/loot$/, handler: async ({ env, user, params }) => {
@@ -19,7 +20,7 @@ export const routes = [
       LIMIT 100
     `).bind(teamId).all();
 
-    return json({ loot: loot.results });
+    return json({ loot: loot.results, mode: await lootModeFor(env, teamId) });
   } },
 
   { method: 'POST', pattern: /^\/api\/teams\/([^/]+)\/loot$/, handler: async ({ request, env, user, params }) => {
@@ -34,6 +35,11 @@ export const routes = [
     const id = crypto.randomUUID();
     await env.DB.prepare('INSERT INTO boss_loot (id, team_id, boss_id, boss_name, item_name, recipient_id, dkp_cost, noted_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(id, teamId, body.bossId || null, body.bossName || 'Unknown', body.itemName.trim(), body.recipientId, body.dkpCost || 0, user.userId).run();
+
+    // Rotation mode: taking a drop sends you to the bottom (unless the officer says it doesn't count)
+    if (body.keepPosition !== true && (await lootModeFor(env, teamId)) === 'rotation') {
+      await moveMember(env, teamId, body.recipientId, 'bottom');
+    }
 
     // Deduct DKP if cost > 0
     if (body.dkpCost && body.dkpCost > 0) {

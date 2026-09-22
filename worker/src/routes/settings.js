@@ -5,6 +5,7 @@ import { rateLimit } from '../lib/ratelimit.js';
 import { sendDiscord, isValidDiscordWebhook } from '../lib/discord.js';
 import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
 import { parseRoles } from './events.js';
+import { lootModeFor } from '../lib/rotation.js';
 
 export const routes = [
   // GET /api/teams/:id/settings
@@ -41,6 +42,7 @@ export const routes = [
       publicToken: settings?.public_token || null,
       rsvpRoles: parseRoles(settings?.rsvp_roles),
       modules: (() => { try { return settings?.modules ? JSON.parse(settings.modules) : {}; } catch { return {}; } })(),
+      lootMode: await lootModeFor(env, teamId),
     });
   } },
 
@@ -89,6 +91,10 @@ export const routes = [
         const next = { ...cur };
         if (body.modules.points !== undefined) next.points = !!body.modules.points;
         sets.push('modules = ?'); vals.push(JSON.stringify(next));
+      }
+      if (body.lootMode !== undefined) {
+        if (!['rotation', 'dkp'].includes(body.lootMode)) return json({ error: 'lootMode must be rotation or dkp' }, 400);
+        sets.push('loot_mode = ?'); vals.push(body.lootMode);
       }
       if (body.rsvpRoles !== undefined) {
         const list = Array.isArray(body.rsvpRoles) ? body.rsvpRoles.map(r => String(r).trim().slice(0, 20)).filter(Boolean).slice(0, 8) : [];
