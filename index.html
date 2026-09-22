@@ -9,64 +9,54 @@
     <title>Guild Manager</title>
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-    <link rel="stylesheet" href="css/app.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/tokens.css?v=20260922b">
+    <link rel="stylesheet" href="css/app.css?v=20260922b">
+    <link rel="stylesheet" href="css/shell.css?v=20260922b">
 </head>
 <body>
-    <div class="header">
-        <div style="display:flex;align-items:center;gap:16px;">
-            <h1 onclick="goHome()"><img src="icon.svg" alt="" style="height:1.2em;vertical-align:middle;margin-right:6px;">Guild Manager</h1>
-            <div id="headerActions" style="display:none;gap:8px;align-items:center;">
-                <button class="btn btn-primary" style="padding:6px 14px;font-size:0.85em;" onclick="showCreateTeamModal()">Create Team</button>
-                <button class="btn" style="padding:6px 14px;font-size:0.85em;background:var(--bg-input);color:var(--text);" onclick="showJoinTeamModal()">Join Team</button>
-            </div>
+    <header class="app-header">
+        <a class="brand" onclick="goHome()"><img src="icon.svg" alt=""><span>Guild Manager</span></a>
+        <div class="header-actions" id="headerActions" style="display:none">
+            <button class="btn btn-primary btn-sm" onclick="showCreateTeamModal()">Create team</button>
+            <button class="btn btn-secondary btn-sm" onclick="showJoinTeamModal()">Join</button>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-            <button class="btn" onclick="showHelpModal()" style="padding:6px 12px;font-size:1.2em;background:var(--bg-input);color:var(--text);border:1px solid var(--border-input);border-radius:8px" title="Help & Guide">❓</button>
-            <button class="btn" onclick="toggleTheme()" id="themeBtn" style="padding:6px 12px;font-size:1.2em;background:var(--bg-input);color:var(--text);border:1px solid var(--border-input);border-radius:8px" title="Toggle theme">🌙</button>
-            <div class="user-info" id="userInfo" style="display:none">
-                <button class="btn" id="upgradeBtn" style="display:none;padding:6px 14px;font-size:0.85em;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;" onclick="showUpgradeModal()">Upgrade</button>
-                <img class="user-avatar" id="userAvatar" src="">
-                <span class="user-name" id="userName"></span>
-                <button class="btn btn-logout" onclick="logout()">Logout</button>
-            </div>
+        <div class="header-spacer"></div>
+        <button class="icon-btn" onclick="showHelpModal()" title="Help &amp; guide">?</button>
+        <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">&#127769;</button>
+        <div class="user-info" id="userInfo" style="display:none">
+            <button class="btn btn-sm" id="upgradeBtn" style="display:none" onclick="showUpgradeModal()">Upgrade</button>
+            <img class="user-avatar" id="userAvatar" src="" alt="">
+            <span class="user-name" id="userName"></span>
+            <button class="btn btn-logout" onclick="logout()">Logout</button>
         </div>
-    </div>
+    </header>
 
-    <div class="container" id="mainContent">
-        <!-- Content injected by JS -->
-    </div>
+    <main class="container app-main" id="mainContent"></main>
 
     <div id="deathModal"></div>
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="js/theme-help.js"></script>
-    <script src="js/core.js"></script>
-    <script src="js/util.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/notifications.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/billing.js"></script>
-    <script src="js/teams.js"></script>
-    <script src="js/team-view.js"></script>
-    <script src="js/bosses.js"></script>
-    <script src="js/members.js"></script>
-    <script src="js/settings.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/chat.js"></script>
-    <script src="js/analytics.js"></script>
-    <script src="js/announcements.js"></script>
-    <script src="js/wars.js"></script>
-    <script src="js/matches.js"></script>
-    <script src="js/loot.js"></script>
-    <script src="js/dkp.js"></script>
-    <script src="js/availability.js"></script>
-    <script src="js/events.js"></script>
-    <script src="js/polls.js"></script>
-    <script src="js/rosters.js"></script>
-    <script src="js/performance.js"></script>
-    <script src="js/recruitment.js"></script>
-    <script src="js/files.js"></script>
-    <script src="js/timers.js"></script>
-    <script src="js/main.js"></script>
+    <script src="js/theme-help.js?v=20260922b"></script>
+    <script src="js/core.js?v=20260922b"></script>
+    <script src="js/util.js?v=20260922b"></script>
+    <script src="js/api.js?v=20260922b"></script>
+    <script src="js/notifications.js?v=20260922b"></script>
+    <script src="js/auth.js?v=20260922b"></script>
+    <script src="js/billing.js?v=20260922b"></script>
+    <script src="js/teams.js?v=20260922b"></script>
+    <script src="js/team-view.js?v=20260922b"></script>
+    <script src="js/home.js?v=20260922b"></script>
+    <script src="js/bosses.js?v=20260922b"></script>
+    <script src="js/members.js?v=20260922b"></script>
+    <script src="js/settings.js?v=20260922b"></script>
+    <script src="js/loot.js?v=20260922b"></script>
+    <script src="js/dkp.js?v=20260922b"></script>
+    <script src="js/availability.js?v=20260922b"></script>
+    <script src="js/events.js?v=20260922b"></script>
+    <script src="js/timers.js?v=20260922b"></script>
+    <script src="js/main.js?v=20260922b"></script>
 </body>
 </html>

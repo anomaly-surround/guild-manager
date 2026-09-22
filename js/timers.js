@@ -16,7 +16,7 @@ setInterval(() => {
         }
 
         // Update UI (only if on timers tab)
-        if (teamTab !== 'timers') continue;
+        if (teamTab !== 'timers' && teamTab !== 'home') continue;
         const el = document.querySelector(`[data-boss-id="${boss.id}"] .boss-countdown`);
         if (!el) continue;
         if (isSpawned) {
@@ -67,21 +67,6 @@ setInterval(async () => {
     teamEvents = data.events || [];
     const el = document.getElementById('eventsListArea');
     if (el) el.innerHTML = renderEventsListOnly();
-}, 30000);
-
-// Refresh chat every 5 seconds
-setInterval(async () => {
-    if (!currentTeamId || teamTab !== 'chat') return;
-    await fetchChatMessages(false);
-}, 5000);
-
-// Refresh announcements every 30 seconds
-setInterval(async () => {
-    if (!currentTeamId || teamTab !== 'announcements') return;
-    const data = await api('GET', `/api/teams/${currentTeamId}/announcements`);
-    teamAnnouncements = data.announcements || [];
-    const el = document.getElementById('announcementsListArea');
-    if (el) el.innerHTML = renderAnnouncementsListOnly();
 }, 30000);
 
 // Activity heartbeat every 5 minutes

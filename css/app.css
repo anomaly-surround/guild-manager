@@ -1,102 +1,26 @@
+/* Tab content styles (pre-overhaul). Tokens live in tokens.css, the shell in shell.css.
+   Rules here are replaced module by module as each tab is rebuilt. */
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    :root {
-        --bg: #0a0e17;
-        --bg-card: #111827;
-        --bg-input: #1e293b;
-        --bg-header: linear-gradient(135deg, #0f1623, #1a1040);
-        --bg-item: #0f1623;
-        --border: #1e293b;
-        --border-header: #2a1f5e;
-        --border-input: #334155;
-        --text: #e0e6f0;
-        --text-muted: #94a3b8;
-        --text-dim: #64748b;
-        --text-label: #7a8baa;
-        --accent: #a78bfa;
-        --accent2: #60a5fa;
-        --tab-bg: #1e293b;
-        --tab-active: #334155;
-        --color-scheme: dark;
-    }
+    
 
-    [data-theme="light"] {
-        --bg: #f1f5f9;
-        --bg-card: #ffffff;
-        --bg-input: #e2e8f0;
-        --bg-header: linear-gradient(135deg, #e2e8f0, #ddd6fe);
-        --bg-item: #f8fafc;
-        --border: #cbd5e1;
-        --border-header: #a78bfa;
-        --border-input: #94a3b8;
-        --text: #1e293b;
-        --text-muted: #475569;
-        --text-dim: #64748b;
-        --text-label: #475569;
-        --accent: #7c3aed;
-        --accent2: #3b82f6;
-        --tab-bg: #e2e8f0;
-        --tab-active: #cbd5e1;
-        --color-scheme: light;
-    }
+    
 
-    body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        min-height: 100vh;
-    }
+    
 
-    .header {
-        background: var(--bg-header);
-        border-bottom: 2px solid var(--border-header);
-        padding: 16px 24px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
+    
 
-    .header h1 {
-        font-size: 1.5em;
-        background: linear-gradient(90deg, var(--accent), var(--accent2));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        cursor: pointer;
-    }
+    
 
-    .user-info {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
+    
 
-    .user-avatar {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: var(--bg-input);
-    }
+    
 
-    .user-name {
-        font-size: 0.9em;
-        color: var(--text-muted);
-    }
+    
 
-    .container {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 24px;
-    }
+    
 
-    .btn {
-        padding: 10px 20px;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 0.9em;
-        font-weight: 600;
-        transition: all 0.2s;
-    }
+    
 
     .btn-discord {
         background: #5865F2;
@@ -110,41 +34,23 @@
 
     .btn-discord:hover { background: #4752C4; }
 
-    .btn-primary {
-        background: linear-gradient(135deg, #7c3aed, #6366f1);
-        color: white;
-    }
+    
 
-    .btn-primary:hover { background: linear-gradient(135deg, #6d28d9, #4f46e5); }
+    
 
-    .btn-sm {
-        padding: 6px 12px;
-        font-size: 0.8em;
-    }
+    
 
-    .btn-danger {
-        background: transparent;
-        color: #ef4444;
-        border: 1px solid #7f1d1d;
-    }
+    
 
-    .btn-danger:hover { background: #7f1d1d33; }
+    
 
-    .btn-secondary {
-        background: var(--bg-input);
-        color: var(--text-muted);
-    }
+    
 
-    .btn-secondary:hover { background: var(--tab-active); color: var(--text); }
+    
 
-    .btn-logout {
-        background: transparent;
-        color: var(--text-dim);
-        padding: 6px 12px;
-        font-size: 0.8em;
-    }
+    
 
-    .btn-logout:hover { color: #ef4444; }
+    
 
     /* Login screen */
     .login-screen {
@@ -291,13 +197,7 @@
         flex-shrink: 0;
     }
 
-    .team-role {
-        font-size: 0.7em;
-        padding: 3px 10px;
-        border-radius: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
+    
 
     .team-role.leader { background: #7f1d1d; color: #fca5a5; }
     .team-role.officer { background: #78350f; color: #fcd34d; }
@@ -338,24 +238,9 @@
     }
 
     /* Invite section */
-    .invite-box {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        background: var(--bg-item);
-        border: 1px dashed #334155;
-        border-radius: 8px;
-        padding: 12px 16px;
-        margin-top: 12px;
-    }
+    
 
-    .invite-code {
-        font-family: monospace;
-        font-size: 1.1em;
-        color: #a78bfa;
-        font-weight: 600;
-        flex: 1;
-    }
+    
 
     /* Toast */
     .toast-container {
@@ -477,47 +362,19 @@
     .toggle-arrow.open { transform: rotate(180deg); }
 
     /* Mobile tab dropdown - hidden on desktop */
-    .mobile-tab-select {
-        display: none;
-    }
+    
 
     /* Sidebar layout */
-    .team-layout {
-        display: flex;
-        gap: 16px;
-        align-items: flex-start;
-    }
+    
 
-    .sidebar {
-        width: 160px;
-        flex-shrink: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        position: sticky;
-        top: 16px;
-    }
+    
 
-    .tab-btn {
-        padding: 10px 14px;
-        background: var(--tab-bg);
-        color: var(--text-dim);
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 0.85em;
-        font-weight: 600;
-        text-align: left;
-        transition: all 0.15s;
-    }
+    
 
-    .tab-btn:hover { color: var(--text); background: var(--tab-active); }
-    .tab-btn.active { background: var(--tab-active); color: var(--accent); border-left: 3px solid var(--accent); }
+    
+    
 
-    .tab-content {
-        flex: 1;
-        min-width: 0;
-    }
+    
 
     /* Legacy tab-bar hidden but kept for settings page */
     .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; }
@@ -588,36 +445,12 @@
     }
 
     /* Dashboard */
-    .dash-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-    }
-    .dash-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 14px 16px;
-        cursor: pointer;
-        transition: border-color 0.15s;
-    }
-    .dash-card:hover { border-color: var(--accent); }
-    .dash-card h4 {
-        font-size: 0.8em;
-        color: var(--text-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 8px;
-    }
-    .dash-card .dash-value {
-        font-size: 1.1em;
-        font-weight: 600;
-    }
-    .dash-card .dash-sub {
-        font-size: 0.8em;
-        color: var(--text-dim);
-        margin-top: 4px;
-    }
+    
+    
+    
+    
+    
+    
 
     /* Chat */
     .chat-container {
@@ -780,60 +613,27 @@
     .note-meta { font-size: 0.7em; color: #64748b; margin-top: 4px; }
 
     @media (max-width: 900px) {
-        .dash-grid { grid-template-columns: 1fr; }
+        
     }
     @media (max-width: 768px) {
-        .team-layout { flex-direction: column; }
-        .sidebar {
-            width: 100%;
-            flex-direction: row;
-            flex-wrap: wrap;
-            position: static;
-            gap: 4px;
-        }
-        .sidebar .tab-btn {
-            padding: 6px 10px;
-            font-size: 0.8em;
-            text-align: center;
-        }
+        
+        
+        
         .boss-grid {
             grid-template-columns: 1fr !important;
         }
     }
     @media (max-width: 600px) {
         /* Header */
-        .header {
-            padding: 10px 12px;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .header h1 {
-            font-size: 1.1em;
-        }
-        .header h1 img {
-            height: 1em !important;
-        }
-        #headerActions {
-            gap: 4px !important;
-        }
-        #headerActions .btn {
-            padding: 4px 8px !important;
-            font-size: 0.75em !important;
-        }
-        .user-info {
-            gap: 6px;
-        }
-        .user-name {
-            display: none;
-        }
-        .user-avatar {
-            width: 28px;
-            height: 28px;
-        }
-        .btn-logout {
-            padding: 4px 8px;
-            font-size: 0.7em;
-        }
+        
+        
+        
+        
+        
+        
+        
+        
+        
         #upgradeBtn {
             padding: 4px 8px !important;
             font-size: 0.75em !important;
@@ -844,7 +644,7 @@
         }
 
         /* Container */
-        .container { padding: 10px; }
+        
 
         /* Forms */
         .form-row {
@@ -953,40 +753,13 @@
         }
 
         /* Hide sidebar tabs on mobile, show dropdown instead */
-        .sidebar {
-            display: none !important;
-        }
-        .mobile-tab-select {
-            display: block !important;
-            width: 100%;
-            padding: 12px 14px;
-            background: var(--bg-input);
-            border: 1px solid var(--border-input);
-            color: var(--text);
-            border-radius: 8px;
-            font-size: 0.95em;
-            font-weight: 600;
-            margin-bottom: 12px;
-            appearance: none;
-            -webkit-appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 12px center;
-            cursor: pointer;
-        }
+        
+        
 
         /* Invite code — compact on mobile */
-        .invite-box {
-            gap: 6px;
-            padding: 8px 10px;
-            margin-top: 8px;
-        }
-        .invite-box > span:first-child {
-            display: none;
-        }
-        .invite-code {
-            font-size: 0.85em;
-        }
+        
+        
+        
 
         /* Announcements */
         .announcement-header {
@@ -995,9 +768,7 @@
         }
 
         /* Dash grid */
-        .dash-grid {
-            grid-template-columns: 1fr;
-        }
+        
 
         /* Toast positioning */
         .toast-container {

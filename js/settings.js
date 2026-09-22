@@ -2,7 +2,6 @@
 
 async function renderTeamSettings() {
     teamTab = 'settings';
-    const content = document.getElementById('mainContent');
     const team = teamData.team;
     const canManage = team.my_role === 'leader' || team.my_role === 'officer';
 
@@ -261,59 +260,9 @@ async function renderTeamSettings() {
     `;
     }
 
-    let html = `
-        <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
-        <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-                <h2>${escapeHtml(team.name)}</h2>
-                <span class="team-role ${team.my_role}">${team.my_role}</span>
-            </div>
-        </div>
-
-        <select class="mobile-tab-select" onchange="mobileTabSwitch(this.value)">
-            <option value="dashboard">Dashboard</option>
-            <option value="chat">Chat</option>
-            <option value="announcements">Announcements</option>
-            <option value="timers">Boss Timers</option>
-            <option value="events">Events</option>
-            <option value="members">Members (${members.length})</option>
-            <option value="loot">Loot</option>
-            <option value="dkp">${ptsName()}</option>
-            <option value="wars">Wars</option>
-            <option value="availability">Availability</option>
-            <option value="polls">Polls</option>
-            <option value="rosters">Rosters</option>
-            <option value="performance">Performance</option>
-            <option value="recruitment">Recruitment</option>
-            <option value="files">Files</option>
-            <option value="matches">Matches</option>
-            <option value="settings" selected>Settings</option>
-        </select>
-        <div class="team-layout">
-            <div class="sidebar">
-                <button class="tab-btn" onclick="loadAndRenderDashboard()">Dashboard</button>
-                <button class="tab-btn" onclick="loadAndRenderChat()">Chat</button>
-                <button class="tab-btn" onclick="loadAndRenderAnnouncements()">Announcements</button>
-                <button class="tab-btn" onclick="teamTab='timers';loadTeamBosses(currentTeamId).then(()=>renderTeamView())">Boss Timers</button>
-                <button class="tab-btn" onclick="loadAndRenderEvents()">Events</button>
-                <button class="tab-btn" onclick="teamTab='members';renderTeamView()">Members (${members.length})</button>
-                <button class="tab-btn" onclick="loadAndRenderLoot()">Loot</button>
-                <button class="tab-btn" onclick="loadAndRenderDKP()">${ptsName()}</button>
-                <button class="tab-btn" onclick="loadAndRenderWars()">Wars</button>
-                <button class="tab-btn" onclick="loadAndRenderAvailability()">Availability</button>
-                <button class="tab-btn" onclick="loadAndRenderPolls()">Polls</button>
-                <button class="tab-btn" onclick="loadAndRenderRosters()">Rosters</button>
-                <button class="tab-btn" onclick="loadAndRenderPerformance()">Performance</button>
-                <button class="tab-btn" onclick="loadAndRenderRecruitment()">Recruitment</button>
-                <button class="tab-btn" onclick="loadAndRenderFiles()">Files</button>
-                <button class="tab-btn" onclick="loadAndRenderMatches()">Matches</button>
-                <button class="tab-btn active">Settings</button>
-            </div>
-            <div class="tab-content">${settingsContent}</div>
-        </div>
-    `;
-
-    content.innerHTML = html;
+    renderTeamView();
+    const el = document.getElementById('settingsContent');
+    if (el) el.innerHTML = settingsContent;
     loadJoinRequests();
 }
 

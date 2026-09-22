@@ -41,6 +41,7 @@ Removed from the front end first; worker routes deleted in the cleanup milestone
 | Performance | Niche stat logging; guilds that want it use spreadsheets or game addons. |
 | Recruitment | Niche; recruiting happens on Discord servers and game forums. |
 | Analytics | Charts over the cut features. Kill history and attendance report stay inside Timers and Events. |
+| Rosters (lineup builder) | Returns in M3 as a per-event lineup inside Events, where a raid lineup actually belongs. |
 
 Data in cut tables is left in D1 untouched until the cleanup milestone; nothing is deleted on the
 first pass, the tabs just disappear.
@@ -83,7 +84,7 @@ custom role names, CSV export). Premium needs redefining; proposal, to decide be
 | # | Milestone | Done when |
 |---|---|---|
 | M0 | Plan locked (this file), cut list confirmed | committed |
-| M1 | **Shell + design system**: tokens, components, top nav, team switcher, Home; cut tabs hidden | new shell renders every kept tab's existing content; screenshots reviewed |
+| M1 | **Shell + design system**: tokens, components, top nav, team switcher, Home; cut tabs hidden | DONE 2026-09-22: new shell renders every kept tab; verified desktop + 390/360px |
 | M2 | **Timers rebuild**: module, new cards, spawn windows, next-up ordering, public timer page | works on phone width and desktop; webhook + alerts unchanged |
 | M3 | **Events rebuild**: module, RSVP by role, caps, week view, iCal | as above |
 | M4 | **Roster rebuild**: members + game role + availability; Settings with module toggles | as above |

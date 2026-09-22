@@ -1,9 +1,50 @@
-// Team view shell: state, openTeam(), tab rendering, mobile tab switcher
+// Team view shell: state, openTeam(), module navigation, sub-views.
+// Modules: Home · Timers · Events · Roster · Loot & Points · Settings (see OVERHAUL.md).
 
 let teamBosses = [];
 let teamData = null;
-let teamTab = 'timers';
+let teamTab = 'home';
 let bossViewMode = localStorage.getItem('gm_boss_view') || 'list';
+
+const ICONS = {
+    home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>',
+    timers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg>',
+    events: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+    roster: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5a5 5 0 0 1 6 5"/></svg>',
+    points: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>',
+    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+};
+
+// `tabs` are the legacy teamTab keys each module mounts under; `open` renders its default view.
+const MODULES = [
+    { id: 'home',     label: 'Home',          tabs: ['home'],                    open: () => loadAndRenderHome() },
+    { id: 'timers',   label: 'Timers',        tabs: ['timers'],                  open: () => { teamTab = 'timers'; loadTeamBosses(currentTeamId).then(renderTeamView); } },
+    { id: 'events',   label: 'Events',        tabs: ['events'],                  open: () => loadAndRenderEvents() },
+    { id: 'roster',   label: 'Roster',        tabs: ['members', 'availability'], open: () => { teamTab = 'members'; renderTeamView(); } },
+    { id: 'points',   label: 'Loot & Points', short: 'Points', tabs: ['loot', 'dkp'], open: () => loadAndRenderLoot() },
+    { id: 'settings', label: 'Settings',      tabs: ['settings'],                open: () => renderTeamSettings() },
+];
+
+const SUB_VIEWS = {
+    roster: [
+        { tab: 'members',      label: () => `Members (${teamData?.members?.length ?? 0})`, open: () => { teamTab = 'members'; renderTeamView(); } },
+        { tab: 'availability', label: () => 'Availability',                                open: () => loadAndRenderAvailability() },
+    ],
+    points: [
+        { tab: 'loot', label: () => 'Loot',      open: () => loadAndRenderLoot() },
+        { tab: 'dkp',  label: () => ptsName(),   open: () => loadAndRenderDKP() },
+    ],
+};
+
+function openModule(id) {
+    const mod = MODULES.find(m => m.id === id);
+    if (mod) mod.open();
+}
+
+function openSubView(moduleId, tab) {
+    const sub = (SUB_VIEWS[moduleId] || []).find(s => s.tab === tab);
+    if (sub) sub.open();
+}
 
 async function openTeam(teamId) {
     currentTeamId = teamId;
@@ -14,11 +55,11 @@ async function openTeam(teamId) {
     if (data.error) { showToast(data.error); showTeamList(); return; }
 
     teamData = data;
-    teamTab = 'dashboard';
+    teamTab = 'home';
     // Load points name setting
     api('GET', `/api/teams/${teamId}/settings`).then(s => { _pointsName = s.pointsName || 'DKP'; }).catch(() => {});
     await loadTeamBosses(teamId);
-    loadAndRenderDashboard();
+    loadAndRenderHome();
 }
 
 async function loadTeamBosses(teamId) {
@@ -31,131 +72,45 @@ function renderTeamView() {
     const team = teamData.team;
     const members = teamData.members;
     const canManage = team.my_role === 'leader' || team.my_role === 'officer';
+    const mod = MODULES.find(m => m.tabs.includes(teamTab)) || MODULES[0];
 
+    const spinner = (id) => `<div id="${id}"><div class="empty-state"><div class="spinner"></div></div></div>`;
     let tabContent = '';
-    if (teamTab === 'dashboard') {
-        tabContent = '<div id="dashboardContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'timers') {
-        tabContent = renderTimersTab(team, canManage);
-    } else if (teamTab === 'members') {
-        tabContent = renderMembersTab(team, members, canManage);
-    } else if (teamTab === 'events') {
-        tabContent = '<div id="eventsContent"><div class="empty-state">Loading...</div></div>';
-    } else if (teamTab === 'chat') {
-        tabContent = '<div id="chatContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'announcements') {
-        tabContent = '<div id="announcementsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'wars') {
-        tabContent = '<div id="warsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'loot') {
-        tabContent = '<div id="lootContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'dkp') {
-        tabContent = '<div id="dkpContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'availability') {
-        tabContent = '<div id="availabilityContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'analytics') {
-        tabContent = '<div id="analyticsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'polls') {
-        tabContent = '<div id="pollsContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'rosters') {
-        tabContent = '<div id="rostersContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'performance') {
-        tabContent = '<div id="performanceContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'recruitment') {
-        tabContent = '<div id="recruitmentContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'files') {
-        tabContent = '<div id="filesContent"><div class="empty-state"><div class="spinner"></div></div></div>';
-    } else if (teamTab === 'matches') {
-        tabContent = '<div id="matchesContent"><div class="empty-state"><div class="spinner"></div></div></div>';
+    switch (teamTab) {
+        case 'home':         tabContent = spinner('homeContent'); break;
+        case 'timers':       tabContent = renderTimersTab(team, canManage); break;
+        case 'events':       tabContent = spinner('eventsContent'); break;
+        case 'members':      tabContent = renderMembersTab(team, members, canManage); break;
+        case 'availability': tabContent = spinner('availabilityContent'); break;
+        case 'loot':         tabContent = spinner('lootContent'); break;
+        case 'dkp':          tabContent = spinner('dkpContent'); break;
+        case 'settings':     tabContent = spinner('settingsContent'); break;
     }
 
-    let html = `
-        <button class="btn btn-secondary btn-sm" onclick="showTeamList()" style="margin-bottom:16px">&larr; Back</button>
-        <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center">
+    const subs = SUB_VIEWS[mod.id];
+    const subNav = subs ? `<div class="sub-nav">${subs.map(s =>
+        `<button class="${s.tab === teamTab ? 'active' : ''}" onclick="openSubView('${mod.id}','${s.tab}')">${escapeHtml(s.label())}</button>`
+    ).join('')}</div>` : '';
+
+    content.innerHTML = `
+        <div class="card team-bar">
+            <div class="team-title">
                 <h2>${escapeHtml(team.name)}</h2>
                 <span class="team-role ${team.my_role}">${team.my_role}</span>
             </div>
-            <div class="invite-box">
-                <span style="color:#64748b;font-size:0.85em">Invite Code:</span>
-                <span class="invite-code">${team.invite_code}</span>
-                <button class="btn btn-sm btn-secondary" onclick="copyInvite('${team.invite_code}')">Copy</button>
-                <button class="btn btn-sm" id="dndBtn" onclick="toggleDND()" style="margin-left:8px;border-radius:12px;padding:4px 10px;font-size:0.8em"></button>
+            <div class="team-meta">
+                <span class="invite-chip" onclick="copyInvite('${team.invite_code}')" title="Copy invite code">Invite <code>${team.invite_code}</code></span>
+                <button class="btn btn-sm btn-secondary" id="dndBtn" onclick="toggleDND()"></button>
+                <button class="btn btn-sm btn-secondary" onclick="showTeamList()" title="Switch team">&#8646; Teams</button>
             </div>
         </div>
-
-        <select class="mobile-tab-select" onchange="mobileTabSwitch(this.value)">
-            <option value="dashboard" ${teamTab === 'dashboard' ? 'selected' : ''}>Dashboard</option>
-            <option value="chat" ${teamTab === 'chat' ? 'selected' : ''}>Chat</option>
-            <option value="announcements" ${teamTab === 'announcements' ? 'selected' : ''}>Announcements</option>
-            <option value="timers" ${teamTab === 'timers' ? 'selected' : ''}>Boss Timers</option>
-            <option value="events" ${teamTab === 'events' ? 'selected' : ''}>Events</option>
-            <option value="members" ${teamTab === 'members' ? 'selected' : ''}>Members (${members.length})</option>
-            <option value="loot" ${teamTab === 'loot' ? 'selected' : ''}>Loot</option>
-            <option value="dkp" ${teamTab === 'dkp' ? 'selected' : ''}>${ptsName()}</option>
-            <option value="wars" ${teamTab === 'wars' ? 'selected' : ''}>Wars</option>
-            <option value="availability" ${teamTab === 'availability' ? 'selected' : ''}>Availability</option>
-            <option value="polls" ${teamTab === 'polls' ? 'selected' : ''}>Polls</option>
-            <option value="rosters" ${teamTab === 'rosters' ? 'selected' : ''}>Rosters</option>
-            <option value="performance" ${teamTab === 'performance' ? 'selected' : ''}>Performance</option>
-            <option value="recruitment" ${teamTab === 'recruitment' ? 'selected' : ''}>Recruitment</option>
-            <option value="files" ${teamTab === 'files' ? 'selected' : ''}>Files</option>
-            <option value="matches" ${teamTab === 'matches' ? 'selected' : ''}>Matches</option>
-            ${team.premium_team ? `<option value="analytics" ${teamTab === 'analytics' ? 'selected' : ''}>Analytics</option>` : ''}
-            <option value="settings" ${teamTab === 'settings' ? 'selected' : ''}>Settings</option>
-        </select>
-        <div class="team-layout">
-            <div class="sidebar">
-                <button class="tab-btn ${teamTab === 'dashboard' ? 'active' : ''}" onclick="loadAndRenderDashboard()">Dashboard</button>
-                <button class="tab-btn ${teamTab === 'chat' ? 'active' : ''}" onclick="loadAndRenderChat()">Chat</button>
-                <button class="tab-btn ${teamTab === 'announcements' ? 'active' : ''}" onclick="loadAndRenderAnnouncements()">Announcements</button>
-                <button class="tab-btn ${teamTab === 'timers' ? 'active' : ''}" onclick="teamTab='timers';renderTeamView()">Boss Timers</button>
-                <button class="tab-btn ${teamTab === 'events' ? 'active' : ''}" onclick="teamTab='events';loadAndRenderEvents()">Events</button>
-                <button class="tab-btn ${teamTab === 'members' ? 'active' : ''}" onclick="teamTab='members';renderTeamView()">Members (${members.length})</button>
-                <button class="tab-btn ${teamTab === 'loot' ? 'active' : ''}" onclick="loadAndRenderLoot()">Loot</button>
-                <button class="tab-btn ${teamTab === 'dkp' ? 'active' : ''}" onclick="loadAndRenderDKP()">${ptsName()}</button>
-                <button class="tab-btn ${teamTab === 'wars' ? 'active' : ''}" onclick="loadAndRenderWars()">Wars</button>
-                <button class="tab-btn ${teamTab === 'availability' ? 'active' : ''}" onclick="loadAndRenderAvailability()">Availability</button>
-                <button class="tab-btn ${teamTab === 'polls' ? 'active' : ''}" onclick="loadAndRenderPolls()">Polls</button>
-                <button class="tab-btn ${teamTab === 'rosters' ? 'active' : ''}" onclick="loadAndRenderRosters()">Rosters</button>
-                <button class="tab-btn ${teamTab === 'performance' ? 'active' : ''}" onclick="loadAndRenderPerformance()">Performance</button>
-                <button class="tab-btn ${teamTab === 'recruitment' ? 'active' : ''}" onclick="loadAndRenderRecruitment()">Recruitment</button>
-                <button class="tab-btn ${teamTab === 'files' ? 'active' : ''}" onclick="loadAndRenderFiles()">Files</button>
-                <button class="tab-btn ${teamTab === 'matches' ? 'active' : ''}" onclick="loadAndRenderMatches()">Matches</button>
-                ${team.premium_team ? `<button class="tab-btn ${teamTab === 'analytics' ? 'active' : ''}" onclick="loadAndRenderAnalytics()">Analytics</button>` : ''}
-                <button class="tab-btn ${teamTab === 'settings' ? 'active' : ''}" onclick="teamTab='settings';renderTeamSettings()">Settings</button>
-            </div>
-            <div class="tab-content">
-                ${tabContent}
-                ${!team.premium_team ? '<div style="text-align:center;margin-top:24px;padding:8px;font-size:0.75em;color:var(--text-dim)">Powered by <b>Guild Manager</b> &middot; <a href="#" onclick="showUpgradeModal();return false" style="color:var(--accent)">Upgrade to Premium</a></div>' : ''}
-            </div>
-        </div>
+        <nav class="module-nav" aria-label="Team sections">
+            ${MODULES.map(m => `<button class="${m.id === mod.id ? 'active' : ''}" onclick="openModule('${m.id}')">${ICONS[m.id]}<span class="lbl-full">${m.label}</span><span class="lbl-short">${m.short || m.label}</span></button>`).join('')}
+        </nav>
+        ${subNav}
+        <section class="module-content">${tabContent}</section>
+        ${!team.premium_team ? '<div class="module-footer">Powered by <b>Guild Manager</b> &middot; <a href="#" onclick="showUpgradeModal();return false">Upgrade to Premium</a></div>' : ''}
     `;
 
-    content.innerHTML = html;
     updateDNDBadge();
-}
-
-// --- Mobile tab switcher ---
-function mobileTabSwitch(tab) {
-    switch(tab) {
-        case 'dashboard': loadAndRenderDashboard(); break;
-        case 'chat': loadAndRenderChat(); break;
-        case 'announcements': loadAndRenderAnnouncements(); break;
-        case 'timers': teamTab='timers'; renderTeamView(); break;
-        case 'events': teamTab='events'; loadAndRenderEvents(); break;
-        case 'members': teamTab='members'; renderTeamView(); break;
-        case 'loot': loadAndRenderLoot(); break;
-        case 'dkp': loadAndRenderDKP(); break;
-        case 'wars': loadAndRenderWars(); break;
-        case 'availability': loadAndRenderAvailability(); break;
-        case 'polls': loadAndRenderPolls(); break;
-        case 'rosters': loadAndRenderRosters(); break;
-        case 'performance': loadAndRenderPerformance(); break;
-        case 'recruitment': loadAndRenderRecruitment(); break;
-        case 'files': loadAndRenderFiles(); break;
-        case 'matches': loadAndRenderMatches(); break;
-        case 'analytics': loadAndRenderAnalytics(); break;
-        case 'settings': teamTab='settings'; renderTeamSettings(); break;
-    }
 }
