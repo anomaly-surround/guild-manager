@@ -120,6 +120,7 @@ export const routes = [
     const teamId = params[1];
     const member = await requireTeamMember(env, teamId, user.userId);
     if (!member) return json({ error: 'Not a member' }, 403);
+    if (!(await isPremiumTeam(env, teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
     const team = await env.DB.prepare('SELECT name FROM teams WHERE id = ?').bind(teamId).first();
     const events = await env.DB.prepare('SELECT * FROM events WHERE team_id = ? AND event_time > ? ORDER BY event_time ASC')
       .bind(teamId, Date.now() - 30 * 86400000).all();

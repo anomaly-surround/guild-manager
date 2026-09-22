@@ -3,6 +3,8 @@
 import { json } from '../lib/http.js';
 import { rateLimit } from '../lib/ratelimit.js';
 import { sendDiscord } from '../lib/discord.js';
+import { isPremiumTeam } from '../lib/team.js';
+import { limitsFor } from '../lib/limits.js';
 
 export const routes = [
   // POST /api/invite/:code — join team via invite code
@@ -24,9 +26,8 @@ export const routes = [
     ).bind(team.id, user.userId).first();
     if (existing) return json({ error: 'Already a member', team: { id: team.id, name: team.name } }, 400);
 
-    // Check member limit (premium owner = 50 members, free = 5)
-    const owner = await env.DB.prepare('SELECT premium FROM users WHERE id = ?').bind(team.owner_id).first();
-    const maxMembers = owner?.premium ? 50 : 5;
+    // Check member limit (plan limits; premium includes an active trial)
+    const maxMembers = limitsFor(await isPremiumTeam(env, team.id)).members;
     const count = await env.DB.prepare(
       'SELECT COUNT(*) as count FROM team_members WHERE team_id = ?'
     ).bind(team.id).first();
@@ -113,9 +114,7 @@ export const routes = [
 
     if (action === 'approve') {
       // Check member limit
-      const team = await env.DB.prepare('SELECT * FROM teams WHERE id = ?').bind(teamId).first();
-      const owner = await env.DB.prepare('SELECT premium FROM users WHERE id = ?').bind(team.owner_id).first();
-      const maxMembers = owner?.premium ? 50 : 5;
+      const maxMembers = limitsFor(await isPremiumTeam(env, teamId)).members;
       const count = await env.DB.prepare('SELECT COUNT(*) as count FROM team_members WHERE team_id = ?').bind(teamId).first();
       if (count.count >= maxMembers) {
         return json({ error: `Team is full (${maxMembers} members max)` }, 403);

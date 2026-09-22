@@ -66,7 +66,7 @@ async function renderTeamSettings() {
         <div class="card">
             <h3>Public timer page</h3>
             <p style="font-size:0.85em;color:var(--text-muted);margin:6px 0 10px">A read-only page of your boss timers that anyone with the link can open. Pin it in Discord.</p>
-            <label style="font-size:0.85em;color:var(--text-muted)"><input type="checkbox" id="publicTimers" ${settings.publicToken ? 'checked' : ''} onchange="savePublicTimers()" style="accent-color:#5865F2"> Enable public timer page</label>
+            <label style="font-size:0.85em;color:var(--text-muted)"><input type="checkbox" id="publicTimers" ${settings.publicToken ? 'checked' : ''} ${team.premium_team ? '' : 'disabled'} onchange="savePublicTimers()" style="accent-color:#5865F2"> Enable public timer page${team.premium_team ? '' : ' <span class="chip chip-accent" style="cursor:pointer" onclick="showUpgradeModal()">Premium</span>'}</label>
             ${settings.publicToken ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
                 <code id="publicTimersUrl" style="font-size:0.78em;padding:6px 8px;background:var(--surface-2);border-radius:6px;word-break:break-all">${location.origin}${location.pathname.replace(/[^/]*$/, '')}timers.html?t=${settings.publicToken}</code>
                 <button class="btn btn-sm btn-secondary" onclick="copyPublicTimersUrl()">Copy link</button>

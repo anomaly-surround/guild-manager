@@ -26,7 +26,7 @@ Load order matters only for code that runs at load time:
 | `main.js` | `init()` — always last |
 
 Modules (see OVERHAUL.md): `home`, `modules/timers.js` (Timers, ES module; shares `modules/timer-cards.js` with the public `timers.html`), `modules/events.js` (Events, ES module), `modules/roster.js` (Roster, ES module),
-`loot` + `dkp` (Loot & Points), `settings`. Shared screens: `auth`, `billing`, `teams`, `team-view`
+`modules/points.js` (Loot & Points, ES module, optional per team), `settings`. Shared screens: `auth`, `billing`, `teams`, `team-view`
 (module nav + sub-views: `MODULES` / `SUB_VIEWS`, `openModule()`, `openSubView()`).
 Cut tabs (chat, announcements, polls, files, wars, matches, performance, recruitment, analytics,
 rosters) were removed from the front end in M1; their worker routes go in M6.

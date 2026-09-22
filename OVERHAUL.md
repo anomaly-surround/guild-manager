@@ -46,15 +46,22 @@ Removed from the front end first; worker routes deleted in the cleanup milestone
 Data in cut tables is left in D1 untouched until the cleanup milestone; nothing is deleted on the
 first pass, the tabs just disappear.
 
-## Premium after the cut
+## Premium (decided in M5, 2026-09-23; numbers live in `worker/src/lib/limits.js`)
 
-Most current premium gates are on cut features (chat reactions, analytics, auctions, wishlist,
-custom role names, CSV export). Premium needs redefining; proposal, to decide before M5:
+| | Free | Premium |
+|---|---|---|
+| Teams | 1 | unlimited |
+| Members per team | 10 | 100 |
+| Boss timers | 15 | unlimited |
+| Discord webhooks | 1 | per-channel (timers / events / announcements) |
+| Loot & Points module | included | included, plus wishlist, auctions, decay |
+| Boss templates, kill history | – | ✓ |
+| Public timer page | – | ✓ |
+| Event templates, attendance report, calendar feed | – | ✓ |
+| Custom role names, no watermark | – | ✓ |
 
-- Free: 1 team, 5 members, up to 10 timers, 1 webhook.
-- Premium: unlimited teams and members, per-channel webhooks, boss templates, public timer page,
-  kill history, attendance report, iCal, Loot & Points module.
-- Until M5 the public timer page is ungated (it shipped in M2 without a premium check).
+Loot & Points stays free so no existing team loses access to its data. Premium is $2/month or $10
+lifetime with a 7-day trial (unchanged).
 
 ## Visual direction
 
@@ -89,7 +96,7 @@ custom role names, CSV export). Premium needs redefining; proposal, to decide be
 | M2 | **Timers rebuild**: module, new cards, spawn windows, next-up ordering, public timer page | DONE 2026-09-22: `js/modules/timers.js` (ES module), dense rows w/ countdown ring, location, spawn windows, edit endpoint, `timers.html` public page; verified desktop + phone with 20 bosses |
 | M3 | **Events rebuild**: module, RSVP by role, caps, week view, iCal | DONE 2026-09-22: `js/modules/events.js`, dense rows, RSVP roles (team-editable), caps w/ 409, week view, per-event lineup (replaces Rosters), attendance modal, iCal feed, edit endpoint |
 | M4 | **Roster rebuild**: members + game role + availability; Settings with module toggles | DONE 2026-09-23: `js/modules/roster.js` (Members / Availability / Requests), game_role per membership, Loot & Points toggle (off by default, auto-on for teams with data), availability hint in event details |
-| M5 | **Loot & Points** as an optional module; premium redefinition | toggle works; premium gates moved |
+| M5 | **Loot & Points** as an optional module; premium redefinition | DONE 2026-09-23: `js/modules/points.js` (Loot / Points sub-views, wishlist + auctions premium), `worker/src/lib/limits.js` (Free 1 team / 10 members / 15 timers; Premium unlimited / 100 / unlimited), premium gates on public timer page + calendar feed, upgrade/pricing/help copy updated |
 | M6 | **Cleanup**: delete cut front-end files and worker routes, drop cut tables' data export path, final polish | repo has no dead code; README updated |
 
 Each milestone is one push (page) and, when needed, one `wrangler deploy` (worker).

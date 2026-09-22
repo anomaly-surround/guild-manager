@@ -3,7 +3,7 @@
 // ES module. Uses shell globals by name (teamData, teamTab, currentTeamId, currentUser, api, token,
 // showToast, guard, renderTeamView, API). Exposed as window.Events.
 
-import { esc } from './timer-cards.js?v=20260922e';
+import { esc } from './timer-cards.js?v=20260922f';
 
 const DEFAULT_ROLES = ['Tank', 'Healer', 'DPS', 'Support'];
 const TYPE_LABEL = { raid: 'Raid', scrim: 'Scrim', gvg: 'GvG', dungeon: 'Dungeon', meeting: 'Meeting', other: 'Event' };
@@ -119,7 +119,7 @@ function render() {
     const el = root();
     if (!el) return;
     const more = [
-        `<button class="menu-item" data-action="ical">Calendar feed (.ics)</button>`,
+        `<button class="menu-item" data-action="ical">Calendar feed (.ics)${isPremium() ? '' : ' <span class="chip chip-accent">Premium</span>'}</button>`,
         isPremium() ? `<button class="menu-item" data-action="report">Attendance report</button>` : '',
     ].filter(Boolean).join('');
     el.innerHTML = `
@@ -302,7 +302,7 @@ function onClick(ev) {
         case 'savetpl': saveTemplate(byId(id)); break;
         case 'peek': expanded.add(id); view = 'list'; localStorage.setItem('gm_events_view', view); render(); root().querySelector(`[data-event-id="${id}"]`)?.scrollIntoView({ block: 'center' }); break;
         case 'week': weekAnchor = btn.dataset.dir === '0' ? Date.now() : weekAnchor + Number(btn.dataset.dir) * 7 * 86400000; rerenderBody(); break;
-        case 'ical': window.open(`${API}/api/teams/${currentTeamId}/events/export?token=${encodeURIComponent(token)}`, '_blank'); break;
+        case 'ical': isPremium() ? window.open(`${API}/api/teams/${currentTeamId}/events/export?token=${encodeURIComponent(token)}`, '_blank') : showUpgradeModal(); break;
         case 'report': showReport(); break;
     }
     if (menu && btn.closest('.menu-list')) menu.open = false;

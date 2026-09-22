@@ -101,7 +101,10 @@ export const routes = [
         const list = Array.isArray(body.rsvpRoles) ? body.rsvpRoles.map(r => String(r).trim().slice(0, 20)).filter(Boolean).slice(0, 8) : [];
         sets.push('rsvp_roles = ?'); vals.push(list.length ? JSON.stringify(list) : null);
       }
-      if (body.publicTimers !== undefined) { sets.push('public_token = ?'); vals.push(body.publicTimers ? crypto.randomUUID().replace(/-/g, '') : null); }
+      if (body.publicTimers !== undefined) {
+        if (body.publicTimers && !(await isPremiumTeam(env, teamId))) return json({ error: 'Premium required', premiumRequired: true }, 403);
+        sets.push('public_token = ?'); vals.push(body.publicTimers ? crypto.randomUUID().replace(/-/g, '') : null);
+      }
       if (body.membersCreateEvents !== undefined) { sets.push('members_create_events = ?'); vals.push(body.membersCreateEvents ? 1 : 0); }
       if (body.autoDeleteEventsDays !== undefined) { sets.push('auto_delete_events_days = ?'); vals.push(body.autoDeleteEventsDays); }
       if (body.autoDeleteChatDays !== undefined) { sets.push('auto_delete_chat_days = ?'); vals.push(body.autoDeleteChatDays); }

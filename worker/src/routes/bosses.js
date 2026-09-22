@@ -3,6 +3,7 @@
 import { json, safeJson } from '../lib/http.js';
 import { getNextFixedSpawn, getNextWeeklySpawn, getNextBiweeklySpawn, getNextTwiceDailySpawn, calcNextSpawn } from '../lib/spawn.js';
 import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
+import { limitsFor } from '../lib/limits.js';
 
 export const routes = [
   // GET /api/teams/:id/bosses
@@ -29,6 +30,12 @@ export const routes = [
     if (!body) return json({ error: "Invalid request body" }, 400);
     if (!body.name?.trim()) return json({ error: 'Name required' }, 400);
     if (body.name.trim().length > 100) return json({ error: 'Name too long (max 100 chars)' }, 400);
+
+    const cap = limitsFor(await isPremiumTeam(env, teamId)).timers;
+    if (Number.isFinite(cap)) {
+      const n = await env.DB.prepare('SELECT COUNT(*) as n FROM bosses WHERE team_id = ?').bind(teamId).first();
+      if (n.n >= cap) return json({ error: `Free plan: ${cap} timers max. Upgrade for unlimited timers.`, premiumRequired: true }, 403);
+    }
 
     const settings = await env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
     const tz = settings?.timezone || 'Asia/Manila';

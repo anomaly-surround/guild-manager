@@ -21,7 +21,7 @@ const MODULES = [
     { id: 'timers',   label: 'Timers',        tabs: ['timers'],                  open: () => window.Timers ? window.Timers.open() : setTimeout(() => openModule('timers'), 50) },
     { id: 'events',   label: 'Events',        tabs: ['events'],                  open: () => window.Events ? window.Events.open() : setTimeout(() => openModule('events'), 50) },
     { id: 'roster',   label: 'Roster',        tabs: ['members', 'availability', 'requests'], open: () => window.Roster ? window.Roster.open('members') : setTimeout(() => openModule('roster'), 50) },
-    { id: 'points',   label: 'Loot & Points', short: 'Points', tabs: ['loot', 'dkp'], open: () => loadAndRenderLoot() },
+    { id: 'points',   label: 'Loot & Points', short: 'Points', tabs: ['loot', 'dkp'], open: () => window.Points ? window.Points.open('loot') : setTimeout(() => openModule('points'), 50) },
     { id: 'settings', label: 'Settings',      tabs: ['settings'],                open: () => renderTeamSettings() },
 ];
 
@@ -32,8 +32,8 @@ const SUB_VIEWS = {
         { tab: 'requests',     label: () => { const n = window.Roster?.pendingCount() || 0; return n ? `Requests (${n})` : 'Requests'; }, officer: true, open: () => window.Roster.open('requests') },
     ],
     points: [
-        { tab: 'loot', label: () => 'Loot',      open: () => loadAndRenderLoot() },
-        { tab: 'dkp',  label: () => ptsName(),   open: () => loadAndRenderDKP() },
+        { tab: 'loot', label: () => 'Loot',      open: () => window.Points.open('loot') },
+        { tab: 'dkp',  label: () => ptsName(),   open: () => window.Points.open('dkp') },
     ],
 };
 
@@ -85,8 +85,8 @@ function renderTeamView() {
         case 'members':
         case 'availability':
         case 'requests':     tabContent = spinner('rosterContent'); break;
-        case 'loot':         tabContent = spinner('lootContent'); break;
-        case 'dkp':          tabContent = spinner('dkpContent'); break;
+        case 'loot':
+        case 'dkp':          tabContent = spinner('pointsContent'); break;
         case 'settings':     tabContent = spinner('settingsContent'); break;
     }
 

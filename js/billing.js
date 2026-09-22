@@ -16,7 +16,15 @@ function showUpgradeModal() {
         <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
             <div class="card" style="width:420px;max-width:90vw;margin:0;border-color:#7c3aed;">
                 <h2 style="color:#a78bfa">Upgrade to Premium</h2>
-                <p style="color:var(--text-muted);font-size:0.9em;margin-bottom:14px">Unlimited teams, 50 members, analytics, custom roles, and more.</p>
+                <p style="color:var(--text-muted);font-size:0.9em;margin-bottom:6px">Free covers 1 team, 10 members and 15 timers. Premium adds:</p>
+                <ul style="margin:0 0 14px 18px;color:var(--text-muted);font-size:0.85em;line-height:1.6">
+                    <li>Unlimited teams and timers, up to 100 members</li>
+                    <li>Public timer page to pin in Discord</li>
+                    <li>Per-channel Discord webhooks</li>
+                    <li>Boss templates and kill history</li>
+                    <li>Event templates, attendance report, calendar feed</li>
+                    <li>Loot wishlist, points auctions and decay</li>
+                </ul>
                 ${trialBtn}
                 <div style="display:flex;gap:10px;">
                     <button class="btn btn-primary" onclick="checkout('monthly')">Monthly Plan</button>

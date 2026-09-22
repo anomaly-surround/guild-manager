@@ -1,0 +1,42 @@
+/* Loot & Points module. Reuses toolbar/modal/form/row helpers from timers.css and events.css. */
+
+.prows { display: flex; flex-direction: column; gap: 6px; }
+.prow {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.prow-sm { grid-template-columns: minmax(0, 1fr) auto; padding: 7px 10px; }
+.prow-sm.mine { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.prow-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-muted); }
+.prow-icon svg { width: 18px; height: 18px; }
+.prow-body { min-width: 0; }
+.prow-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.prow-title { font-weight: 700; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prow-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.75rem; margin-top: 3px; }
+.p-pill { padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 0.72rem; }
+
+.p-rank { width: 28px; text-align: center; font-family: var(--mono); font-weight: 700; color: var(--text-dim); }
+.p-rank.top { color: var(--warn); }
+.prow-sm .p-rank { grid-column: 1; }
+.prow-sm:has(.p-rank) { grid-template-columns: 28px minmax(0, 1fr) auto; }
+.p-balance { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1rem; }
+.p-balance.pos { color: var(--success); }
+.p-balance.neg { color: var(--danger); }
+.p-history { margin: 4px 0 8px; }
+
+.p-section { margin-top: 18px; }
+.p-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.p-teaser { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; font-size: 0.85rem; color: var(--text-muted); }
+
+.p-bid { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.p-bid input { width: 84px; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: 0.85rem; }
+@media (max-width: 639px) {
+    .prow { grid-template-columns: 36px minmax(0, 1fr) auto; }
+    .p-bid { grid-column: 1 / -1; }
+}

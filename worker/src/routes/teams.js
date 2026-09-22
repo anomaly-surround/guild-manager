@@ -3,6 +3,7 @@
 import { json, safeJson } from '../lib/http.js';
 import { generateInviteCode } from '../lib/ids.js';
 import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
+import { limitsFor, limitsJson } from '../lib/limits.js';
 
 export const routes = [
   // GET /api/teams — list user's teams
@@ -33,8 +34,9 @@ export const routes = [
     const teamCount = await env.DB.prepare(
       'SELECT COUNT(*) as count FROM teams WHERE owner_id = ?'
     ).bind(user.userId).first();
-    if (!isPremium && teamCount.count >= 1) {
-      return json({ error: 'Free tier: 1 team max. Upgrade for more.' }, 403);
+    const teamCap = limitsFor(!!isPremium).teams;
+    if (teamCount.count >= teamCap) {
+      return json({ error: `Free plan: ${teamCap} team max. Upgrade for more.`, premiumRequired: true }, 403);
     }
 
     const teamId = crypto.randomUUID();
@@ -92,7 +94,7 @@ export const routes = [
     }
 
     return json({
-      team: { ...team, my_role: membership.role, premium_team: premiumTeam, modules },
+      team: { ...team, my_role: membership.role, premium_team: premiumTeam, modules, max_members: limitsJson(premiumTeam).members, limits: limitsJson(premiumTeam) },
       members: members.results,
     });
   } },
