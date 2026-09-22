@@ -243,7 +243,6 @@ button, input, select, textarea { font-family: inherit; }
     .brand span { display: none; }
     .user-name { display: none; }
     .user-menu .menu-list { right: 0; }
-    .header-actions .btn { padding: 6px 8px; font-size: 0.72rem; white-space: nowrap; }
     .icon-btn { width: 32px; height: 32px; }
     .container { padding: 12px; }
     .app-main { padding-bottom: calc(var(--nav-h) + 20px); }
