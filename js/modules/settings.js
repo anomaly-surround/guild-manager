@@ -2,7 +2,7 @@
 // public timer page, team icon, leadership. ES module; uses shell globals by name. window.Settings.
 // Only fields the worker actually consumes are shown here — if a setting has no consumer, it is cut.
 
-import { esc } from './timer-cards.js?v=20260923d';
+import { esc } from './timer-cards.js?v=20260923e';
 
 const TIMEZONES = ['Asia/Manila', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Singapore', 'Australia/Sydney', 'Pacific/Auckland'];
 

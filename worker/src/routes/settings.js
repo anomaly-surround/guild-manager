@@ -40,7 +40,7 @@ export const routes = [
       publicToken: settings?.public_token || null,
       rsvpRoles: parseRoles(settings?.rsvp_roles),
       modules: (() => { try { return settings?.modules ? JSON.parse(settings.modules) : {}; } catch { return {}; } })(),
-      lootMode: await lootModeFor(env, teamId),
+      lootMode: await lootModeFor(env, teamId, settings || null),
     });
   } },
 

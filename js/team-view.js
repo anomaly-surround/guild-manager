@@ -53,14 +53,19 @@ async function openTeam(teamId) {
     const content = document.getElementById('mainContent');
     content.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
 
-    const data = await api('GET', `/api/teams/${teamId}`);
+    // Everything Home needs, in flight at once (one round trip instead of three). The events
+    // and settings responses land in the GET cache, so Home and Settings read them for free.
+    const [data, bossesData] = await Promise.all([
+        api('GET', `/api/teams/${teamId}`),
+        api('GET', `/api/teams/${teamId}/bosses`).catch(() => ({})),
+        api('GET', `/api/teams/${teamId}/events`).catch(() => ({})),
+        api('GET', `/api/teams/${teamId}/settings`).then(s => { _pointsName = s.pointsName || 'DKP'; }).catch(() => {}),
+    ]);
     if (data.error) { showToast(data.error); showTeamList(); return; }
 
     teamData = data;
     teamTab = 'home';
-    // Load points name setting
-    api('GET', `/api/teams/${teamId}/settings`).then(s => { _pointsName = s.pointsName || 'DKP'; }).catch(() => {});
-    await loadTeamBosses(teamId);
+    teamBosses = bossesData.bosses || [];
     loadAndRenderHome();
 }
 

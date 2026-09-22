@@ -3,7 +3,7 @@
 //   dkp               — points standings/history/awards + auctions (premium)
 // Plus the loot log + wishlist (premium) in both modes. ES module; uses shell globals by name. window.Points.
 
-import { esc } from './timer-cards.js?v=20260923d';
+import { esc } from './timer-cards.js?v=20260923e';
 
 let tab = 'loot';
 let loot = [], wishes = [], balances = [], history = [], auctions = [], order = [];

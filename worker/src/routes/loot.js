@@ -38,13 +38,13 @@ export const routes = [
       .bind(id, teamId, body.bossId || null, body.bossName || 'Unknown', body.itemName.trim(), body.recipientId, body.dkpCost || 0, user.userId).run();
 
     // Rotation mode: taking a drop sends you to the bottom (unless the officer says it doesn't count)
-    const mode = await lootModeFor(env, teamId);
+    const settings = await env.DB.prepare('SELECT webhook_url, on_loot, loot_mode FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    const mode = await lootModeFor(env, teamId, settings || null);
     if (body.keepPosition !== true && mode === 'rotation') {
       await moveMember(env, teamId, body.recipientId, 'bottom');
     }
 
     // Discord: "X received Y" (+ who is next in the rotation). on_loot defaults to on; general webhook only.
-    const settings = await env.DB.prepare('SELECT webhook_url, on_loot FROM team_settings WHERE team_id = ?').bind(teamId).first();
     if (settings?.webhook_url && (settings.on_loot ?? 1)) {
       const recipient = await env.DB.prepare('SELECT username FROM users WHERE id = ?').bind(body.recipientId).first();
       const bossPart = body.bossName && body.bossName !== 'Unknown' ? ` from **${body.bossName}**` : '';

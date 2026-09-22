@@ -4,12 +4,16 @@
 // which sorts LAST (newcomers start at the bottom). Positions are only materialised when a
 // move needs them, so a team that never touches the rotation just runs in join order.
 
-export async function lootModeFor(env, teamId) {
-  const row = await env.DB.prepare('SELECT loot_mode FROM team_settings WHERE team_id = ?').bind(teamId).first();
+// settingsRow: pass the team_settings row if the caller already has it (saves a D1 round trip).
+// dkpCount: pass the ledger count if the caller already has it (only consulted when loot_mode is unset).
+export async function lootModeFor(env, teamId, settingsRow, dkpCount) {
+  const row = settingsRow !== undefined ? settingsRow
+    : await env.DB.prepare('SELECT loot_mode FROM team_settings WHERE team_id = ?').bind(teamId).first();
   if (row?.loot_mode === 'dkp' || row?.loot_mode === 'rotation') return row.loot_mode;
   // Unset: teams that already run a points ledger stay on DKP, everyone else gets rotation.
-  const used = await env.DB.prepare('SELECT COUNT(*) AS n FROM dkp_ledger WHERE team_id = ?').bind(teamId).first();
-  return (used?.n || 0) > 0 ? 'dkp' : 'rotation';
+  const n = dkpCount !== undefined ? dkpCount
+    : (await env.DB.prepare('SELECT COUNT(*) AS n FROM dkp_ledger WHERE team_id = ?').bind(teamId).first())?.n;
+  return (n || 0) > 0 ? 'dkp' : 'rotation';
 }
 
 // rowid breaks same-second joined_at ties so the fallback really is join order.

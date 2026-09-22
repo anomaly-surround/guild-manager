@@ -86,16 +86,19 @@ export const routes = [
     `).bind(teamId).all();
 
     // Module toggles: Loot & Points is off by default, unless the team already has loot/points data.
-    const settingsRow = await env.DB.prepare('SELECT modules FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    const settingsRow = await env.DB.prepare('SELECT modules, loot_mode FROM team_settings WHERE team_id = ?').bind(teamId).first();
     let modules = null;
     try { modules = settingsRow?.modules ? JSON.parse(settingsRow.modules) : null; } catch {}
-    if (!modules || modules.points === undefined) {
-      const used = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM dkp_ledger WHERE team_id = ?) + (SELECT COUNT(*) FROM boss_loot WHERE team_id = ?) AS n').bind(teamId, teamId).first();
-      modules = { ...(modules || {}), points: (used?.n || 0) > 0 };
+    const modeSet = settingsRow?.loot_mode === 'dkp' || settingsRow?.loot_mode === 'rotation';
+    let used = null;
+    if (!modules || modules.points === undefined || !modeSet) {
+      used = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM dkp_ledger WHERE team_id = ?) AS dkp, (SELECT COUNT(*) FROM boss_loot WHERE team_id = ?) AS loot').bind(teamId, teamId).first();
     }
+    if (!modules || modules.points === undefined) modules = { ...(modules || {}), points: ((used?.dkp || 0) + (used?.loot || 0)) > 0 };
+    const lootMode = await lootModeFor(env, teamId, settingsRow || null, used?.dkp ?? 0);
 
     return json({
-      team: { ...team, my_role: membership.role, premium_team: premiumTeam, modules, loot_mode: await lootModeFor(env, teamId), max_members: limitsJson(premiumTeam).members, limits: limitsJson(premiumTeam) },
+      team: { ...team, my_role: membership.role, premium_team: premiumTeam, modules, loot_mode: lootMode, max_members: limitsJson(premiumTeam).members, limits: limitsJson(premiumTeam) },
       members: members.results,
     });
   } },

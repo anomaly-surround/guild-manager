@@ -7,9 +7,7 @@ export async function requireTeamMember(env, teamId, userId) {
 
 export async function isPremiumTeam(env, teamId) {
   try {
-    const team = await env.DB.prepare('SELECT owner_id FROM teams WHERE id = ?').bind(teamId).first();
-    if (!team) return false;
-    const owner = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(team.owner_id).first();
+    const owner = await env.DB.prepare('SELECT u.premium, u.premium_type, u.premium_until, u.trial_started, u.trial_used FROM teams t JOIN users u ON u.id = t.owner_id WHERE t.id = ?').bind(teamId).first();
     if (!owner) return false;
     if (owner.premium) {
       if (String(owner.premium_type || '').trim().toLowerCase() === 'lifetime') return true;
