@@ -113,6 +113,8 @@ function generateInviteCode() {
 
 // --- Database setup ---
 
+let _dbInit = null; // per-isolate memo of initDB(); reset to null on failure so the next request retries
+
 async function initDB(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS users (
@@ -571,7 +573,9 @@ async function initDB(db) {
         FOREIGN KEY (user_id) REFERENCES users(id)
       )`,
     ];
-    for (const sql of migrations) await db.exec(sql).catch(() => {});
+    // prepare().run() — NOT db.exec(): D1's exec() splits on newlines, so the
+    // multi-line CREATE TABLE above could never succeed and the probe failed forever.
+    for (const sql of migrations) await db.prepare(sql).run().catch(() => {});
   }
 }
 
@@ -914,8 +918,10 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
 
-  // Init DB on first request
-  try { await initDB(env.DB); } catch(e) { console.error('initDB error:', e); }
+  // Init DB once per isolate (was: every request — ~40 CREATE TABLEs + 6 probes,
+  // and 45 sequential migrations whenever a probe failed = ~8s per API call).
+  if (!_dbInit) _dbInit = initDB(env.DB).catch(e => { _dbInit = null; console.error('initDB error:', e); });
+  await _dbInit;
 
   // --- Rate limiting for auth routes ---
   const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
