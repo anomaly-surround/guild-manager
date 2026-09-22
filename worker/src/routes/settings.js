@@ -18,23 +18,18 @@ export const routes = [
       webhookUrlSet: !!settings?.webhook_url,
       onWarning: settings?.on_warning ?? true,
       onSpawn: settings?.on_spawn ?? true,
-      onAnnouncement: settings?.on_announcement ?? true,
       onEvent: settings?.on_event ?? true,
-      onWar: settings?.on_war ?? true,
       eventReminderMinutes: settings?.event_reminder_minutes ?? 15,
       inactiveDays: settings?.inactive_days ?? 7,
       defaultEventDuration: settings?.default_event_duration ?? 60,
       teamDescription: settings?.team_description || '',
       membersCreateEvents: settings?.members_create_events ?? true,
       autoDeleteEventsDays: settings?.auto_delete_events_days ?? 0,
-      autoDeleteChatDays: settings?.auto_delete_chat_days ?? 0,
       startingDkp: settings?.starting_dkp ?? 0,
       timezone: settings?.timezone || 'Asia/Manila',
       // Premium settings — only return "set" flags, never leak the URL (even partially)
       webhookBossSet: !!settings?.webhook_boss,
       webhookEventsSet: !!settings?.webhook_events,
-      webhookWarsSet: !!settings?.webhook_wars,
-      webhookAnnouncementsSet: !!settings?.webhook_announcements,
       dkpDecayEnabled: !!(settings?.dkp_decay_enabled),
       dkpDecayPercent: settings?.dkp_decay_percent ?? 10,
       dkpDecayInactiveDays: settings?.dkp_decay_inactive_days ?? 14,
@@ -76,9 +71,7 @@ export const routes = [
       }
       if (body.onWarning !== undefined) { sets.push('on_warning = ?'); vals.push(body.onWarning ? 1 : 0); }
       if (body.onSpawn !== undefined) { sets.push('on_spawn = ?'); vals.push(body.onSpawn ? 1 : 0); }
-      if (body.onAnnouncement !== undefined) { sets.push('on_announcement = ?'); vals.push(body.onAnnouncement ? 1 : 0); }
       if (body.onEvent !== undefined) { sets.push('on_event = ?'); vals.push(body.onEvent ? 1 : 0); }
-      if (body.onWar !== undefined) { sets.push('on_war = ?'); vals.push(body.onWar ? 1 : 0); }
       if (body.eventReminderMinutes !== undefined) { sets.push('event_reminder_minutes = ?'); vals.push(body.eventReminderMinutes); }
       if (body.inactiveDays !== undefined) { sets.push('inactive_days = ?'); vals.push(body.inactiveDays); }
       if (body.defaultEventDuration !== undefined) { sets.push('default_event_duration = ?'); vals.push(body.defaultEventDuration); }
@@ -107,12 +100,10 @@ export const routes = [
       }
       if (body.membersCreateEvents !== undefined) { sets.push('members_create_events = ?'); vals.push(body.membersCreateEvents ? 1 : 0); }
       if (body.autoDeleteEventsDays !== undefined) { sets.push('auto_delete_events_days = ?'); vals.push(body.autoDeleteEventsDays); }
-      if (body.autoDeleteChatDays !== undefined) { sets.push('auto_delete_chat_days = ?'); vals.push(body.autoDeleteChatDays); }
       if (body.startingDkp !== undefined) { sets.push('starting_dkp = ?'); vals.push(body.startingDkp); }
       if (body.timezone !== undefined) { sets.push('timezone = ?'); vals.push(body.timezone); }
       // Premium fields — require premium team
       const hasPremiumFields = body.webhookBoss !== undefined || body.webhookEvents !== undefined ||
-        body.webhookWars !== undefined || body.webhookAnnouncements !== undefined ||
         body.dkpDecayEnabled !== undefined || body.dkpDecayPercent !== undefined ||
         body.dkpDecayInactiveDays !== undefined || body.dkpDecayIntervalDays !== undefined;
 
@@ -128,14 +119,6 @@ export const routes = [
         if (body.webhookEvents && !isValidDiscordWebhook(body.webhookEvents)) return json({ error: 'Invalid Discord webhook URL' }, 400);
         sets.push('webhook_events = ?'); vals.push(body.webhookEvents || null);
       }
-      if (body.webhookWars !== undefined) {
-        if (body.webhookWars && !isValidDiscordWebhook(body.webhookWars)) return json({ error: 'Invalid Discord webhook URL' }, 400);
-        sets.push('webhook_wars = ?'); vals.push(body.webhookWars || null);
-      }
-      if (body.webhookAnnouncements !== undefined) {
-        if (body.webhookAnnouncements && !isValidDiscordWebhook(body.webhookAnnouncements)) return json({ error: 'Invalid Discord webhook URL' }, 400);
-        sets.push('webhook_announcements = ?'); vals.push(body.webhookAnnouncements || null);
-      }
       if (body.dkpDecayEnabled !== undefined) { sets.push('dkp_decay_enabled = ?'); vals.push(body.dkpDecayEnabled ? 1 : 0); }
       if (body.dkpDecayPercent !== undefined) { sets.push('dkp_decay_percent = ?'); vals.push(Math.min(100, Math.max(0, parseInt(body.dkpDecayPercent) || 10))); }
       if (body.dkpDecayInactiveDays !== undefined) { sets.push('dkp_decay_inactive_days = ?'); vals.push(Math.min(365, Math.max(1, parseInt(body.dkpDecayInactiveDays) || 14))); }
@@ -146,11 +129,6 @@ export const routes = [
         vals.push(teamId);
         await env.DB.prepare(`UPDATE team_settings SET ${sets.join(', ')} WHERE team_id = ?`).bind(...vals).run();
       }
-    } else {
-      const webhookVal = body.webhookUrl || null;
-      if (webhookVal && !isValidDiscordWebhook(webhookVal)) return json({ error: 'Invalid Discord webhook URL' }, 400);
-      await env.DB.prepare('INSERT INTO team_settings (team_id, webhook_url, on_warning, on_spawn, on_announcement, timezone) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(teamId, webhookVal, body.onWarning !== false ? 1 : 0, body.onSpawn !== false ? 1 : 0, body.onAnnouncement !== false ? 1 : 0, body.timezone || 'Asia/Manila').run();
     }
 
     return json({ ok: true });

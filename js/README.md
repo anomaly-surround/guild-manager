@@ -1,7 +1,9 @@
 # Front-end layout
 
-`index.html` is markup only. Styles: `css/tokens.css` (design tokens), `css/app.css` (tab content,
-pre-overhaul), `css/shell.css` (header, module nav, Home, normalised components). Behaviour is one
+`index.html` is markup only. Styles: `css/tokens.css` (design tokens), `css/shell.css` (header, module
+nav, Home, buttons/cards), `css/components.css` (toolbar, menus, modals, forms, rows, spinner — shared by
+every module), one file per module (`timers`, `events`, `roster`, `points`), and `css/app.css` for the
+remaining pre-overhaul screens (login, team list, Settings). Behaviour is one
 classic script per feature under `js/`, loaded in order at the end of `<body>` with `?v=` cache-busting
 (bump the version in index.html on every release).
 
@@ -29,7 +31,8 @@ Modules (see OVERHAUL.md): `home`, `modules/timers.js` (Timers, ES module; share
 `modules/points.js` (Loot & Points, ES module, optional per team), `settings`. Shared screens: `auth`, `billing`, `teams`, `team-view`
 (module nav + sub-views: `MODULES` / `SUB_VIEWS`, `openModule()`, `openSubView()`).
 Cut tabs (chat, announcements, polls, files, wars, matches, performance, recruitment, analytics,
-rosters) were removed from the front end in M1; their worker routes go in M6.
+rosters) are gone from both the front end (M1) and the worker (M6). Their tables still exist in D1 with
+old data; nothing reads them.
 
 Local test harness: serve the folder on one origin and proxy `/api` + `/auth` to `wrangler dev`
 (the worker only allows the GitHub Pages origin, so a plain file server cannot reach it).

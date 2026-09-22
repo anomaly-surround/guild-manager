@@ -43,13 +43,15 @@ src/
   routes/             one module per resource; each exports `routes = [{ method, pattern, handler }]`
     auth.js           /auth/*                     (public)
     billing.js        /paddle/webhook, start-trial, checkout   (public)
-    teams.js          teams CRUD, roles, kick/leave/transfer, search-teams
+    public.js         /public/timers/:token       (public, read-only timer page)
+    teams.js          teams CRUD, member game role, roles, kick/leave/transfer
     invites.js        invite codes, join requests
-    bosses.js         bosses, kill, templates, history
-    settings.js       settings, webhook test, custom roles
-    events.js         events, rsvp, attendance, event templates, attendance report
-    announcements.js  members.js  chat.js  loot.js  dkp.js  wars.js  analytics.js
-    polls.js  rosters.js  performance.js  recruitment.js  files.js
+    bosses.js         bosses (+window/location), kill, edit, templates, history
+    settings.js       settings, webhook test, custom roles, modules, RSVP roles, public timers
+    events.js         events, RSVP by role, caps, lineup, attendance, templates, report, iCal
+    members.js        officer notes, heartbeat, availability
+    loot.js  dkp.js   Loot & Points (optional module): loot, wishlist, points, auctions
+  lib/limits.js       plan limits (Free / Premium)
 ```
 
 ## Adding a route

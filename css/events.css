@@ -1,13 +1,7 @@
-/* Events module: dense rows, RSVP segmented control, details, week view. Reuses modal/form classes from timers.css. */
+/* Events module: dense rows, RSVP segmented control, details, week view. Shared components live in components.css. */
 
 .e-viewswitch { margin: 0; }
-.e-dim { color: var(--text-dim); font-size: 0.8rem; }
 .e-section-empty { padding: 10px 2px 12px; color: var(--text-muted); font-size: 0.875rem; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.e-past-toggle {
-    display: block; width: 100%; text-align: left; margin-top: 14px; padding: 8px 2px;
-    background: none; border: 0; color: var(--text-muted); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
-}
-.e-past-toggle:hover { color: var(--text); }
 
 .erows { display: flex; flex-direction: column; gap: 6px; }
 .erows-past { opacity: 0.75; }
@@ -41,8 +35,6 @@
 .erow-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
 .erow-people { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
 .erow-people b { color: var(--text); }
-.e-rolecount { margin-right: 4px; }
-.e-rolecount b { color: var(--text-muted); }
 
 .erow-rsvp { grid-area: rsvp; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .erow-chevron { grid-area: chev; }

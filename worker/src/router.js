@@ -16,25 +16,14 @@ import { routes as inviteRoutes } from './routes/invites.js';
 import { routes as bossRoutes } from './routes/bosses.js';
 import { routes as settingsRoutes } from './routes/settings.js';
 import { routes as eventRoutes } from './routes/events.js';
-import { routes as announcementRoutes } from './routes/announcements.js';
 import { routes as memberRoutes } from './routes/members.js';
-import { routes as chatRoutes } from './routes/chat.js';
 import { routes as lootRoutes } from './routes/loot.js';
 import { routes as dkpRoutes } from './routes/dkp.js';
-import { routes as warRoutes } from './routes/wars.js';
-import { routes as analyticsRoutes } from './routes/analytics.js';
-import { routes as pollRoutes } from './routes/polls.js';
-import { routes as rosterRoutes } from './routes/rosters.js';
-import { routes as performanceRoutes } from './routes/performance.js';
-import { routes as recruitmentRoutes } from './routes/recruitment.js';
-import { routes as fileRoutes } from './routes/files.js';
 
 const PUBLIC_ROUTES = [...authRoutes, ...billingRoutes, ...publicRoutes];
 const PROTECTED_ROUTES = [
   ...teamRoutes, ...inviteRoutes, ...bossRoutes, ...settingsRoutes, ...eventRoutes,
-  ...announcementRoutes, ...memberRoutes, ...chatRoutes, ...lootRoutes, ...dkpRoutes,
-  ...warRoutes, ...analyticsRoutes, ...pollRoutes, ...rosterRoutes, ...performanceRoutes,
-  ...recruitmentRoutes, ...fileRoutes,
+  ...memberRoutes, ...lootRoutes, ...dkpRoutes,
 ];
 
 function matchRoute(routes, method, path) {

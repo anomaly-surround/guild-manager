@@ -1,4 +1,4 @@
-/* Loot & Points module. Reuses toolbar/modal/form/row helpers from timers.css and events.css. */
+/* Loot & Points module. Shared components live in components.css. */
 
 .prows { display: flex; flex-direction: column; gap: 6px; }
 .prow {

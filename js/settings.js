@@ -99,9 +99,7 @@ async function renderTeamSettings() {
             <div style="margin-top:12px;display:flex;gap:12px 20px;flex-wrap:wrap;font-size:0.85em;color:var(--text-muted)">
                 <label><input type="checkbox" id="onWarning" ${settings.onWarning ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Boss warning</label>
                 <label><input type="checkbox" id="onSpawn" ${settings.onSpawn ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Boss spawn</label>
-                <label><input type="checkbox" id="onAnnouncement" ${settings.onAnnouncement !== false ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Announcements</label>
                 <label><input type="checkbox" id="onEvent" ${settings.onEvent !== false ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> Events</label>
-                <label><input type="checkbox" id="onWar" ${settings.onWar !== false ? 'checked' : ''} onchange="saveNotifSettings()" style="accent-color:#5865F2"> War results</label>
             </div>
             <div class="form-row" style="margin-top:10px">
                 <div class="form-group" style="max-width:180px">
@@ -148,10 +146,6 @@ async function renderTeamSettings() {
                     <label>Delete old events after (days)</label>
                     <input type="number" id="autoDeleteEvents" value="${settings.autoDeleteEventsDays || 0}" min="0">
                 </div>
-                <div class="form-group" style="max-width:200px">
-                    <label>Delete old chat after (days)</label>
-                    <input type="number" id="autoDeleteChat" value="${settings.autoDeleteChatDays || 0}" min="0">
-                </div>
                 <div style="align-self:flex-end"><button class="btn btn-secondary btn-sm" onclick="saveCleanup()">Save</button></div>
             </div>
         </div>
@@ -173,20 +167,6 @@ async function renderTeamSettings() {
                 <div style="display:flex;gap:6px">
                     <input type="text" id="webhookEvents" placeholder="${settings.webhookEventsSet ? '(saved — paste a new URL to replace)' : 'https://discord.com/api/webhooks/...'}" value="">
                     ${settings.webhookEventsSet ? '<button class="btn btn-sm btn-secondary" onclick="clearChannelWebhook(\'Events\')">Clear</button>' : ''}
-                </div>
-            </div>
-            <div class="form-group" style="margin-top:6px">
-                <label>War Results Webhook ${settings.webhookWarsSet ? '<span style="color:#34d399;font-size:0.85em">✓ saved</span>' : ''}</label>
-                <div style="display:flex;gap:6px">
-                    <input type="text" id="webhookWars" placeholder="${settings.webhookWarsSet ? '(saved — paste a new URL to replace)' : 'https://discord.com/api/webhooks/...'}" value="">
-                    ${settings.webhookWarsSet ? '<button class="btn btn-sm btn-secondary" onclick="clearChannelWebhook(\'Wars\')">Clear</button>' : ''}
-                </div>
-            </div>
-            <div class="form-group" style="margin-top:6px">
-                <label>Announcements Webhook ${settings.webhookAnnouncementsSet ? '<span style="color:#34d399;font-size:0.85em">✓ saved</span>' : ''}</label>
-                <div style="display:flex;gap:6px">
-                    <input type="text" id="webhookAnnouncements" placeholder="${settings.webhookAnnouncementsSet ? '(saved — paste a new URL to replace)' : 'https://discord.com/api/webhooks/...'}" value="">
-                    ${settings.webhookAnnouncementsSet ? '<button class="btn btn-sm btn-secondary" onclick="clearChannelWebhook(\'Announcements\')">Clear</button>' : ''}
                 </div>
             </div>
             <button class="btn btn-primary btn-sm" onclick="saveChannelWebhooks()" style="margin-top:8px">Save</button>
@@ -320,9 +300,7 @@ async function saveNotifSettings() {
     const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, {
         onWarning: document.getElementById('onWarning').checked,
         onSpawn: document.getElementById('onSpawn').checked,
-        onAnnouncement: document.getElementById('onAnnouncement').checked,
         onEvent: document.getElementById('onEvent').checked,
-        onWar: document.getElementById('onWar').checked,
         eventReminderMinutes: parseInt(document.getElementById('eventReminderMin').value) || 15,
     });
     if (res.error) { showToast(res.error); await renderTeamSettings(); return; }
@@ -369,7 +347,6 @@ const saveInviteSettings = guard('saveInviteSettings', async function() {
 const saveCleanup = guard('saveCleanup', async function() {
     await api('PUT', `/api/teams/${currentTeamId}/settings`, {
         autoDeleteEventsDays: parseInt(document.getElementById('autoDeleteEvents').value) || 0,
-        autoDeleteChatDays: parseInt(document.getElementById('autoDeleteChat').value) || 0,
     });
     showToast('Cleanup settings saved');
 });
@@ -390,12 +367,8 @@ const saveChannelWebhooks = guard('saveChannelWebhooks', async function() {
     const body = {};
     const boss = document.getElementById('webhookBoss').value.trim();
     const events = document.getElementById('webhookEvents').value.trim();
-    const wars = document.getElementById('webhookWars').value.trim();
-    const ann = document.getElementById('webhookAnnouncements').value.trim();
     if (boss) body.webhookBoss = boss;
     if (events) body.webhookEvents = events;
-    if (wars) body.webhookWars = wars;
-    if (ann) body.webhookAnnouncements = ann;
     if (Object.keys(body).length === 0) { showToast('Nothing to save — paste a webhook URL first'); return; }
     const res = await api('PUT', `/api/teams/${currentTeamId}/settings`, body);
     if (res.error) { showToast(res.error); return; }

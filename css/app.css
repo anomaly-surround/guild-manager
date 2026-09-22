@@ -204,38 +204,17 @@
     .team-role.member { background: #064e3b; color: #6ee7b7; }
 
     /* Member list */
-    .member-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 14px;
-        background: var(--bg-item);
-        border-radius: 8px;
-        margin-bottom: 6px;
-    }
+    
 
-    .member-avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: #1e293b;
-    }
+    
 
-    .member-info { flex: 1; }
+    
 
-    .member-name { font-size: 0.9em; font-weight: 600; }
+    
 
-    .member-role-badge {
-        font-size: 0.7em;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-weight: 600;
-    }
+    
 
-    .member-actions {
-        display: flex;
-        gap: 6px;
-    }
+    
 
     /* Invite section */
     
@@ -276,22 +255,9 @@
     }
 
     /* Boss timers */
-    .boss-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px 16px;
-        background: var(--bg-item);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        margin-bottom: 8px;
-        position: relative;
-    }
+    
 
-    .boss-item.spawning {
-        border-color: #7f1d1d;
-        animation: pulse-red 1.5s ease-in-out infinite;
-    }
+    
 
     .boss-item.warning { border-color: #78350f; }
 
@@ -300,9 +266,9 @@
         50% { box-shadow: 0 0 15px rgba(239,68,68,0.4); }
     }
 
-    .boss-name-text { font-weight: 600; font-size: 0.95em; }
-    .boss-meta-text { font-size: 0.75em; color: #64748b; margin-top: 2px; }
-    .boss-death-text { font-size: 0.7em; color: #f59e0b; margin-top: 2px; }
+    
+    
+    
 
     .boss-countdown {
         font-size: 1.4em;
@@ -316,46 +282,25 @@
     .boss-countdown.warning-text { color: #f59e0b; }
     .boss-countdown.spawned { color: #ef4444; }
 
-    .boss-actions { display: flex; gap: 6px; }
+    
 
     /* Boss grid mode */
-    .boss-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 10px;
-    }
-    .boss-grid .boss-item {
-        flex-direction: column;
-        text-align: center;
-        padding: 16px 12px;
-    }
-    .boss-grid .boss-item > div:first-child { text-align: center; }
+    
+    
+    
     .boss-grid .boss-countdown { min-width: auto; text-align: center; font-size: 1.6em; }
-    .boss-grid .boss-actions { justify-content: center; }
-    .boss-grid .boss-meta-text { font-size: 0.7em; }
+    
+    
 
-    .view-toggle { display: flex; gap: 2px; }
-    .view-toggle button {
-        padding: 5px 10px;
-        background: var(--tab-bg);
-        color: var(--text-dim);
-        border: 1px solid var(--border);
-        cursor: pointer;
-        font-size: 0.8em;
-    }
-    .view-toggle button:first-child { border-radius: 6px 0 0 6px; }
-    .view-toggle button:last-child { border-radius: 0 6px 6px 0; }
+    
+    
+    
+    
     .view-toggle button.active { background: var(--tab-active); color: var(--accent); }
 
-    .collapsible-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: pointer;
-        user-select: none;
-    }
+    
 
-    .collapsible-body { overflow: hidden; max-height: 0; transition: max-height 0.3s ease-out; }
+    
     .collapsible-body.open { max-height: 2000px; }
 
     .toggle-arrow { font-size: 0.8em; color: #64748b; transition: transform 0.2s; }
@@ -377,72 +322,37 @@
     
 
     /* Legacy tab-bar hidden but kept for settings page */
-    .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; }
+    
 
     /* Events */
-    .event-card {
-        background: var(--bg-item);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 14px 16px;
-        margin-bottom: 10px;
-    }
+    
 
     .event-card.past { opacity: 0.5; }
 
-    .event-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-    }
+    
 
-    .event-title { font-weight: 600; font-size: 1em; }
+    
 
-    .event-type-badge {
-        font-size: 0.7em;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
+    
 
     .event-type-badge.scrim { background: #1e3a5f; color: #60a5fa; }
     .event-type-badge.raid { background: #7f1d1d; color: #fca5a5; }
     .event-type-badge.gvg { background: #581c87; color: #c084fc; }
     .event-type-badge.other { background: #1e293b; color: #94a3b8; }
 
-    .event-time { font-size: 0.85em; color: #7a8baa; margin-top: 4px; }
-    .event-desc { font-size: 0.8em; color: #64748b; margin-top: 6px; }
+    
+    
 
-    .rsvp-bar {
-        display: flex;
-        gap: 6px;
-        margin-top: 10px;
-        align-items: center;
-    }
+    
 
-    .rsvp-btn {
-        padding: 5px 12px;
-        border: 1px solid var(--border-input);
-        border-radius: 6px;
-        background: transparent;
-        color: #94a3b8;
-        cursor: pointer;
-        font-size: 0.8em;
-        font-weight: 600;
-        transition: all 0.15s;
-    }
+    
 
-    .rsvp-btn:hover { border-color: #a78bfa; color: #e0e6f0; }
-    .rsvp-btn.active-going { background: #065f46; border-color: #065f46; color: #34d399; }
-    .rsvp-btn.active-maybe { background: #78350f; border-color: #78350f; color: #fcd34d; }
-    .rsvp-btn.active-not { background: #7f1d1d; border-color: #7f1d1d; color: #fca5a5; }
+    
+    
+    
+    
 
-    .rsvp-counts {
-        font-size: 0.75em;
-        color: #64748b;
-        margin-left: auto;
-    }
+    
 
     /* Dashboard */
     
@@ -453,176 +363,66 @@
     
 
     /* Chat */
-    .chat-container {
-        display: flex;
-        flex-direction: column;
-        height: 60vh;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    .chat-messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-    .chat-msg {
-        display: flex;
-        gap: 8px;
-        align-items: flex-start;
-    }
-    .chat-msg-avatar {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        flex-shrink: 0;
-        background: #334155;
-    }
-    .chat-msg-body { flex: 1; min-width: 0; }
-    .chat-msg-name { font-size: 0.8em; font-weight: 600; color: var(--accent); }
-    .chat-msg-time { font-size: 0.65em; color: var(--text-dim); margin-left: 6px; }
-    .chat-msg-text { font-size: 0.9em; word-wrap: break-word; margin-top: 1px; }
-    .chat-input-bar {
-        display: flex;
-        gap: 8px;
-        padding: 10px 12px;
-        border-top: 1px solid #1e293b;
-        background: var(--bg-item);
-    }
-    .chat-input-bar input {
-        flex: 1;
-        background: var(--bg-input);
-        border: 1px solid var(--border-input);
-        color: var(--text);
-        padding: 10px;
-        border-radius: 8px;
-        font-size: 0.9em;
-    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     /* Announcements */
-    .announcement-card {
-        background: var(--bg-item);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 14px 16px;
-        margin-bottom: 10px;
-    }
-    .announcement-card.pinned { border-left: 3px solid #f59e0b; }
-    .announcement-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-    }
-    .announcement-title { font-weight: 600; font-size: 1em; }
-    .announcement-body { font-size: 0.85em; color: #94a3b8; margin-top: 6px; white-space: pre-wrap; }
-    .announcement-meta { font-size: 0.7em; color: #64748b; margin-top: 6px; }
-    .pin-icon { color: #f59e0b; font-size: 0.85em; margin-right: 4px; }
+    
+    
+    
+    
+    
+    
+    
 
     /* Wars */
-    .war-item {
-        background: var(--bg-item);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin-bottom: 8px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .war-item.win { border-left: 3px solid #34d399; }
-    .war-item.loss { border-left: 3px solid #ef4444; }
+    
+    
+    
     .war-item.draw { border-left: 3px solid #f59e0b; }
-    .war-result { font-weight: 700; font-size: 0.85em; padding: 2px 10px; border-radius: 10px; }
-    .war-result.win { background: #065f46; color: #34d399; }
-    .war-result.loss { background: #7f1d1d; color: #fca5a5; }
+    
+    
+    
     .war-result.draw { background: #78350f; color: #fcd34d; }
-    .stat-box {
-        text-align: center;
-        padding: 12px;
-        border-radius: 8px;
-        background: var(--bg-item);
-        flex: 1;
-    }
-    .stat-number { font-size: 1.8em; font-weight: 700; }
-    .stat-label { font-size: 0.75em; color: #64748b; text-transform: uppercase; }
+    
+    
+    
 
     /* Loot & DKP */
-    .loot-item {
-        background: var(--bg-item);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin-bottom: 8px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .loot-item-name { font-weight: 600; color: #fbbf24; }
-    .dkp-row {
-        background: var(--bg-item);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin-bottom: 6px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .dkp-positive { color: #34d399; font-weight: 600; }
-    .dkp-negative { color: #ef4444; font-weight: 600; }
+    
+    
+    
+    
+    
 
     /* Availability */
-    .avail-grid {
-        display: grid;
-        grid-template-columns: 80px repeat(7, 1fr);
-        gap: 2px;
-        font-size: 0.75em;
-        margin-top: 12px;
-    }
-    .avail-header { background: #1e293b; padding: 6px 4px; text-align: center; border-radius: 4px; font-weight: 600; color: #94a3b8; }
-    .avail-cell { background: var(--bg-item); padding: 4px; text-align: center; border-radius: 4px; min-height: 28px; }
-    .avail-slot { background: #065f46; color: #34d399; border-radius: 3px; padding: 2px 4px; margin: 1px 0; font-size: 0.9em; }
+    
+    
+    
+    
 
     /* Activity */
-    .activity-dot {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 4px;
-        vertical-align: middle;
-    }
+    
     .activity-dot.online { background: #34d399; }
     .activity-dot.away { background: #f59e0b; }
     .activity-dot.inactive { background: #ef4444; }
-    .activity-text { font-size: 0.7em; color: #64748b; }
+    
 
     /* Notes */
-    .note-item {
-        background: var(--bg-item);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        padding: 10px 12px;
-        margin-bottom: 8px;
-    }
-    .note-text { font-size: 0.85em; white-space: pre-wrap; }
-    .note-meta { font-size: 0.7em; color: #64748b; margin-top: 4px; }
+    
+    
+    
 
-    @media (max-width: 900px) {
-        
-    }
-    @media (max-width: 768px) {
-        
-        
-        
-        .boss-grid {
-            grid-template-columns: 1fr !important;
-        }
-    }
+    
+    
     @media (max-width: 600px) {
         /* Header */
         
@@ -665,20 +465,13 @@
         }
 
         /* Boss items */
-        .boss-item {
-            flex-wrap: wrap;
-            gap: 8px;
-            padding: 10px 12px;
-        }
+        
         .boss-countdown {
             min-width: auto !important;
             text-align: left;
             font-size: 1.2em;
         }
-        .boss-actions {
-            width: 100%;
-            justify-content: flex-start;
-        }
+        
 
         /* Team cards */
         .team-card {
@@ -695,62 +488,28 @@
         }
 
         /* Member items */
-        .member-item {
-            flex-wrap: wrap;
-            gap: 8px;
-            padding: 8px 10px;
-        }
-        .member-actions {
-            width: 100%;
-            justify-content: flex-end;
-        }
+        
+        
 
         /* War items */
-        .war-item {
-            flex-wrap: wrap;
-            gap: 6px;
-            font-size: 0.85em;
-        }
-        .stat-box {
-            padding: 8px;
-        }
-        .stat-number {
-            font-size: 1.4em;
-        }
+        
+        
+        
 
         /* Loot & DKP */
-        .loot-item, .dkp-row {
-            flex-wrap: wrap;
-            gap: 6px;
-            font-size: 0.85em;
-        }
+        
 
         /* Events */
-        .event-header {
-            flex-direction: column;
-            gap: 6px;
-        }
-        .rsvp-bar {
-            flex-wrap: wrap;
-        }
+        
+        
 
         /* Availability grid */
-        .avail-grid {
-            grid-template-columns: 60px repeat(7, 1fr);
-            font-size: 0.65em;
-            gap: 1px;
-        }
-        .avail-header {
-            padding: 4px 2px;
-        }
+        
+        
 
         /* Chat */
-        .chat-container {
-            height: 50vh;
-        }
-        .chat-input-bar {
-            padding: 8px;
-        }
+        
+        
 
         /* Hide sidebar tabs on mobile, show dropdown instead */
         
@@ -762,10 +521,7 @@
         
 
         /* Announcements */
-        .announcement-header {
-            flex-direction: column;
-            gap: 4px;
-        }
+        
 
         /* Dash grid */
         

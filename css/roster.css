@@ -1,4 +1,4 @@
-/* Roster module: member rows, availability grid, notes. Reuses toolbar/modal/form classes from timers.css. */
+/* Roster module: member rows, availability grid, notes. Shared components live in components.css. */
 
 .t-ok { color: var(--success); font-weight: 600; }
 .t-warnish { color: var(--warn); }

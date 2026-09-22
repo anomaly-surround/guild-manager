@@ -98,18 +98,6 @@ const joinTeam = guard('joinTeam', async function() {
     }
 });
 
-const changeRole = guard('changeRole', async function(teamId, userId, role) {
-    await api('POST', `/api/teams/${teamId}/members/role`, { userId, role });
-    openTeam(teamId);
-});
-
-const kickMember = guard('kickMember', async function(teamId, userId, username) {
-    if (!confirm(`Kick ${username}?`)) return;
-    await api('POST', `/api/teams/${teamId}/kick`, { userId });
-    showToast(`${username} kicked`);
-    openTeam(teamId);
-});
-
 const deleteTeam = guard('deleteTeam', async function(teamId) {
     if (!confirm('Delete this team? This cannot be undone.')) return;
     await api('DELETE', `/api/teams/${teamId}`);

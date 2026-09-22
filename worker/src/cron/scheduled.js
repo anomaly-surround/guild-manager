@@ -230,9 +230,9 @@ export async function handleScheduled(env) {
     }
   } catch (e) { console.error('Auction close error:', e); }
 
-  // --- Auto-delete old events and chat. Collect all deletes into one batch. ---
+  // --- Auto-delete old events. Collect all deletes into one batch. ---
   try {
-    const allSettings = await env.DB.prepare('SELECT team_id, auto_delete_events_days, auto_delete_chat_days FROM team_settings WHERE auto_delete_events_days > 0 OR auto_delete_chat_days > 0').all();
+    const allSettings = await env.DB.prepare('SELECT team_id, auto_delete_events_days FROM team_settings WHERE auto_delete_events_days > 0').all();
     if (allSettings.results.length > 0) {
       const deleteWrites = [];
       for (const s of allSettings.results) {
@@ -244,10 +244,6 @@ export async function handleScheduled(env) {
             deleteWrites.push(env.DB.prepare('DELETE FROM event_attendance WHERE event_id = ?').bind(e.id));
             deleteWrites.push(env.DB.prepare('DELETE FROM events WHERE id = ?').bind(e.id));
           }
-        }
-        if (s.auto_delete_chat_days > 0) {
-          const cutoff = Math.floor(now / 1000) - s.auto_delete_chat_days * 86400;
-          deleteWrites.push(env.DB.prepare('DELETE FROM chat_messages WHERE team_id = ? AND created_at < ?').bind(s.team_id, cutoff));
         }
       }
       if (deleteWrites.length > 0) await env.DB.batch(deleteWrites);
