@@ -1,7 +1,7 @@
 // Loot & Points module (optional per team): loot log + wishlist (premium), points standings/history/
 // awards + auctions (premium). ES module; uses shell globals by name. window.Points.
 
-import { esc } from './timer-cards.js?v=20260922g';
+import { esc } from './timer-cards.js?v=20260923a';
 
 let tab = 'loot';
 let loot = [], wishes = [], balances = [], history = [], auctions = [];

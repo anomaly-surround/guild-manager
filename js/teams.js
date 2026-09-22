@@ -1,37 +1,27 @@
 // Team list, create/join modals, membership actions (role, kick, leave, delete)
 
+function _teamModal(title, fieldsHtml, submitLabel, onSubmit) {
+    const host = document.getElementById('deathModal');
+    host.innerHTML = `<div class="modal-backdrop"><div class="card modal-card"><h2>${title}</h2>
+        <form class="tform" id="teamForm">${fieldsHtml}
+            <div class="tf-actions tf-wide"><button type="button" class="btn btn-secondary" data-close="1">Cancel</button><button type="submit" class="btn btn-primary">${submitLabel}</button></div>
+        </form></div></div>`;
+    const back = host.firstElementChild;
+    back.addEventListener('click', (e) => { if (e.target === back || e.target.closest('[data-close]')) host.innerHTML = ''; });
+    back.querySelector('#teamForm').addEventListener('submit', (e) => { e.preventDefault(); onSubmit(); });
+    setTimeout(() => back.querySelector('input')?.focus(), 0);
+}
+
 function showCreateTeamModal() {
-    document.getElementById('deathModal').innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
-            <div class="card" style="width:400px;max-width:90vw;margin:0;">
-                <h2>Create Team</h2>
-                <div class="form-group">
-                    <label>Team Name</label>
-                    <input type="text" id="teamName" placeholder="e.g. Shadow Guild">
-                </div>
-                <div style="display:flex;gap:8px;margin-top:12px;">
-                    <button class="btn btn-primary" onclick="createTeam()">Create</button>
-                    <button class="btn" style="background:var(--bg-input);color:var(--text);" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
-                </div>
-            </div>
-        </div>`;
+    _teamModal('New team', `
+        <label class="tf-field tf-wide"><span>Team name</span><input type="text" id="teamName" maxlength="60" required placeholder="e.g. Shadow Guild"></label>
+        <p class="tf-help tf-wide">You become the leader. Share the invite code from the team bar to bring people in.</p>`, 'Create team', createTeam);
 }
 
 function showJoinTeamModal() {
-    document.getElementById('deathModal').innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
-            <div class="card" style="width:400px;max-width:90vw;margin:0;">
-                <h2>Join Team</h2>
-                <div class="form-group">
-                    <label>Invite Code</label>
-                    <input type="text" id="inviteCode" placeholder="e.g. AbCd1234">
-                </div>
-                <div style="display:flex;gap:8px;margin-top:12px;">
-                    <button class="btn btn-primary" onclick="joinTeam()">Join</button>
-                    <button class="btn" style="background:var(--bg-input);color:var(--text);" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
-                </div>
-            </div>
-        </div>`;
+    _teamModal('Join a team', `
+        <label class="tf-field tf-wide"><span>Invite code</span><input type="text" id="inviteCode" maxlength="12" required placeholder="e.g. AbCd1234" autocapitalize="off" autocomplete="off"></label>
+        <p class="tf-help tf-wide">Ask your leader for the 8-character code shown in their team bar.</p>`, 'Join', joinTeam);
 }
 
 async function showTeamList() {
@@ -41,36 +31,36 @@ async function showTeamList() {
 
     const data = await api('GET', '/api/teams');
     const teams = data.teams || [];
+    const actions = `<div class="teams-actions">
+        <button class="btn btn-secondary" onclick="showJoinTeamModal()">Join with code</button>
+        <button class="btn btn-primary" onclick="showCreateTeamModal()">+ New team</button>
+    </div>`;
 
-    let html = `
-        <h3 style="color:var(--text-muted);margin:20px 0 14px;font-size:1.1em">Your Teams</h3>
-    `;
-
+    let html = `<div class="teams-head"><h2>Your teams</h2>${teams.length ? actions : ''}</div>`;
     if (teams.length === 0) {
-        html += '<div class="empty-state">No teams yet. Create or join one above.</div>';
+        html += `<div class="t-empty card">
+            <div class="t-empty-title">No teams yet</div>
+            <div class="t-empty-sub">Create one for your guild, or join with the invite code your leader shares.</div>
+            ${actions}
+        </div>`;
     } else {
-        for (const t of teams) {
-            const initials = t.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-            html += `
-                <div class="team-card" onclick="openTeam('${t.id}')">
-                    ${t.team_icon ? `<img class="team-icon" src="${t.team_icon}" style="object-fit:cover">` : `<div class="team-icon">${initials}</div>`}
-                    <div class="team-info">
-                        <div class="team-name">${escapeHtml(t.name)}</div>
-                        ${t.description ? `<div class="team-desc">${escapeHtml(t.description)}</div>` : ''}
-                        <div class="team-stats">
-                            <span>${t.member_count} member${t.member_count !== 1 ? 's' : ''}</span>
-                            <span style="color:#34d399">${t.online_count || 0} online</span>
-                            ${t.upcoming_events_24h > 0 ? `<span style="color:#f59e0b">${t.upcoming_events_24h} event${t.upcoming_events_24h !== 1 ? 's' : ''} today</span>` : ''}
-                        </div>
-                    </div>
-                    <div class="team-card-right">
-                        <span class="team-role ${t.role}">${t.role}</span>
-                    </div>
+        html += '<div class="trows">' + teams.map(t => {
+            const initials = t.name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+            const stats = [`${t.member_count} member${t.member_count !== 1 ? 's' : ''}`,
+                `<span class="${t.online_count ? 't-ok' : ''}">${t.online_count || 0} online</span>`,
+                t.upcoming_events_24h > 0 ? `<span class="t-warnish">${t.upcoming_events_24h} event${t.upcoming_events_24h !== 1 ? 's' : ''} today</span>` : ''].filter(Boolean).join(' · ');
+            return `
+            <article class="trow-team" onclick="openTeam('${t.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter')openTeam('${t.id}')">
+                ${t.team_icon ? `<img class="trow-icon" src="${escapeHtml(t.team_icon)}" alt="">` : `<span class="trow-icon trow-initials">${escapeHtml(initials)}</span>`}
+                <div class="trow-body">
+                    <div class="trow-top"><span class="trow-name">${escapeHtml(t.name)}</span><span class="team-role ${t.role}">${t.role}</span></div>
+                    <div class="trow-meta">${t.description ? escapeHtml(t.description) + ' · ' : ''}${stats}</div>
                 </div>
-            `;
-        }
+                <span class="trow-chev">&#8250;</span>
+            </article>`;
+        }).join('') + '</div>';
+        if (!currentUser?.premium) html += '<p class="teams-note">Free plan includes one team you lead; joining others is unlimited. <a href="#" onclick="showUpgradeModal();return false">Premium</a> removes the limit.</p>';
     }
-
     content.innerHTML = html;
 }
 
@@ -94,6 +84,7 @@ const joinTeam = guard('joinTeam', async function() {
         showToast('Join request sent! Waiting for approval.');
     } else {
         showToast(`Joined ${data.team.name}!`);
+        _invalidateForMutation('/api/teams');
         showTeamList();
     }
 });

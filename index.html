@@ -12,31 +12,34 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/tokens.css?v=20260922g">
-    <link rel="stylesheet" href="css/app.css?v=20260922g">
-    <link rel="stylesheet" href="css/shell.css?v=20260922g">
-    <link rel="stylesheet" href="css/components.css?v=20260922g">
-    <link rel="stylesheet" href="css/timers.css?v=20260922g">
-    <link rel="stylesheet" href="css/events.css?v=20260922g">
-    <link rel="stylesheet" href="css/roster.css?v=20260922g">
-    <link rel="stylesheet" href="css/points.css?v=20260922g">
+    <link rel="stylesheet" href="css/tokens.css?v=20260923a">
+    <link rel="stylesheet" href="css/app.css?v=20260923a">
+    <link rel="stylesheet" href="css/shell.css?v=20260923a">
+    <link rel="stylesheet" href="css/components.css?v=20260923a">
+    <link rel="stylesheet" href="css/timers.css?v=20260923a">
+    <link rel="stylesheet" href="css/events.css?v=20260923a">
+    <link rel="stylesheet" href="css/roster.css?v=20260923a">
+    <link rel="stylesheet" href="css/points.css?v=20260923a">
 </head>
 <body>
     <header class="app-header">
         <a class="brand" onclick="goHome()"><img src="icon.svg" alt=""><span>Guild Manager</span></a>
-        <div class="header-actions" id="headerActions" style="display:none">
-            <button class="btn btn-primary btn-sm" onclick="showCreateTeamModal()">Create team</button>
-            <button class="btn btn-secondary btn-sm" onclick="showJoinTeamModal()">Join</button>
-        </div>
         <div class="header-spacer"></div>
-        <button class="icon-btn" onclick="showHelpModal()" title="Help &amp; guide">?</button>
-        <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">&#127769;</button>
-        <div class="user-info" id="userInfo" style="display:none">
-            <button class="btn btn-sm" id="upgradeBtn" style="display:none" onclick="showUpgradeModal()">Upgrade</button>
-            <img class="user-avatar" id="userAvatar" src="" alt="">
-            <span class="user-name" id="userName"></span>
-            <button class="btn btn-logout" onclick="logout()">Logout</button>
-        </div>
+        <button class="icon-btn" onclick="showHelpModal()" title="Help &amp; guide" aria-label="Help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/></svg></button>
+        <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+        <details class="menu user-menu" id="userInfo" style="display:none">
+            <summary class="user-chip" title="Account">
+                <img class="user-avatar" id="userAvatar" src="" alt="">
+                <span class="user-initial" id="userInitial"></span>
+                <span class="user-name" id="userName"></span>
+            </summary>
+            <div class="menu-list">
+                <div class="user-menu-head"><b id="userMenuName"></b><span class="chip chip-muted" id="userPlan"></span></div>
+                <button class="menu-item" id="upgradeBtn" onclick="showUpgradeModal()">Upgrade to Premium</button>
+                <a class="menu-item" href="pricing.html" target="_blank" rel="noopener">Plans &amp; pricing</a>
+                <button class="menu-item menu-item-danger" onclick="logout()">Log out</button>
+            </div>
+        </details>
     </header>
 
     <main class="container app-main" id="mainContent"></main>
@@ -44,22 +47,22 @@
     <div id="deathModal"></div>
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="js/theme-help.js?v=20260922g"></script>
-    <script src="js/core.js?v=20260922g"></script>
-    <script src="js/util.js?v=20260922g"></script>
-    <script src="js/api.js?v=20260922g"></script>
-    <script src="js/notifications.js?v=20260922g"></script>
-    <script src="js/auth.js?v=20260922g"></script>
-    <script src="js/billing.js?v=20260922g"></script>
-    <script src="js/teams.js?v=20260922g"></script>
-    <script src="js/team-view.js?v=20260922g"></script>
-    <script src="js/home.js?v=20260922g"></script>
-    <script src="js/settings.js?v=20260922g"></script>
-    <script src="js/timers.js?v=20260922g"></script>
-    <script src="js/main.js?v=20260922g"></script>
-    <script type="module" src="js/modules/timers.js?v=20260922g"></script>
-    <script type="module" src="js/modules/events.js?v=20260922g"></script>
-    <script type="module" src="js/modules/roster.js?v=20260922g"></script>
-    <script type="module" src="js/modules/points.js?v=20260922g"></script>
+    <script src="js/theme-help.js?v=20260923a"></script>
+    <script src="js/core.js?v=20260923a"></script>
+    <script src="js/util.js?v=20260923a"></script>
+    <script src="js/api.js?v=20260923a"></script>
+    <script src="js/notifications.js?v=20260923a"></script>
+    <script src="js/auth.js?v=20260923a"></script>
+    <script src="js/billing.js?v=20260923a"></script>
+    <script src="js/teams.js?v=20260923a"></script>
+    <script src="js/team-view.js?v=20260923a"></script>
+    <script src="js/home.js?v=20260923a"></script>
+    <script src="js/settings.js?v=20260923a"></script>
+    <script src="js/timers.js?v=20260923a"></script>
+    <script src="js/main.js?v=20260923a"></script>
+    <script type="module" src="js/modules/timers.js?v=20260923a"></script>
+    <script type="module" src="js/modules/events.js?v=20260923a"></script>
+    <script type="module" src="js/modules/roster.js?v=20260923a"></script>
+    <script type="module" src="js/modules/points.js?v=20260923a"></script>
 </body>
 </html>

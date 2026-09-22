@@ -38,29 +38,8 @@ button, input, select, textarea { font-family: inherit; }
     white-space: nowrap;
     user-select: none;
 }
-.brand img { height: 22px; width: 22px; }
-.header-actions { display: flex; gap: 6px; align-items: center; }
-.header-spacer { flex: 1; }
-.icon-btn {
-    width: 36px;
-    height: 36px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
-    color: var(--text);
-    font-size: 15px;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-}
+.brand img { height: 24px; width: 24px; border-radius: 6px; }
 .icon-btn:hover { background: var(--surface-3); border-color: var(--border-strong); }
-.user-info { display: flex; align-items: center; gap: 8px; }
-.user-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--surface-2); object-fit: cover; }
-.user-avatar:not([src]), .user-avatar[src=""] { display: none; }
-.user-name { font-size: 0.875rem; color: var(--text-muted); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btn-logout { background: transparent; color: var(--text-dim); padding: 6px 8px; font-size: 0.8rem; }
-.btn-logout:hover { color: var(--danger); }
 
 /* ---------- Layout ---------- */
 .container {
@@ -263,9 +242,8 @@ button, input, select, textarea { font-family: inherit; }
     .app-header { padding: 0 10px; gap: 6px; }
     .brand span { display: none; }
     .user-name { display: none; }
+    .user-menu .menu-list { right: 0; }
     .header-actions .btn { padding: 6px 8px; font-size: 0.72rem; white-space: nowrap; }
-    #upgradeBtn { display: none !important; }
-    .btn-logout { padding: 6px 4px; font-size: 0.72rem; }
     .icon-btn { width: 32px; height: 32px; }
     .container { padding: 12px; }
     .app-main { padding-bottom: calc(var(--nav-h) + 20px); }
@@ -300,3 +278,87 @@ button, input, select, textarea { font-family: inherit; }
     .module-nav button .lbl-short { display: inline; }
     html, body { overflow-x: hidden; }
 }
+
+/* ---------- Header: user menu ---------- */
+.chip-accent { background: var(--accent-soft); color: var(--accent); }
+.icon-btn svg { width: 18px; height: 18px; }
+.user-menu > summary.user-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 10px 3px 3px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; list-style: none;
+}
+.user-menu > summary::-webkit-details-marker { display: none; }
+.user-menu > summary:hover { border-color: var(--border-strong); }
+.user-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--surface-3); }
+.user-initial { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 0.8rem; }
+.user-name { font-size: 0.85rem; font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-menu .menu-list { min-width: 220px; }
+.user-menu-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px 10px; border-bottom: 1px solid var(--border); margin-bottom: 4px; font-size: 0.9rem; }
+.user-menu .menu-item { text-decoration: none; }
+
+/* ---------- Login ---------- */
+.login { display: grid; grid-template-columns: 1fr; grid-template-areas: "hero" "card" "points"; gap: 20px; align-items: start; max-width: 920px; margin: 8px auto 0; }
+.login-hero { grid-area: hero; }
+.login-points { grid-area: points; }
+.login-card { grid-area: card; }
+.login-logo { width: 52px; height: 52px; border-radius: 13px; box-shadow: 0 6px 18px rgba(91, 74, 224, 0.35); }
+.login-hero h1 { font-size: 1.9rem; letter-spacing: -0.02em; margin: 10px 0 6px; }
+.login-tag { color: var(--text-muted); font-size: 1rem; max-width: 420px; line-height: 1.5; margin: 0; }
+.login-points { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.login-points li { display: flex; gap: 12px; align-items: flex-start; }
+.login-points svg { width: 22px; height: 22px; flex-shrink: 0; color: var(--accent); margin-top: 2px; }
+.login-points b { display: block; font-size: 0.95rem; }
+.login-points span { display: block; font-size: 0.82rem; color: var(--text-muted); }
+.login-card { padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+.login-card h2 { margin: 0 0 4px; font-size: 1.15rem; }
+.btn-discord { background: #5865F2; color: #fff; padding: 11px 16px; font-size: 0.95rem; }
+.btn-discord:hover { background: #4752C4; }
+.btn-google { background: #fff; color: #1f2937; padding: 11px 16px; font-size: 0.95rem; border-color: #d1d5db; }
+.btn-google:hover { background: #f3f4f6; }
+.login-or { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 0.78rem; margin: 4px 0; }
+.login-or::before, .login-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.login-guest { display: flex; gap: 8px; }
+.login-guest input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: 0.95rem; }
+.login-guest input:focus { outline: none; border-color: var(--accent); }
+.login-note { margin: 2px 0 0; font-size: 0.75rem; color: var(--text-dim); line-height: 1.4; }
+.login-legal { margin: 6px 0 0; font-size: 0.75rem; color: var(--text-dim); text-align: center; }
+.login-legal a { color: var(--text-muted); }
+@media (min-width: 760px) {
+    .login { grid-template-columns: 1.1fr 1fr; grid-template-areas: "hero card" "points card"; gap: 8px 40px; margin-top: 40px; }
+    .login-points { margin-top: 10px; }
+    .login-card { padding: 26px; }
+}
+
+/* ---------- Teams screen ---------- */
+.teams-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
+.teams-head h2 { margin: 0; font-size: 1.2rem; letter-spacing: -0.01em; }
+.teams-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.trows { display: flex; flex-direction: column; gap: 8px; }
+.trow-team {
+    display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+    padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
+    transition: border-color 0.15s, transform 0.05s;
+}
+.trow-team:hover { border-color: var(--accent); }
+.trow-team:active { transform: translateY(1px); }
+.trow-icon { width: 44px; height: 44px; border-radius: var(--radius-sm); object-fit: cover; }
+.trow-initials { display: grid; place-items: center; background: var(--accent-strong); color: #fff; font-weight: 700; font-size: 1rem; }
+.trow-body { min-width: 0; }
+.trow-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.trow-name { font-weight: 700; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trow-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trow-chev { color: var(--text-dim); font-size: 1.4rem; line-height: 1; }
+.teams-note { margin: 14px 2px 0; font-size: 0.78rem; color: var(--text-dim); }
+.teams-note a { color: var(--accent); }
+
+/* ---------- Help modal ---------- */
+.help-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.help-head h2 { margin: 0; }
+.help-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; padding-right: 2px; }
+.help-item { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.help-item > summary { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; list-style: none; font-weight: 600; font-size: 0.9rem; background: var(--surface-2); user-select: none; }
+.help-item > summary::-webkit-details-marker { display: none; }
+.help-icon { font-size: 1.05rem; }
+.help-chev { margin-left: auto; color: var(--text-dim); font-size: 0.8rem; transition: transform 0.15s; }
+.help-item[open] .help-chev { transform: rotate(180deg); }
+.help-body { padding: 10px 12px; font-size: 0.85rem; color: var(--text-muted); line-height: 1.55; }

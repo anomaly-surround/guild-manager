@@ -3,7 +3,7 @@
 // ES module. Uses shell globals by name (teamData, teamTab, currentTeamId, currentUser, api, token,
 // showToast, guard, renderTeamView, API). Exposed as window.Events.
 
-import { esc } from './timer-cards.js?v=20260922g';
+import { esc } from './timer-cards.js?v=20260923a';
 
 const DEFAULT_ROLES = ['Tank', 'Healer', 'DPS', 'Support'];
 const TYPE_LABEL = { raid: 'Raid', scrim: 'Scrim', gvg: 'GvG', dungeon: 'Dungeon', meeting: 'Meeting', other: 'Event' };

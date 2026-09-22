@@ -52,3 +52,11 @@ function toggleSection(id, el) {
     document.getElementById(id).classList.toggle('open');
     el.querySelector('.toggle-arrow').classList.toggle('open');
 }
+
+// Close any open <details class="menu"> dropdown when clicking elsewhere or pressing Escape.
+document.addEventListener('click', (e) => {
+    document.querySelectorAll('details.menu[open]').forEach(m => { if (!m.contains(e.target)) m.open = false; });
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(m => { m.open = false; });
+});
