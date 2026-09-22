@@ -13,6 +13,8 @@ Bindings (D1 `DB`, R2 `FILES`) and the every-minute cron live in `wrangler.toml`
 Secrets (`DISCORD_*`, `GOOGLE_*`, `JWT_SECRET`, `PADDLE_*`) are set in the Cloudflare dashboard
 and survive deploys. Roll back with `npx wrangler rollback`.
 
+Dropping the tables of cut features from production is a manual step: see `DROP_TABLES.md`.
+
 ## Run locally
 
 ```

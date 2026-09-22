@@ -101,17 +101,6 @@ async function initDB(db) {
       timezone TEXT DEFAULT 'Asia/Manila',
       FOREIGN KEY (team_id) REFERENCES teams(id)
     )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS announcements (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      body TEXT,
-      pinned INTEGER DEFAULT 0,
-      created_by TEXT NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (team_id) REFERENCES teams(id),
-      FOREIGN KEY (created_by) REFERENCES users(id)
-    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS member_activity (
       team_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
@@ -168,15 +157,6 @@ async function initDB(db) {
       FOREIGN KEY (team_id) REFERENCES teams(id),
       FOREIGN KEY (target_user_id) REFERENCES users(id),
       FOREIGN KEY (author_id) REFERENCES users(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS chat_reactions (
-      message_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      emoji TEXT NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      PRIMARY KEY (message_id, user_id, emoji),
-      FOREIGN KEY (message_id) REFERENCES chat_messages(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS boss_kill_log (
       id TEXT PRIMARY KEY,
@@ -245,165 +225,8 @@ async function initDB(db) {
       FOREIGN KEY (auction_id) REFERENCES dkp_auctions(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS analytics_snapshots (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      snapshot_type TEXT NOT NULL,
-      snapshot_data TEXT NOT NULL,
-      snapshot_date INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (team_id) REFERENCES teams(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS custom_roles (
-      team_id TEXT NOT NULL,
-      base_role TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      color TEXT,
-      PRIMARY KEY (team_id, base_role),
-      FOREIGN KEY (team_id) REFERENCES teams(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS chat_messages (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      message TEXT NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (team_id) REFERENCES teams(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS war_log (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      opponent TEXT NOT NULL,
-      result TEXT NOT NULL,
-      event_type TEXT DEFAULT 'gvg',
-      score_us INTEGER,
-      score_them INTEGER,
-      notes TEXT,
-      war_date INTEGER DEFAULT (unixepoch()),
-      logged_by TEXT NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (team_id) REFERENCES teams(id),
-      FOREIGN KEY (logged_by) REFERENCES users(id)
-    )`),
   ]);
 
-  // Phase 10 tables: Polls, Roster, Performance, Recruitment
-  await db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS polls (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      question TEXT NOT NULL,
-      poll_type TEXT DEFAULT 'single',
-      created_by TEXT NOT NULL,
-      closed INTEGER DEFAULT 0,
-      expires_at INTEGER,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (team_id) REFERENCES teams(id),
-      FOREIGN KEY (created_by) REFERENCES users(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS poll_options (
-      id TEXT PRIMARY KEY,
-      poll_id TEXT NOT NULL,
-      label TEXT NOT NULL,
-      sort_order INTEGER DEFAULT 0,
-      FOREIGN KEY (poll_id) REFERENCES polls(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS poll_votes (
-      poll_id TEXT NOT NULL,
-      option_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      PRIMARY KEY (poll_id, option_id, user_id),
-      FOREIGN KEY (poll_id) REFERENCES polls(id),
-      FOREIGN KEY (option_id) REFERENCES poll_options(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS rosters (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      event_id TEXT,
-      created_by TEXT NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (team_id) REFERENCES teams(id),
-      FOREIGN KEY (created_by) REFERENCES users(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS roster_slots (
-      id TEXT PRIMARY KEY,
-      roster_id TEXT NOT NULL,
-      role_name TEXT NOT NULL,
-      user_id TEXT,
-      sort_order INTEGER DEFAULT 0,
-      FOREIGN KEY (roster_id) REFERENCES rosters(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS performance_entries (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      event_label TEXT NOT NULL,
-      stat_name TEXT NOT NULL,
-      stat_value REAL NOT NULL,
-      logged_by TEXT NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (team_id) REFERENCES teams(id),
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (logged_by) REFERENCES users(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS recruitment_posts (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT,
-      role_needed TEXT,
-      status TEXT DEFAULT 'open',
-      created_by TEXT NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (team_id) REFERENCES teams(id),
-      FOREIGN KEY (created_by) REFERENCES users(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS recruitment_applications (
-      id TEXT PRIMARY KEY,
-      post_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      message TEXT,
-      status TEXT DEFAULT 'pending',
-      reviewed_by TEXT,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (post_id) REFERENCES recruitment_posts(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS matches (
-      id TEXT PRIMARY KEY,
-      challenger_team_id TEXT NOT NULL,
-      challenged_team_id TEXT NOT NULL,
-      challenger_name TEXT NOT NULL,
-      challenged_name TEXT NOT NULL,
-      match_type TEXT DEFAULT 'gvg',
-      scheduled_time INTEGER,
-      message TEXT,
-      status TEXT DEFAULT 'pending',
-      result_challenger INTEGER,
-      result_challenged INTEGER,
-      winner_team_id TEXT,
-      completed_by TEXT,
-      created_by TEXT NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (challenger_team_id) REFERENCES teams(id),
-      FOREIGN KEY (challenged_team_id) REFERENCES teams(id)
-    )`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS team_files (
-      id TEXT PRIMARY KEY,
-      team_id TEXT NOT NULL,
-      file_name TEXT NOT NULL,
-      file_size INTEGER NOT NULL,
-      content_type TEXT NOT NULL,
-      uploaded_by TEXT NOT NULL,
-      created_at INTEGER DEFAULT (unixepoch()),
-      FOREIGN KEY (team_id) REFERENCES teams(id),
-      FOREIGN KEY (uploaded_by) REFERENCES users(id)
-    )`),
-  ]);
 
   // Run migrations (each one is idempotent via catch).
   // Probes MUST include the newest added column/table — otherwise DBs that passed

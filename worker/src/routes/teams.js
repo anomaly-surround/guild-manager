@@ -107,25 +107,13 @@ export const routes = [
       .bind(teamId, user.userId).first();
     if (!team) return json({ error: 'Not the owner' }, 403);
 
-    // Remove the team's uploaded files from R2 (their metadata rows go in the batch below).
-    if (env.FILES) {
-      const files = await env.DB.prepare('SELECT id, file_name FROM team_files WHERE team_id = ?').bind(teamId).all();
-      const keys = files.results.map(f => `teams/${teamId}/${f.id}/${f.file_name}`);
-      if (keys.length > 0) await env.FILES.delete(keys).catch(e => console.error('R2 cleanup error:', e));
-    }
-
     // One batch, grandchildren -> children -> team. D1 enforces FOREIGN KEYs, so every
     // table that references teams (directly or via a child) must be cleared here.
     const t = (sql) => env.DB.prepare(sql).bind(teamId);
     await env.DB.batch([
       t('DELETE FROM event_rsvps WHERE event_id IN (SELECT id FROM events WHERE team_id = ?)'),
       t('DELETE FROM event_attendance WHERE event_id IN (SELECT id FROM events WHERE team_id = ?)'),
-      t('DELETE FROM chat_reactions WHERE message_id IN (SELECT id FROM chat_messages WHERE team_id = ?)'),
       t('DELETE FROM dkp_bids WHERE auction_id IN (SELECT id FROM dkp_auctions WHERE team_id = ?)'),
-      t('DELETE FROM poll_votes WHERE poll_id IN (SELECT id FROM polls WHERE team_id = ?)'),
-      t('DELETE FROM poll_options WHERE poll_id IN (SELECT id FROM polls WHERE team_id = ?)'),
-      t('DELETE FROM roster_slots WHERE roster_id IN (SELECT id FROM rosters WHERE team_id = ?)'),
-      t('DELETE FROM recruitment_applications WHERE post_id IN (SELECT id FROM recruitment_posts WHERE team_id = ?)'),
       t('DELETE FROM events WHERE team_id = ?'),
       t('DELETE FROM bosses WHERE team_id = ?'),
       t('DELETE FROM member_notes WHERE team_id = ?'),
@@ -136,19 +124,8 @@ export const routes = [
       t('DELETE FROM dkp_ledger WHERE team_id = ?'),
       t('DELETE FROM dkp_auctions WHERE team_id = ?'),
       t('DELETE FROM loot_wishlist WHERE team_id = ?'),
-      t('DELETE FROM chat_messages WHERE team_id = ?'),
-      t('DELETE FROM war_log WHERE team_id = ?'),
-      t('DELETE FROM announcements WHERE team_id = ?'),
       t('DELETE FROM event_templates WHERE team_id = ?'),
-      t('DELETE FROM analytics_snapshots WHERE team_id = ?'),
-      t('DELETE FROM custom_roles WHERE team_id = ?'),
-      t('DELETE FROM polls WHERE team_id = ?'),
-      t('DELETE FROM rosters WHERE team_id = ?'),
-      t('DELETE FROM performance_entries WHERE team_id = ?'),
-      t('DELETE FROM recruitment_posts WHERE team_id = ?'),
-      t('DELETE FROM team_files WHERE team_id = ?'),
       t('DELETE FROM join_requests WHERE team_id = ?'),
-      env.DB.prepare('DELETE FROM matches WHERE challenger_team_id = ? OR challenged_team_id = ?').bind(teamId, teamId),
       t('DELETE FROM team_settings WHERE team_id = ?'),
       t('DELETE FROM team_members WHERE team_id = ?'),
       t('DELETE FROM teams WHERE id = ?'),
