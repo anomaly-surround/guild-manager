@@ -89,13 +89,16 @@ function showUserInfo() {
     planEl.className = 'chip ' + (currentUser.premium && !currentUser.trial ? 'chip-accent' : currentUser.trial ? 'chip-success' : 'chip-muted');
     const avatar = document.getElementById('userAvatar');
     const initial = document.getElementById('userInitial');
-    if (currentUser.avatar && currentUser.discordId) {
-        avatar.src = `https://cdn.discordapp.com/avatars/${currentUser.discordId}/${currentUser.avatar}.png?size=64`;
-        avatar.style.display = ''; initial.style.display = 'none';
-    } else {
-        avatar.removeAttribute('src'); avatar.style.display = 'none';
-        initial.textContent = (currentUser.username || '?').slice(0, 1).toUpperCase(); initial.style.display = '';
-    }
+    initial.textContent = (currentUser.username || '?').slice(0, 1).toUpperCase();
+    const showInitial = () => { avatar.removeAttribute('src'); avatar.style.display = 'none'; initial.style.display = ''; };
+    // Google stores a full picture URL; Discord stores an avatar hash that needs the CDN path.
+    const src = /^https?:\/\//.test(currentUser.avatar || '') ? currentUser.avatar
+        : currentUser.avatar && /^\d+$/.test(currentUser.discordId || '') ? `https://cdn.discordapp.com/avatars/${currentUser.discordId}/${currentUser.avatar}.png?size=64`
+        : null;
+    if (src) {
+        avatar.onerror = showInitial;   // expired hash, blocked CDN, offline: fall back to the initial badge
+        avatar.src = src; avatar.style.display = ''; initial.style.display = 'none';
+    } else showInitial();
     const upgradeBtn = document.getElementById('upgradeBtn');
     upgradeBtn.style.display = currentUser.premium && !currentUser.trial ? 'none' : '';
     upgradeBtn.textContent = currentUser.trial ? 'Keep Premium after the trial' : 'Upgrade to Premium';
