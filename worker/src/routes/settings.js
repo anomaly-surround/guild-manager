@@ -54,7 +54,7 @@ export const routes = [
       invitesEnabled: settings?.invites_enabled ?? true,
       inviteApproval: !!(settings?.invite_approval),
       publicToken: settings?.public_token || null,
-      discordGuildId: settings?.discord_guild_id || null,
+      discordGuilds: (await env.DB.prepare('SELECT guild_id, guild_name, linked_at FROM discord_guilds WHERE team_id = ? ORDER BY linked_at').bind(teamId).all()).results.map(g => ({ guildId: g.guild_id, name: g.guild_name, linkedAt: g.linked_at })),
       rsvpRoles: parseRoles(settings?.rsvp_roles),
       modules: (() => { try { return settings?.modules ? JSON.parse(settings.modules) : {}; } catch { return {}; } })(),
       lootMode: await lootModeFor(env, teamId, settings || null),
@@ -86,7 +86,7 @@ export const routes = [
         if (body.webhookUrl && !isValidDiscordWebhook(body.webhookUrl)) return json({ error: 'Webhook must be a Discord webhook URL (https://discord.com/api/webhooks/...)' }, 400);
         sets.push('webhook_url = ?'); vals.push(body.webhookUrl || null);
       }
-      if (body.discordGuildId === null || body.discordGuildId === '') { sets.push('discord_guild_id = ?'); vals.push(null); }   // unlink from Settings; linking happens via /link in Discord
+      if (body.unlinkDiscordGuild) await env.DB.prepare('DELETE FROM discord_guilds WHERE guild_id = ? AND team_id = ?').bind(String(body.unlinkDiscordGuild), teamId).run();   // linking happens via Add to Discord or /link
       if (body.onWarning !== undefined) { sets.push('on_warning = ?'); vals.push(body.onWarning ? 1 : 0); }
       if (body.onSpawn !== undefined) { sets.push('on_spawn = ?'); vals.push(body.onSpawn ? 1 : 0); }
       if (body.onEvent !== undefined) { sets.push('on_event = ?'); vals.push(body.onEvent ? 1 : 0); }

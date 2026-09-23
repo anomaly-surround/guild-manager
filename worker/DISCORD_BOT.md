@@ -9,7 +9,7 @@ worker itself never needs it — only `scripts/register-commands.mjs` does.
 
 | Command | Who | Does |
 |---|---|---|
-| `/link <code>` | leader/officer of the team, signed in to Guild Manager with Discord | ties this Discord server to the team with that invite code (one server per team; re-running moves it) |
+| `/link <code>` | leader/officer of the team, signed in to Guild Manager with Discord | ties this Discord server to the team with that invite code (a server belongs to one team; a team may link many servers — `discord_guilds`) |
 | `/unlink` | leader/officer | removes the tie (also possible from Settings → Discord slash commands) |
 | `/next [count]` | **anyone** in the linked server | next spawns, up-now first, team time, with a link to the timer page / app |
 | `/killed <boss> [minutes_ago]` | team members only | logs the kill and restarts the timer; boss name autocompletes; ambiguous names ask "which one?" |

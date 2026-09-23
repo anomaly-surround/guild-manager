@@ -42,6 +42,28 @@ export async function editOriginal(env, interactionToken, content) {
   if (!r.ok) console.error('discord editOriginal failed:', r.status, await r.text().catch(() => ''));
 }
 
+// ---- server links (discord_guilds): a server belongs to one team; a team may have many servers.
+
+export async function guildName(env, guildId) {
+  if (!env.DISCORD_BOT_TOKEN) return null;
+  try {
+    const r = await fetch(`${env.DISCORD_API || API}/guilds/${guildId}`, { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
+    if (!r.ok) return null;
+    return (await r.json()).name || null;
+  } catch { return null; }
+}
+
+export async function linkGuild(env, { guildId, teamId, userId }) {
+  const name = await guildName(env, guildId);
+  await env.DB.prepare('INSERT INTO discord_guilds (guild_id, team_id, guild_name, linked_by) VALUES (?, ?, ?, ?) ON CONFLICT(guild_id) DO UPDATE SET team_id = excluded.team_id, guild_name = COALESCE(excluded.guild_name, discord_guilds.guild_name), linked_by = excluded.linked_by, linked_at = unixepoch()')
+    .bind(guildId, teamId, name, userId || null).run();
+  return name;
+}
+
+export async function unlinkGuild(env, guildId) {
+  await env.DB.prepare('DELETE FROM discord_guilds WHERE guild_id = ?').bind(guildId).run();
+}
+
 export function optionValue(interaction, name) {
   return (interaction.data?.options || []).find(o => o.name === name)?.value;
 }

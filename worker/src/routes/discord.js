@@ -1,6 +1,6 @@
 // Discord slash commands (public route, signed by Discord): /link, /unlink, /next, /killed.
 //
-// One Discord server ↔ one team (team_settings.discord_guild_id). /next is open to anyone in the
+// A Discord server belongs to one team; a team may link any number of servers (discord_guilds). /next is open to anyone in the
 // linked server (the discovery surface); /killed needs the Discord account to be a member of the
 // team in Guild Manager; /link and /unlink need officer+. Discord expects an answer within 3 s and
 // this worker's database is far from Discord's servers, so commands are acknowledged with a
@@ -12,14 +12,14 @@ import { verifyToken } from '../lib/auth.js';
 import { killBoss } from '../lib/boss-kill.js';
 import {
   InteractionType, verifyDiscordRequest, pong, message, deferred, choices, editOriginal,
-  optionValue, focusedOption, invoker, nextSpawnsText, fmtDuration, clockIn,
+  optionValue, focusedOption, invoker, nextSpawnsText, fmtDuration, clockIn, linkGuild, unlinkGuild,
 } from '../lib/discord-interactions.js';
 
 const APP_URL = 'https://anomaly-surround.github.io/guild-manager/';
 
 async function linkedTeam(env, guildId) {
   if (!guildId) return null;
-  return env.DB.prepare('SELECT t.id, t.name, ts.timezone, ts.public_token FROM team_settings ts JOIN teams t ON t.id = ts.team_id WHERE ts.discord_guild_id = ?')
+  return env.DB.prepare('SELECT t.id, t.name, ts.timezone, ts.public_token FROM discord_guilds g JOIN teams t ON t.id = g.team_id LEFT JOIN team_settings ts ON ts.team_id = t.id WHERE g.guild_id = ?')
     .bind(guildId).first();
 }
 async function membership(env, teamId, discordUserId) {
@@ -39,11 +39,7 @@ async function cmdLink(env, interaction) {
   const m = await membership(env, team.id, who.id);
   if (!m) return `Your Discord account is not a member of **${team.name}** in Guild Manager. Sign in there with Discord first.`;
   if (m.role === 'member') return 'Only the leader or an officer can link a server.';
-  await env.DB.batch([
-    env.DB.prepare('UPDATE team_settings SET discord_guild_id = NULL WHERE discord_guild_id = ?').bind(interaction.guild_id),
-    // a team has no settings row until something is saved, so upsert
-    env.DB.prepare('INSERT INTO team_settings (team_id, discord_guild_id) VALUES (?, ?) ON CONFLICT(team_id) DO UPDATE SET discord_guild_id = excluded.discord_guild_id').bind(team.id, interaction.guild_id),
-  ]);
+  await linkGuild(env, { guildId: interaction.guild_id, teamId: team.id, userId: m.user_id });
   return `Linked this server to **${team.name}**. Everyone here can use \`/next\`; team members can log kills with \`/killed\`.`;
 }
 
@@ -52,7 +48,7 @@ async function cmdUnlink(env, interaction) {
   if (!team) return 'This server is not linked to a team.';
   const m = await membership(env, team.id, invoker(interaction).id);
   if (!m || m.role === 'member') return 'Only the leader or an officer can unlink.';
-  await env.DB.prepare('UPDATE team_settings SET discord_guild_id = NULL WHERE team_id = ?').bind(team.id).run();
+  await unlinkGuild(env, interaction.guild_id);
   return `Unlinked **${team.name}** from this server.`;
 }
 
@@ -100,10 +96,7 @@ export const routes = [
     if (!state || state.kind !== 'discord-link' || !guildId) return back('error');
     const m = await env.DB.prepare('SELECT role FROM team_members WHERE team_id = ? AND user_id = ?').bind(state.teamId, state.userId).first();
     if (!m || m.role === 'member') return back('error');
-    await env.DB.batch([
-      env.DB.prepare('UPDATE team_settings SET discord_guild_id = NULL WHERE discord_guild_id = ?').bind(guildId),
-      env.DB.prepare('INSERT INTO team_settings (team_id, discord_guild_id) VALUES (?, ?) ON CONFLICT(team_id) DO UPDATE SET discord_guild_id = excluded.discord_guild_id').bind(state.teamId, guildId),
-    ]);
+    await linkGuild(env, { guildId, teamId: state.teamId, userId: state.userId });
     return back('linked');
   } },
 
@@ -114,6 +107,7 @@ export const routes = [
     try { interaction = JSON.parse(raw); } catch { return json({ error: 'bad body' }, 400); }
 
     if (interaction.type === InteractionType.PING) return pong();
+    console.log('discord interaction', JSON.stringify({ type: interaction.type, command: interaction.data?.name, guild: interaction.guild_id, user: (interaction.member?.user || interaction.user || {}).id }));
 
     if (interaction.type === InteractionType.AUTOCOMPLETE) {
       const team = await linkedTeam(env, interaction.guild_id);
