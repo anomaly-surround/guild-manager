@@ -105,8 +105,9 @@ async function touchLicense(env, userId, checkedAt) {
 
 // Verify a key and attach it to a user. productId may be omitted (manual activation): both
 // products are tried. -> { ok: true, plan } | { ok: false, error, transient? }
-export async function bindLicense(env, userId, licenseKey, productId) {
+export async function bindLicense(env, userId, licenseKey, productId, lap = () => {}) {
   const user = await env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(userId).first();
+  lap('user row');
   if (!user) return { ok: false, error: 'Unknown account' };
 
   const candidates = productId ? [productId] : [productForPlan(env, 'monthly'), productForPlan(env, 'lifetime')].filter(Boolean);
@@ -115,6 +116,7 @@ export async function bindLicense(env, userId, licenseKey, productId) {
     const plan = planForProduct(env, pid);
     if (!plan) continue;
     const v = await verifyLicense(env, pid, licenseKey);
+    lap('gumroad verify');
     last = v;
     if (v.transient) return v;
     if (!v.ok) continue;
@@ -126,6 +128,7 @@ export async function bindLicense(env, userId, licenseKey, productId) {
     if (other) return { ok: false, error: 'This license key is already in use on another account' };
 
     await grantLicense(env, userId, plan, licenseKey, pid);
+    lap('granted');
     return { ok: true, plan };
   }
   return { ok: false, error: last.error || 'That license key was not found' };

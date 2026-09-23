@@ -91,10 +91,7 @@ function showUserInfo() {
     const initial = document.getElementById('userInitial');
     initial.textContent = (currentUser.username || '?').slice(0, 1).toUpperCase();
     const showInitial = () => { avatar.removeAttribute('src'); avatar.style.display = 'none'; initial.style.display = ''; };
-    // Google stores a full picture URL; Discord stores an avatar hash that needs the CDN path.
-    const src = /^https?:\/\//.test(currentUser.avatar || '') ? currentUser.avatar
-        : currentUser.avatar && /^\d+$/.test(currentUser.discordId || '') ? `https://cdn.discordapp.com/avatars/${currentUser.discordId}/${currentUser.avatar}.png?size=64`
-        : null;
+    const src = avatarUrl(currentUser);
     if (src) {
         avatar.onerror = showInitial;   // expired hash, blocked CDN, offline: fall back to the initial badge
         avatar.src = src; avatar.style.display = ''; initial.style.display = 'none';

@@ -1,4 +1,4 @@
-// Generic helpers: escapeHtml, formatTime, formatTimeLong, showToast, copyInvite, goHome
+// Generic helpers: escapeHtml, formatTime, formatTimeLong, showToast, copyInvite, goHome, avatarUrl
 
 // Modal backdrops close on a click OUTSIDE the card. A drag that starts inside the card (selecting
 // text in a field) and ends on the backdrop also fires a 'click' on the backdrop; swallow those so
@@ -10,6 +10,20 @@
         if (e.target.classList?.contains('modal-backdrop') && !pressedOnBackdrop) e.stopPropagation();
     }, true);
 })();
+
+// Image URL for a user row ({ avatar, discord_id }) or the session user ({ avatar, discordId }), else null.
+// Google accounts store a full picture URL; Discord accounts store an avatar hash for the CDN.
+function avatarUrl(u) {
+    const avatar = u?.avatar || '';
+    const id = u?.discord_id || u?.discordId || '';
+    if (/^https?:\/\//.test(avatar)) return avatar;
+    if (avatar && /^\d+$/.test(id)) return `https://cdn.discordapp.com/avatars/${id}/${avatar}.png?size=64`;
+    return null;
+}
+// <img> that swaps itself for an initials badge if the picture fails to load.
+function avatarImg(src, cls, initials) {
+    return `<img class="${cls}" src="${src}" alt="${initials}" onerror="this.replaceWith(Object.assign(document.createElement('span'), { className: '${cls} r-initials', textContent: this.alt }))">`;
+}
 
 function escapeHtml(text) {
     const div = document.createElement('div');

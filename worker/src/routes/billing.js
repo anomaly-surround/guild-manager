@@ -12,8 +12,10 @@ export const routes = [
   // buyer's account id attached to the checkout link; without it the key is matched to an account
   // that already activated it, or left for the buyer to enter in the app.
   { method: 'POST', pattern: '/gumroad/ping', handler: async ({ request, env }) => {
+    const t0 = Date.now(); const lap = (what) => console.log(`gumroad ping +${Date.now() - t0}ms ${what}`);
     let form;
     try { form = await request.formData(); } catch { return json({ ok: true, ignored: 'unreadable body' }); }
+    lap('body read');
     const licenseKey = String(form.get('license_key') || '').trim();
     const productId = configuredProductFromPing(env, form);
     // Visible in `wrangler tail`: which product/url_params Gumroad actually sends.
@@ -28,8 +30,10 @@ export const routes = [
       userId = existing ? existing.id : '';
     }
     if (!userId) return json({ ok: true, ignored: 'no account attached; buyer can enter the key in the app' });
+    lap('user resolved');
 
-    const r = await bindLicense(env, userId, licenseKey, productId);
+    const r = await bindLicense(env, userId, licenseKey, productId, lap);
+    lap('done');
     if (r.transient) return json({ error: r.error }, 503);   // let Gumroad retry
     return json({ ok: true, granted: r.ok, plan: r.plan || null, note: r.ok ? undefined : r.error });
   } },

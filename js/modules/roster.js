@@ -72,7 +72,8 @@ function activity(m, nowSec = Math.floor(Date.now() / 1000)) {
 }
 function avatarHtml(m) {
     const initials = (m.username || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-    return m.avatar ? `<img class="r-avatar" src="https://cdn.discordapp.com/avatars/${m.discord_id}/${m.avatar}.png?size=64" alt="">` : `<span class="r-avatar r-initials">${esc(initials)}</span>`;
+    const src = avatarUrl(m);
+    return src ? avatarImg(src, 'r-avatar', esc(initials)) : `<span class="r-avatar r-initials">${esc(initials)}</span>`;
 }
 function roleRank(m) { return m.role === 'leader' ? 0 : m.role === 'officer' ? 1 : 2; }
 function sortedMembers() {

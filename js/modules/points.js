@@ -119,9 +119,8 @@ function rotationRowsHtml() {
     if (!order.length) return '<div class="t-empty card"><div class="t-empty-title">Nobody in the rotation yet</div></div>';
     return order.map((m, i) => {
         const initials = esc((m.username || '?').slice(0, 2).toUpperCase());
-        const avatar = m.avatar && m.discord_id
-            ? `<img class="rot-avatar" src="https://cdn.discordapp.com/avatars/${m.discord_id}/${m.avatar}.png?size=64" alt="">`
-            : `<span class="rot-avatar r-initials">${initials}</span>`;
+        const src = avatarUrl(m);
+        const avatar = src ? avatarImg(src, 'rot-avatar', initials) : `<span class="rot-avatar r-initials">${initials}</span>`;
         const last = m.last_item ? `last drop: ${esc(m.last_item)} · ${fmtDate(m.last_at)}` : 'no drops yet';
         const actions = isOfficer() ? `
             <div class="rot-actions">
