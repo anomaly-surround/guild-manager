@@ -3,8 +3,8 @@
 // ES module. Uses shell globals by name (teamData, teamTab, currentTeamId, currentUser, api, token,
 // showToast, guard, renderTeamView, API). Exposed as window.Events.
 
-import { esc } from './timer-cards.js?v=20260923s';
-import { loadAttendance, attendanceHtml, onAttendanceClick } from './attendance.js?v=20260923s';
+import { esc } from './timer-cards.js?v=20260924b';
+import { loadAttendance, attendanceHtml, onAttendanceClick, onAttendanceInput, onAttendanceToggle } from './attendance.js?v=20260924b';
 
 const DEFAULT_ROLES = ['Tank', 'Healer', 'DPS', 'Support'];
 const TYPE_LABEL = { raid: 'Raid', scrim: 'Scrim', gvg: 'GvG', dungeon: 'Dungeon', meeting: 'Meeting', other: 'Event' };
@@ -141,6 +141,15 @@ function render() {
         </div>
         <div data-role="body">${view === 'attendance' ? attendanceHtml() : view === 'week' ? weekHtml() : listHtml()}</div>`;
     el.onclick = onClick;
+    // attendance search re-renders only the day list, so the input keeps focus
+    el.oninput = (e) => {
+        if (onAttendanceInput(e.target) === 'list') {
+            const tmp = document.createElement('div'); tmp.innerHTML = attendanceHtml();
+            const days = el.querySelector('.att-days'); const fresh = tmp.querySelector('.att-days');
+            if (days && fresh) days.replaceWith(fresh);
+        }
+    };
+    if (!el._attToggle) { el._attToggle = true; el.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('att-day')) onAttendanceToggle(e.target); }, true); }
     el.onchange = onChange;
 }
 
