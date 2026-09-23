@@ -48,6 +48,7 @@ src/
     auth.js           /auth/*                     (public)
     billing.js        /gumroad/ping, activate-license, start-trial, checkout   (public)
     public.js         /public/timers/:token       (public, read-only timer page)
+    account.js        GET /api/me/export (JSON download), DELETE /api/me (anonymise + remove personal rows)
     teams.js          teams CRUD, member game role, roles, kick/leave/transfer
     invites.js        invite codes, join requests
     bosses.js         bosses (+window/location), kill, edit, templates, game presets, history
@@ -58,6 +59,7 @@ src/
     rotation.js       loot rotation order, officer moves, leader reset
   lib/limits.js       plan limits (Free / Premium)
   lib/boss-create.js  next spawn per schedule type + the INSERT statement (create, template import, presets)
+  lib/team-delete.js  child-first DELETE statements for a team (delete team, account deletion)
   presets/            built-in boss lists per game (lordnine.js, ...) served by GET /api/presets
 ```
 

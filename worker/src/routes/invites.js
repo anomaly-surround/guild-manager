@@ -13,6 +13,8 @@ export const routes = [
 
     const team = await env.DB.prepare('SELECT * FROM teams WHERE invite_code = ?').bind(code).first();
     if (!team) return json({ error: 'Invalid invite code' }, 404);
+    const me = await env.DB.prepare('SELECT auth_type FROM users WHERE id = ?').bind(user.userId).first();
+    if (!me || me.auth_type === 'deleted') return json({ error: 'Account deleted' }, 401);
 
     // Check if invites are enabled
     const settings = await env.DB.prepare('SELECT invites_enabled, invite_approval FROM team_settings WHERE team_id = ?').bind(team.id).first();

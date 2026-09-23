@@ -4,6 +4,7 @@ import { json, safeJson } from '../lib/http.js';
 import { generateInviteCode } from '../lib/ids.js';
 import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
 import { limitsFor, limitsJson } from '../lib/limits.js';
+import { teamDeleteStmts } from '../lib/team-delete.js';
 import { lootModeFor } from '../lib/rotation.js';
 
 export const routes = [
@@ -30,7 +31,8 @@ export const routes = [
     if (!body.name || !body.name.trim()) return json({ error: 'Name required' }, 400);
 
     // Check team limit (free = 1, premium = unlimited)
-    const dbUser = await env.DB.prepare('SELECT premium FROM users WHERE id = ?').bind(user.userId).first();
+    const dbUser = await env.DB.prepare('SELECT premium, auth_type FROM users WHERE id = ?').bind(user.userId).first();
+    if (!dbUser || dbUser.auth_type === 'deleted') return json({ error: 'Account deleted' }, 401);
     const isPremium = dbUser?.premium;
     const teamCount = await env.DB.prepare(
       'SELECT COUNT(*) as count FROM teams WHERE owner_id = ?'
@@ -110,29 +112,7 @@ export const routes = [
       .bind(teamId, user.userId).first();
     if (!team) return json({ error: 'Not the owner' }, 403);
 
-    // One batch, grandchildren -> children -> team. D1 enforces FOREIGN KEYs, so every
-    // table that references teams (directly or via a child) must be cleared here.
-    const t = (sql) => env.DB.prepare(sql).bind(teamId);
-    await env.DB.batch([
-      t('DELETE FROM event_rsvps WHERE event_id IN (SELECT id FROM events WHERE team_id = ?)'),
-      t('DELETE FROM event_attendance WHERE event_id IN (SELECT id FROM events WHERE team_id = ?)'),
-      t('DELETE FROM dkp_bids WHERE auction_id IN (SELECT id FROM dkp_auctions WHERE team_id = ?)'),
-      t('DELETE FROM events WHERE team_id = ?'),
-      t('DELETE FROM bosses WHERE team_id = ?'),
-      t('DELETE FROM member_notes WHERE team_id = ?'),
-      t('DELETE FROM member_activity WHERE team_id = ?'),
-      t('DELETE FROM member_availability WHERE team_id = ?'),
-      t('DELETE FROM boss_loot WHERE team_id = ?'),
-      t('DELETE FROM boss_kill_log WHERE team_id = ?'),
-      t('DELETE FROM dkp_ledger WHERE team_id = ?'),
-      t('DELETE FROM dkp_auctions WHERE team_id = ?'),
-      t('DELETE FROM loot_wishlist WHERE team_id = ?'),
-      t('DELETE FROM event_templates WHERE team_id = ?'),
-      t('DELETE FROM join_requests WHERE team_id = ?'),
-      t('DELETE FROM team_settings WHERE team_id = ?'),
-      t('DELETE FROM team_members WHERE team_id = ?'),
-      t('DELETE FROM teams WHERE id = ?'),
-    ]);
+    await env.DB.batch(teamDeleteStmts(env, teamId));
     return json({ ok: true });
   } },
 

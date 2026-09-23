@@ -145,6 +145,7 @@ export const routes = [
     if (!user) return json({ error: 'Not logged in' }, 401);
     const dbUser = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user.userId).first();
     if (!dbUser) return json({ error: 'User not found' }, 404);
+    if (dbUser.auth_type === 'deleted') return json({ error: 'Account deleted' }, 401);   // stale token after DELETE /api/me
     // Check if subscription is still active
     let isPremium = false;
     let isTrial = false;

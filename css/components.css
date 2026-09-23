@@ -137,6 +137,18 @@
 .e-rolecount { margin-right: 4px; }
 .e-rolecount b { color: var(--text-muted); }
 
+/* account & data modal (js/account.js) */
+.acct-facts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 4px 0 6px; }
+.acct-facts > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; background: var(--surface-2); border-radius: var(--radius-sm); min-width: 0; }
+.acct-facts span { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.acct-facts b { font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 480px) { .acct-facts { grid-template-columns: 1fr; } }
+.acct-teamlist { margin: 4px 0 8px; }
+.acct-delete { display: flex; gap: 8px; margin-top: 6px; }
+.acct-delete input { flex: 1; min-width: 0; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: 0.9rem; }
+.acct-delete input:focus { outline: none; border-color: var(--danger); }
+.acct-delete .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* loading spinner (used by every module's placeholder) */
 .spinner {
     width: 26px; height: 26px; margin: 24px auto;
