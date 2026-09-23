@@ -2,7 +2,7 @@
 // and the points summary. Claims arrive from Discord (/here with a screenshot, /rollcall by an officer).
 // ES module used by events.js. Uses shell globals by name (currentTeamId, teamData, api, token, API, showToast, guard).
 
-import { esc } from './timer-cards.js?v=20260924c';
+import { esc } from './timer-cards.js?v=20260924d';
 
 let claims = [], pending = 0, officer = false, summary = null, days = 7, filter = 'pending', query = '';
 const openDays = new Set();
@@ -36,7 +36,7 @@ export function attendanceHtml() {
         const src = c.source === 'rollcall' ? 'roll call' : 'screenshot';
         const actions = officer ? `<button class="btn btn-sm btn-primary" data-att="approve" data-id="${c.id}">Approve</button><button class="btn btn-sm btn-secondary" data-att="reject" data-id="${c.id}">Reject</button>` : statusChip(c);
         return `<div class="card att-row is-${c.status}">
-            ${c.hasImage ? `<img class="att-thumb" src="${imgUrl(c.id)}" alt="" loading="lazy" data-att="zoom" data-id="${c.id}">` : `<div class="att-thumb-none">${src}</div>`}
+            ${c.hasImage ? `<img class="att-thumb" src="${imgUrl(c.id)}" alt="" loading="lazy" data-att="zoom" data-id="${c.id}">` : `<div class="att-thumb-none" title="${src}">${c.source === 'rollcall' ? '&#128203;' : '&#128444;'}</div>`}
             <div class="att-body">
                 <div class="att-name">${esc(c.username)} <span class="t-dim">· ${esc(bosses)} · ${c.points} pt${c.points === 1 ? '' : 's'}</span></div>
                 <div class="att-meta">${when} · ${src}${c.note ? ` · <span class="att-note">${esc(c.note)}</span>` : ''}</div>

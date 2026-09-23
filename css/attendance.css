@@ -53,4 +53,7 @@
 .att-meta { font-size: 0.75rem; }
 .att-more { display: block; width: 100%; padding: 7px; background: none; border: 0; border-top: 1px solid var(--border); color: var(--accent); font-size: 0.8rem; font-weight: 600; cursor: pointer; }
 .att-more:hover { background: var(--surface-2); }
+.att-row.card, .att-lines.card, .att-summary.card { margin: 0; }
+.att-summary.card { margin-top: 18px; }
+.att-thumb-none { font-size: 1rem; }
 
