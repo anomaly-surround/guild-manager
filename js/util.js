@@ -1,4 +1,4 @@
-// Generic helpers: escapeHtml, formatTime, formatTimeLong, showToast, copyInvite, goHome, avatarUrl
+// Generic helpers: escapeHtml, formatTime, formatTimeLong, showToast, copyInvite, goHome, avatarUrl, timezone display
 
 // Modal backdrops close on a click OUTSIDE the card. A drag that starts inside the card (selecting
 // text in a field) and ends on the backdrop also fires a 'click' on the backdrop; swallow those so
@@ -10,6 +10,38 @@
         if (e.target.classList?.contains('modal-backdrop') && !pressedOnBackdrop) e.stopPropagation();
     }, true);
 })();
+
+// --- Timezone display (per device, localStorage 'gm_tz_mode': 'device' | 'team') ---
+// Every stored time is absolute (ms). Boss schedules (weekly/daily) are written in the TEAM timezone
+// (Settings → Team); everything else is shown in the viewer's device timezone unless they choose
+// "team time" in Account & data. Helpers are globals so ES modules can use them too.
+function deviceTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } }
+function teamTz() { return teamData?.timezone || 'Asia/Manila'; }
+function tzMode() { try { return localStorage.getItem('gm_tz_mode') === 'team' ? 'team' : 'device'; } catch { return 'device'; } }
+function setTzMode(mode) { try { localStorage.setItem('gm_tz_mode', mode === 'team' ? 'team' : 'device'); } catch {} }
+function validTz(tz) { try { new Intl.DateTimeFormat([], { timeZone: tz }); return true; } catch { return false; } }
+// The IANA zone times are DISPLAYED in, or undefined for the device zone.
+function displayTz() { const tz = teamTz(); return tzMode() === 'team' && validTz(tz) ? tz : undefined; }
+// Spread into any toLocale*String options.
+function tzOpts(opts) { const tz = displayTz(); return tz ? { ...opts, timeZone: tz } : opts; }
+// True when the device clock differs from the team's zone (hints become useful).
+function tzDiffers() { const tz = teamTz(); if (!validTz(tz)) return false; return offsetMinutes(tz) !== offsetMinutes(deviceTz()); }
+function offsetMinutes(tz, at = new Date()) {
+    at = new Date(Math.floor(at.getTime() / 60000) * 60000);   // whole minutes, so the parts below round-trip exactly
+    const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(at);
+    const g = (t) => Number(p.find(x => x.type === t)?.value);
+    const asUtc = Date.UTC(g('year'), g('month') - 1, g('day'), g('hour') % 24, g('minute'));
+    return Math.round((asUtc - at.getTime()) / 60000);
+}
+// "3 h ahead of you" / "6 h behind you" for the team zone vs the device.
+function tzOffsetLabel() {
+    const diff = offsetMinutes(teamTz()) - offsetMinutes(deviceTz());
+    if (!diff) return 'same as your device';
+    const h = Math.abs(diff) / 60;
+    return `${Number.isInteger(h) ? h : h.toFixed(1)} h ${diff > 0 ? 'ahead of' : 'behind'} your device`;
+}
+// A clock time in the team zone, e.g. "21:00", for "team time" suffixes.
+function teamTimeStr(ms) { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: teamTz() }); }
 
 // Image URL for a user row ({ avatar, discord_id }) or the session user ({ avatar, discordId }), else null.
 // Google accounts store a full picture URL; Discord accounts store an avatar hash for the CDN.

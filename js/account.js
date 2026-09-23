@@ -1,4 +1,4 @@
-// Account & data modal: export my data (JSON download), delete my account
+// Account & data modal: time display preference, export my data (JSON download), delete my account
 
 function showAccountModal() {
     const host = document.getElementById('deathModal');
@@ -12,6 +12,13 @@ function showAccountModal() {
                     <div><span>Name</span><b>${escapeHtml(currentUser?.username || '')}</b></div>
                     <div><span>Signed in with</span><b>${escapeHtml(method)}</b></div>
                     <div><span>Plan</span><b>${escapeHtml(plan)}</b></div>
+                </div>
+
+                <h3 class="t-h3">Times</h3>
+                <p class="tf-help">Your device is on <b>${escapeHtml(deviceTz())}</b>. Boss schedules are always entered in the team's timezone; this only changes how times are displayed on this device.</p>
+                <div class="acct-radios">
+                    <label><input type="radio" name="tzmode" value="device" ${tzMode() === 'device' ? 'checked' : ''}> My device time</label>
+                    <label><input type="radio" name="tzmode" value="team" ${tzMode() === 'team' ? 'checked' : ''}> Team time <span class="t-dim">(${escapeHtml(teamTz())}${currentTeamId ? '' : ' by default; each team has its own'})</span></label>
                 </div>
 
                 <h3 class="t-h3">Export</h3>
@@ -46,6 +53,9 @@ function showAccountModal() {
     back.addEventListener('click', (e) => {
         if (e.target === back || e.target.closest('[data-close]')) { host.innerHTML = ''; return; }
         if (e.target.closest('[data-act="export"]')) exportMyData(status);
+    });
+    back.addEventListener('change', (e) => {
+        if (e.target.name === 'tzmode') { setTzMode(e.target.value); if (currentTeamId) openTeam(currentTeamId); }
     });
     back.querySelector('form[data-act="delete"]').addEventListener('submit', (e) => { e.preventDefault(); deleteMyAccount(status); });
 }

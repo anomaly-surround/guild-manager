@@ -64,6 +64,9 @@
     .tcard-secondary { display: flex; }
 }
 
+/* team-time note on schedule text (only when the viewer's clock differs from the team zone) */
+.tcard-tz { color: var(--text-dim); font-size: 0.7rem; }
+
 /* game presets modal */
 .t-empty-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .preset-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }

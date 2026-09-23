@@ -91,8 +91,10 @@ function countdownHtml(e, now = Date.now()) {
     if (isPast(e, now)) return '<span class="e-dim">ended</span>';
     return `in ${fmtRel(e.event_time - now)}`;
 }
-function timeStr(ms) { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
-function dateStr(ms) { return new Date(ms).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }); }
+function timeStr(ms) { return new Date(ms).toLocaleTimeString([], tzOpts({ hour: 'numeric', minute: '2-digit' })); }
+function dateStr(ms) { return new Date(ms).toLocaleDateString([], tzOpts({ weekday: 'short', month: 'short', day: 'numeric' })); }
+// "· 21:00 team time" when the viewer's clock differs from the team zone and times are shown device-side.
+function teamTimeNote(ms) { return tzDiffers() && tzMode() === 'device' ? ` <span class="e-tz">${teamTimeStr(ms)} team time</span>` : ''; }
 function pad(n) { return String(n).padStart(2, '0'); }
 function toLocalInput(ms) { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 
@@ -197,13 +199,13 @@ function rowHtml(e, now = Date.now()) {
     return `
         <article class="erow ${isLive(e, now) ? 'live' : ''} ${isPast(e, now) ? 'past' : ''} ${open ? 'open' : ''}" data-event-id="${e.id}">
             <div class="erow-date" data-action="toggle" data-id="${e.id}">
-                <span class="d-dow">${d.toLocaleDateString([], { weekday: 'short' })}</span>
-                <span class="d-day">${d.getDate()}</span>
-                <span class="d-mon">${d.toLocaleDateString([], { month: 'short' })}</span>
+                <span class="d-dow">${d.toLocaleDateString([], tzOpts({ weekday: 'short' }))}</span>
+                <span class="d-day">${d.toLocaleDateString([], tzOpts({ day: 'numeric' }))}</span>
+                <span class="d-mon">${d.toLocaleDateString([], tzOpts({ month: 'short' }))}</span>
             </div>
             <div class="erow-body" data-action="toggle" data-id="${e.id}">
                 <div class="erow-top"><h4 class="erow-title">${esc(e.title)}</h4>${chipsHtml(e, now)}</div>
-                <div class="erow-meta">${timeStr(e.event_time)} · ${e.duration_minutes || 60} min · <span data-role="cd">${countdownHtml(e, now)}</span></div>
+                <div class="erow-meta">${timeStr(e.event_time)}${teamTimeNote(e.event_time)} · ${e.duration_minutes || 60} min · <span data-role="cd">${countdownHtml(e, now)}</span></div>
                 <div class="erow-people">${peopleHtml(e)}</div>
             </div>
             <div class="erow-rsvp">${rsvpControlHtml(e, now)}</div>
@@ -356,7 +358,7 @@ async function openEventModal(e) {
             <label class="tf-field tf-wide"><span>Title</span><input id="efTitle" maxlength="100" required value="${esc(e?.title || '')}" placeholder="e.g. Castle Siege"></label>
             <label class="tf-field"><span>Type</span><select id="efType">${Object.entries(TYPE_LABEL).map(([k, v]) => `<option value="${k}" ${(e?.event_type || 'raid') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
             <label class="tf-field"><span>Repeat</span><select id="efRepeat"><option value="">No repeat</option>${Object.entries(REPEAT_LABEL).map(([k, v]) => `<option value="${k}" ${e?.recurrence === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-            <label class="tf-field"><span>Date &amp; time</span><input id="efTime" type="datetime-local" required value="${defaultTime}"></label>
+            <label class="tf-field"><span>Date &amp; time <em>${tzDiffers() ? 'your device time' : ''}</em></span><input id="efTime" type="datetime-local" required value="${defaultTime}"></label>
             <label class="tf-field"><span>Duration <em>minutes</em></span><input id="efDuration" type="number" min="5" max="1440" value="${e?.duration_minutes ?? 60}"></label>
             <label class="tf-field"><span>Sign-up cap <em>0 = none</em></span><input id="efCap" type="number" min="0" max="500" value="${e?.max_going ?? 0}"></label>
             ${!e && roles.length ? `<label class="tf-field"><span>Your role</span><select id="efMyRole"><option value="">—</option>${roles.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}</select></label>` : ''}

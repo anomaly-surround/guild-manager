@@ -3,7 +3,7 @@
 // (teamBosses, teamData, teamTab, currentTeamId, api, showToast, guard, loadTeamBosses, renderTeamView).
 // Exposed to the shell as window.Timers.
 
-import { cardHtml, updateCard, bossState, sortBosses, groupedListHtml, scheduleText, esc, DAY, fmtDuration } from './timer-cards.js?v=20260923l';
+import { cardHtml, updateCard, bossState, sortBosses, groupedListHtml, scheduleText, setDisplayTimeZone, esc, DAY, fmtDuration } from './timer-cards.js?v=20260923n';
 
 let search = '';
 let tickTimer = null;
@@ -85,7 +85,8 @@ function listHtml() {
         </div>`;
     }
     if (list.length === 0) return '<div class="t-empty card"><div class="t-empty-title">No bosses match “' + esc(search) + '”</div></div>';
-    return groupedListHtml(list, { canManage: canManage() });
+    setDisplayTimeZone(displayTz());
+    return groupedListHtml(list, { canManage: canManage(), teamTimeNote: tzDiffers() ? 'team time' : '' });
 }
 
 function render() {
@@ -204,6 +205,7 @@ function bossFormHtml(b) {
         <form class="tform" id="bossForm">
             <label class="tf-field tf-wide"><span>Boss name</span><input id="bfName" maxlength="100" required value="${esc(b?.name || '')}" placeholder="e.g. Kundun"></label>
             <label class="tf-field tf-wide"><span>Location / channel <em>optional</em></span><input id="bfLocation" maxlength="80" value="${esc(b?.location || '')}" placeholder="e.g. Kalima 7, Channel 3"></label>
+            <p class="tf-help tf-wide" data-role="tzhint">Daily and weekly times are <b>team time</b> (${esc(teamTz())})${tzDiffers() ? `, ${tzOffsetLabel()}` : ''}. Change the team timezone in Settings.</p>
             <label class="tf-field"><span>Spawn rule</span>
                 <select id="bfType">${Object.entries(TYPE_LABEL).map(([k, v]) => `<option value="${k}" ${(b?.type || 'interval') === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
             </label>
@@ -484,7 +486,7 @@ async function showHistory() {
     const data = await api('GET', `/api/teams/${currentTeamId}/bosses/history`);
     if (data.error) { showToast(data.error); return; }
     const stats = (data.stats || []).map(s => `<div class="t-row"><span>${esc(s.boss_name)}</span><span class="t-up">${s.kill_count} kill${s.kill_count !== 1 ? 's' : ''}</span></div>`).join('');
-    const hist = (data.history || []).slice(0, 30).map(h => `<div class="t-row t-row-sm"><span>${esc(h.boss_name)}</span><span class="t-dim">${esc(h.killed_by_name || 'unknown')} · ${new Date(h.killed_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>`).join('');
+    const hist = (data.history || []).slice(0, 30).map(h => `<div class="t-row t-row-sm"><span>${esc(h.boss_name)}</span><span class="t-dim">${esc(h.killed_by_name || 'unknown')} · ${new Date(h.killed_at).toLocaleString([], tzOpts({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}</span></div>`).join('');
     const back = modal(`<h2>Kill history</h2>
         ${stats ? `<h3 class="t-h3">Per boss</h3>${stats}` : ''}
         <h3 class="t-h3">Recent kills</h3>${hist || '<div class="t-empty-sub">No kills logged yet.</div>'}

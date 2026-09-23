@@ -9,10 +9,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/tokens.css?v=20260923m">
-    <link rel="stylesheet" href="css/shell.css?v=20260923m">
-    <link rel="stylesheet" href="css/components.css?v=20260923m">
-    <link rel="stylesheet" href="css/timers.css?v=20260923m">
+    <link rel="stylesheet" href="css/tokens.css?v=20260923n">
+    <link rel="stylesheet" href="css/shell.css?v=20260923n">
+    <link rel="stylesheet" href="css/components.css?v=20260923n">
+    <link rel="stylesheet" href="css/timers.css?v=20260923n">
 </head>
 <body>
     <header class="app-header">
@@ -27,7 +27,7 @@
     </main>
 
     <script type="module">
-        import { updateCard, sortBosses, bossState, groupedListHtml, esc, fmtDuration } from './js/modules/timer-cards.js?v=20260923m';
+        import { updateCard, sortBosses, bossState, groupedListHtml, esc, fmtDuration } from './js/modules/timer-cards.js?v=20260923n';
         const API = 'https://guild-manager.xpropics.workers.dev';
         const token = new URLSearchParams(location.search).get('t') || '';
         const pub = document.getElementById('pub');
@@ -43,12 +43,21 @@
             return parts.join(' · ');
         }
 
+        // Schedules are in the team zone; flag it when this device's clock differs.
+        function teamTimeNote() {
+            try {
+                const at = new Date();
+                const off = (tz) => { const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(at); const g = (t) => Number(p.find(x => x.type === t)?.value); return Date.UTC(g('year'), g('month') - 1, g('day'), g('hour') % 24, g('minute')); };
+                return off(team.timezone) !== off(Intl.DateTimeFormat().resolvedOptions().timeZone) ? `team time (${team.timezone})` : '';
+            } catch { return ''; }
+        }
+
         function render() {
             const now = Date.now();
             document.title = `${team.name} — Boss Timers`;
             pub.innerHTML = `
                 <div class="pub-head"><h1>${esc(team.name)}</h1><span class="t-dim" data-role="summary">${summary(now)}</span></div>
-                <div class="tcards">${groupedListHtml(bosses, { readOnly: true }, now) || '<div class="t-empty card"><div class="t-empty-title">No timers yet</div></div>'}</div>`;
+                <div class="tcards">${groupedListHtml(bosses, { readOnly: true, teamTimeNote: teamTimeNote() }, now) || '<div class="t-empty card"><div class="t-empty-title">No timers yet</div></div>'}</div>`;
         }
 
         async function load() {

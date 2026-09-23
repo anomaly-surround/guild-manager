@@ -83,8 +83,14 @@ export function stateIcon(key) {
     return '';
 }
 
+// Zone the row clocks are shown in (undefined = the device zone). The app sets it from the
+// viewer's preference; the public page leaves it on the device.
+let displayZone;
+export function setDisplayTimeZone(tz) { displayZone = tz || undefined; }
+const zoned = (opts) => displayZone ? { ...opts, timeZone: displayZone } : opts;
+
 function timeAt(ts) {
-    return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return new Date(ts).toLocaleTimeString([], zoned({ hour: 'numeric', minute: '2-digit' }));
 }
 
 function countdownText(boss, st) {
@@ -102,8 +108,11 @@ function atText(boss, st) {
 // Full card. opts: { readOnly, canManage }
 export function cardHtml(boss, opts = {}, now = Date.now()) {
     const st = bossState(boss, now);
-    const meta = [scheduleText(boss), boss.location ? esc(boss.location) : ''].filter(Boolean).join(' · ');
-    const sub = boss.last_death ? `Killed ${new Date(boss.last_death).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : 'No kill logged yet';
+    // Schedules are written in the team zone; say so when the viewer's clock differs (opts.teamTimeNote).
+    const sched = scheduleText(boss);
+    const schedNote = sched && boss.type !== 'interval' && opts.teamTimeNote ? ` <span class="tcard-tz">${esc(opts.teamTimeNote)}</span>` : '';
+    const meta = [sched ? sched + schedNote : '', boss.location ? esc(boss.location) : ''].filter(Boolean).join(' · ');
+    const sub = boss.last_death ? `Killed ${new Date(boss.last_death).toLocaleString([], zoned({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}` : 'No kill logged yet';
     const windowNote = boss.window_ms ? ` · window ${fmtDuration(boss.window_ms)}` : '';
     const actions = opts.readOnly ? '' : `
         <div class="tcard-actions">

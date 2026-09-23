@@ -104,3 +104,6 @@
     .wk-ev { grid-template-columns: 1fr; gap: 2px; }
     .wk-going { display: none; }
 }
+
+/* "21:00 team time" beside an event's time when the viewer's clock differs from the team zone */
+.e-tz { color: var(--text-dim); font-size: 0.75rem; }

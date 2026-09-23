@@ -33,7 +33,7 @@ async function loadAndRenderHome() {
             <div class="home-row" data-boss-id="${b.id}">
                 <div class="grow">
                     <div class="title">${escapeHtml(b.name)}</div>
-                    <div class="sub">${b.spawned ? 'Log the kill when it is down' : 'at ' + new Date(b.next_spawn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                    <div class="sub">${b.spawned ? 'Log the kill when it is down' : 'at ' + new Date(b.next_spawn).toLocaleTimeString([], tzOpts({ hour: '2-digit', minute: '2-digit' }))}</div>
                 </div>
                 ${chip}
                 <span class="when ${cls}">${when}</span>
@@ -51,7 +51,7 @@ async function loadAndRenderHome() {
         const isLive = e.event_time <= now;
         const d = new Date(e.event_time);
         const whenText = isLive ? 'Happening now'
-            : d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            : d.toLocaleDateString([], tzOpts({ weekday: 'short', month: 'short', day: 'numeric' })) + ' · ' + d.toLocaleTimeString([], tzOpts({ hour: '2-digit', minute: '2-digit' }));
         const mine = e.my_rsvp === 'going' ? '<span class="chip chip-success">Going</span>'
             : e.my_rsvp === 'maybe' ? '<span class="chip chip-warn">Maybe</span>'
             : e.my_rsvp === 'not_going' ? '<span class="chip chip-muted">Out</span>' : '';

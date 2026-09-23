@@ -88,7 +88,7 @@ export const routes = [
     `).bind(teamId).all();
 
     // Module toggles: Loot & Points is off by default, unless the team already has loot/points data.
-    const settingsRow = await env.DB.prepare('SELECT modules, loot_mode FROM team_settings WHERE team_id = ?').bind(teamId).first();
+    const settingsRow = await env.DB.prepare('SELECT modules, loot_mode, timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
     let modules = null;
     try { modules = settingsRow?.modules ? JSON.parse(settingsRow.modules) : null; } catch {}
     const modeSet = settingsRow?.loot_mode === 'dkp' || settingsRow?.loot_mode === 'rotation';
@@ -100,7 +100,7 @@ export const routes = [
     const lootMode = await lootModeFor(env, teamId, settingsRow || null, used?.dkp ?? 0);
 
     return json({
-      team: { ...team, my_role: membership.role, premium_team: premiumTeam, modules, loot_mode: lootMode, max_members: limitsJson(premiumTeam).members, limits: limitsJson(premiumTeam) },
+      team: { ...team, my_role: membership.role, premium_team: premiumTeam, modules, loot_mode: lootMode, timezone: settingsRow?.timezone || 'Asia/Manila', max_members: limitsJson(premiumTeam).members, limits: limitsJson(premiumTeam) },
       members: members.results,
     });
   } },

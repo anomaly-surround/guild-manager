@@ -144,6 +144,9 @@
 .acct-facts b { font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 480px) { .acct-facts { grid-template-columns: 1fr; } }
 .acct-teamlist { margin: 4px 0 8px; }
+.acct-radios { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 4px; font-size: 0.9rem; }
+.acct-radios label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.acct-radios input { accent-color: var(--accent); }
 .acct-delete { display: flex; gap: 8px; margin-top: 6px; }
 .acct-delete input { flex: 1; min-width: 0; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: 0.9rem; }
 .acct-delete input:focus { outline: none; border-color: var(--danger); }
