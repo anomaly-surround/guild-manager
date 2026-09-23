@@ -30,4 +30,5 @@ const url = guildId
 const r = await fetch(url, { method: 'PUT', headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(commands) });
 const body = await r.text();
 console.log(r.status, r.ok ? `registered ${commands.length} commands ${guildId ? 'for guild ' + guildId : 'globally'}` : body);
-process.exit(r.ok ? 0 : 1);
+// Let the socket close on its own; process.exit() right after fetch trips a libuv assertion on Windows.
+process.exitCode = r.ok ? 0 : 1;
