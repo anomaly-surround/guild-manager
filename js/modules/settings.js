@@ -129,14 +129,14 @@ function discordCard() {
 function attendanceCard() {
     return `<section class="card s-card"><h3>Rally attendance</h3>
         <p class="s-desc">Members check in from Discord with <code>/here</code> + a screenshot; officers log a whole rally with <code>/rollcall</code>. Review under Events → Attendance. Approved rallies award points to the team ledger.</p>
-        <div class="tform">
+        <div class="tform" style="margin-bottom:12px">
             <label class="tf-field"><span>Points per boss attended</span><input type="number" id="sAttPts" min="0" max="100" value="${settings.attendancePoints ?? 1}"></label>
-            <div class="tf-field tf-wide s-toggles">
-                ${toggle('sAttSelf', 'Members can check in themselves (/here with a screenshot)', settings.attendanceSelfCheckin !== false, { help: 'Off = officer roll call only, nothing to verify.' })}
-                ${toggle('sAttAuto', 'Trust mode: approve unflagged check-ins automatically', !!settings.attendanceAutoApprove, { help: 'Flagged ones (no kill logged, sent hours late, duplicate screenshot) always wait for review.' })}
-            </div>
-            <div class="tf-actions tf-wide"><button class="btn btn-primary btn-sm" data-action="save-attendance">Save</button></div>
         </div>
+        <div class="s-toggles">
+            ${toggle('sAttSelf', 'Members can check in themselves (/here with a screenshot)', settings.attendanceSelfCheckin !== false, { help: 'Off = officer roll call only, nothing to verify.' })}
+            ${toggle('sAttAuto', 'Trust mode: approve unflagged check-ins automatically', !!settings.attendanceAutoApprove, { help: 'Flagged ones (no kill logged, sent hours late, duplicate screenshot) always wait for review.' })}
+        </div>
+        <div class="tf-actions"><button class="btn btn-primary btn-sm" data-action="save-attendance">Save</button></div>
     </section>`;
 }
 
