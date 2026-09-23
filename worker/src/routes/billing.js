@@ -16,6 +16,10 @@ export const routes = [
     try { form = await request.formData(); } catch { return json({ ok: true, ignored: 'unreadable body' }); }
     const licenseKey = String(form.get('license_key') || '').trim();
     const productId = configuredProductFromPing(env, form);
+    // Visible in `wrangler tail`: which product/url_params Gumroad actually sends.
+    console.log('gumroad ping', JSON.stringify({ product_id: form.get('product_id'), permalink: form.get('permalink'), product_permalink: form.get('product_permalink'),
+      matched: productId || null, key: licenseKey ? licenseKey.slice(0, 8) + '…' : null, test: form.get('test'), recurring: form.get('is_recurring_charge'),
+      url_params: [...form.keys()].filter(k => k.startsWith('url_params')).map(k => `${k}=${form.get(k)}`) }));
     if (!licenseKey || !productId) return json({ ok: true, ignored: 'not a premium product' });
 
     let userId = String(form.get('url_params[uid]') || '').trim();

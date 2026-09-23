@@ -14,10 +14,16 @@ export const RECHECK_AFTER_SEC = 20 * 3600;   // re-verify each stored license a
 const RETRY_AFTER_SEC = 3600;                 // when Gumroad is unreachable, try that license again in 1 h
 const MONTHLY_GRACE_SEC = 35 * 86400;         // access granted per verified check of a monthly license
 
+// The link's permalink (…/l/<permalink>) counts as an id too, so a Ping that names the product
+// only by permalink still matches when the config holds the long id.
+function permalinkOf(url) {
+  return String(url || '').split('?')[0].split('/').filter(Boolean).pop() || '';
+}
+
 export function planForProduct(env, productId) {
   if (!productId) return null;
-  if (productId === env.GUMROAD_MONTHLY_PRODUCT_ID) return 'monthly';
-  if (productId === env.GUMROAD_LIFETIME_PRODUCT_ID) return 'lifetime';
+  if (productId === env.GUMROAD_MONTHLY_PRODUCT_ID || productId === permalinkOf(env.GUMROAD_MONTHLY_URL)) return 'monthly';
+  if (productId === env.GUMROAD_LIFETIME_PRODUCT_ID || productId === permalinkOf(env.GUMROAD_LIFETIME_URL)) return 'lifetime';
   return null;
 }
 

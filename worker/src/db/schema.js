@@ -231,16 +231,23 @@ async function initDB(db) {
   // Run migrations (each one is idempotent via catch).
   // Probes MUST include the newest added column/table — otherwise DBs that passed
   // older probes will silently miss newer migrations forever.
-  const needsMigrations = await db.prepare("SELECT premium FROM users LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT accent_color FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT trial_started FROM users LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT google_id FROM users LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT invites_enabled FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT 1 FROM join_requests LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT public_token FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT rsvp_roles FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT points_name FROM team_settings LIMIT 1").first().then(() => false).catch(() => true)
-    || await db.prepare("SELECT gumroad_license FROM users LIMIT 1").first().then(() => false).catch(() => true);
+  // One sqlite_master read instead of one SELECT per probe: on a healthy DB every probe used to
+  // pass and run in turn = 10 sequential D1 round trips per cold isolate, which from a far colo
+  // (Gumroad's webhook arrives via IAD) took long enough for the caller to time out.
+  const PROBES = [
+    ['users', 'premium'], ['team_settings', 'accent_color'], ['users', 'trial_started'], ['users', 'google_id'],
+    ['team_settings', 'invites_enabled'], ['join_requests', null], ['team_settings', 'public_token'],
+    ['team_settings', 'rsvp_roles'], ['team_settings', 'points_name'], ['users', 'gumroad_license'],
+  ];
+  const tables = await db.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table'").all();
+  const createSql = Object.fromEntries(tables.results.map(t => [t.name, t.sql || '']));
+  const present = (table, column) => {
+    const sql = createSql[table];
+    if (sql === undefined) return false;
+    if (!column) return true;
+    return sql.split(/[\s(),"`[\]]+/).some(tok => tok.toLowerCase() === column);
+  };
+  const needsMigrations = PROBES.some(([table, column]) => !present(table, column));
   if (needsMigrations) {
     const migrations = [
       'ALTER TABLE users ADD COLUMN premium INTEGER DEFAULT 0',

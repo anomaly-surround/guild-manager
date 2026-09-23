@@ -1,5 +1,16 @@
 // Generic helpers: escapeHtml, formatTime, formatTimeLong, showToast, copyInvite, goHome
 
+// Modal backdrops close on a click OUTSIDE the card. A drag that starts inside the card (selecting
+// text in a field) and ends on the backdrop also fires a 'click' on the backdrop; swallow those so
+// every module's "click backdrop = close" handler only sees real outside clicks.
+(function() {
+    let pressedOnBackdrop = false;
+    document.addEventListener('pointerdown', (e) => { pressedOnBackdrop = e.target.classList?.contains('modal-backdrop'); }, true);
+    document.addEventListener('click', (e) => {
+        if (e.target.classList?.contains('modal-backdrop') && !pressedOnBackdrop) e.stopPropagation();
+    }, true);
+})();
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
