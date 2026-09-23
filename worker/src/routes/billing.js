@@ -7,11 +7,14 @@ import { bindLicense, checkoutUrl, configuredProductFromPing } from '../lib/gumr
 
 export const routes = [
   // POST /gumroad/ping — Gumroad's sale webhook (x-www-form-urlencoded, unsigned). Fires on every
-  // sale and every recurring membership charge; retried hourly for 3 h on a non-200. The license
-  // key it carries is verified with Gumroad before anything is granted. url_params[uid] is the
-  // buyer's account id attached to the checkout link; without it the key is matched to an account
-  // that already activated it, or left for the buyer to enter in the app.
-  { method: 'POST', pattern: '/gumroad/ping', handler: async ({ request, env }) => {
+  // sale and every recurring membership charge. The license key it carries is verified with Gumroad
+  // before anything is granted. url_params[uid] is the buyer's account id attached to the checkout
+  // link; without it the key is matched to an account that already activated it, or left for the
+  // buyer to enter in the app.
+  // Gumroad gives up on a slow response (pings from its IAD path took 6–15 s here, 2026-09-23), so
+  // the request is acknowledged as soon as the body is parsed and the verification runs in
+  // ctx.waitUntil. Failures are covered by the daily recheck and the paste-your-key path.
+  { method: 'POST', pattern: '/gumroad/ping', handler: async ({ request, env, ctx }) => {
     const t0 = Date.now(); const lap = (what) => console.log(`gumroad ping +${Date.now() - t0}ms ${what}`);
     let form;
     try { form = await request.formData(); } catch { return json({ ok: true, ignored: 'unreadable body' }); }
@@ -32,10 +35,12 @@ export const routes = [
     if (!userId) return json({ ok: true, ignored: 'no account attached; buyer can enter the key in the app' });
     lap('user resolved');
 
-    const r = await bindLicense(env, userId, licenseKey, productId, lap);
-    lap('done');
-    if (r.transient) return json({ error: r.error }, 503);   // let Gumroad retry
-    return json({ ok: true, granted: r.ok, plan: r.plan || null, note: r.ok ? undefined : r.error });
+    const work = bindLicense(env, userId, licenseKey, productId, lap)
+      .then(r => lap(`done granted=${r.ok} ${r.plan || r.error || ''}`))
+      .catch(e => console.error('gumroad ping bind error:', e));
+    if (ctx?.waitUntil) { ctx.waitUntil(work); return json({ ok: true, queued: true }); }
+    await work;   // local harness / tests: synchronous
+    return json({ ok: true, queued: false });
   } },
 
   // POST /api/activate-license { licenseKey } — the buyer pastes the key Gumroad emailed them.

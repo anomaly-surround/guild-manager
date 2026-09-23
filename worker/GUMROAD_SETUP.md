@@ -11,6 +11,9 @@ review to start selling; identity/payout details are asked for only once a payou
    `/gumroad/ping`. The ping is unsigned, so the worker trusts nothing in it: it takes the `license_key`
    and `product_id` from the ping and verifies them with Gumroad's license API (no token needed).
    Only a verified, active purchase grants Premium to the account in `url_params[uid]`.
+   The worker answers 200 as soon as the body is parsed and verifies in the background (`ctx.waitUntil`):
+   Gumroad's pings arrive via its IAD path and its client gave up on 6–15 s responses (seen 2026-09-23).
+   `wrangler tail` shows each ping's fields and `+Nms` step timings.
 3. Meanwhile the modal polls `/auth/me` every 5 s for 3 min and flips to Premium when the ping lands.
    If the ping never arrives (bought from the Gumroad page directly, ping misconfigured), the buyer pastes
    the license key from Gumroad's email into the modal → `POST /api/activate-license` → same verification.

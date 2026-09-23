@@ -41,7 +41,7 @@ function matchRoute(routes, method, path) {
   return null;
 }
 
-export async function handleRequest(request, env) {
+export async function handleRequest(request, env, ctx) {
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders() });
   }
@@ -60,7 +60,7 @@ export async function handleRequest(request, env) {
   }
 
   const pub = matchRoute(PUBLIC_ROUTES, request.method, path);
-  if (pub) return pub.route.handler({ request, env, url, path, user: null, params: pub.params });
+  if (pub) return pub.route.handler({ request, env, ctx, url, path, user: null, params: pub.params });
 
   const user = await getUser(request, env);
   if (!user && path.startsWith('/api/')) {
@@ -68,7 +68,7 @@ export async function handleRequest(request, env) {
   }
 
   const prot = matchRoute(PROTECTED_ROUTES, request.method, path);
-  if (prot) return prot.route.handler({ request, env, url, path, user, params: prot.params });
+  if (prot) return prot.route.handler({ request, env, ctx, url, path, user, params: prot.params });
 
   return json({ error: 'Not found' }, 404);
 }

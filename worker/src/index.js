@@ -5,9 +5,9 @@ import { handleScheduled } from './cron/scheduled.js';
 import { corsHeaders } from './lib/http.js';
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     try {
-      return await handleRequest(request, env);
+      return await handleRequest(request, env, ctx);
     } catch(e) {
       console.error('Unhandled error:', e);
       return new Response(JSON.stringify({ error: 'Internal server error' }), {
