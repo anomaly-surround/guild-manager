@@ -1,13 +1,6 @@
-// App config (API base, Paddle), shared session state and the double-tap guard()
+// App config (API base), shared session state and the double-tap guard()
 
 const API = 'https://guild-manager.xpropics.workers.dev';
-// Paddle client-side token (public, safe to embed)
-const PADDLE_CLIENT_TOKEN = 'live_96be34db32c0db584630de40f8b';
-const PADDLE_ENV = 'production';
-if (typeof Paddle !== 'undefined') {
-    Paddle.Environment.set(PADDLE_ENV);
-    Paddle.Initialize({ token: PADDLE_CLIENT_TOKEN });
-}
 let token = localStorage.getItem('gm_token') || '';
 let currentUser = null;
 let currentTeamId = null;

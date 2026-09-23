@@ -1,7 +1,8 @@
-// Cron tick (every minute): boss timers, event notifications, recurring events, DKP decay, auctions, cleanup
+// Cron tick (every minute): boss timers, event notifications, recurring events, DKP decay, auctions, cleanup, license recheck
 
 import { sendDiscord } from '../lib/discord.js';
 import { calcNextSpawn } from '../lib/spawn.js';
+import { recheckLicenses } from '../lib/gumroad.js';
 
 export async function handleScheduled(env) {
   // NOTE: initDB intentionally NOT called here. Schema is created by handleRequest
@@ -254,4 +255,9 @@ export async function handleScheduled(env) {
   try {
     await env.DB.prepare("DELETE FROM join_requests WHERE status != 'pending' AND resolved_at < unixepoch() - 2592000").run();
   } catch (e) { console.error('Join request cleanup error:', e); }
+
+  // --- Gumroad licenses: re-verify a few whose last check is older than ~20 h (see lib/gumroad.js). ---
+  try {
+    await recheckLicenses(env);
+  } catch (e) { console.error('License recheck error:', e); }
 }

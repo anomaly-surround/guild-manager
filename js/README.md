@@ -17,7 +17,7 @@ Load order matters only for code that runs at load time:
 | file | runs at load |
 |---|---|
 | `theme-help.js` | applies the saved theme |
-| `core.js` | API base, Paddle init, session state, `guard()` |
+| `core.js` | API base, session state, `guard()` |
 | `util.js` | generic helpers |
 | `api.js` | `api()` + TTL cache (must precede any caller that runs at load) |
 | `notifications.js` | requests notification permission |

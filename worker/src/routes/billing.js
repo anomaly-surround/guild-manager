@@ -1,68 +1,46 @@
-// Paddle webhook, free trial, checkout price lookup (public routes)
+// Billing (public routes): Gumroad ping, license activation, free trial, checkout link.
+// All verification logic lives in lib/gumroad.js.
 
 import { json, safeJson } from '../lib/http.js';
 import { getUser } from '../lib/auth.js';
+import { bindLicense, checkoutUrl, configuredProductFromPing } from '../lib/gumroad.js';
 
 export const routes = [
-  { method: 'POST', pattern: '/paddle/webhook', handler: async ({ request, env }) => {
-    const rawBody = await request.text();
-    // Verify Paddle webhook signature
-    const sigHeader = request.headers.get('paddle-signature') || '';
-    if (!env.PADDLE_WEBHOOK_SECRET || !sigHeader) return json({ error: 'Unauthorized' }, 403);
+  // POST /gumroad/ping — Gumroad's sale webhook (x-www-form-urlencoded, unsigned). Fires on every
+  // sale and every recurring membership charge; retried hourly for 3 h on a non-200. The license
+  // key it carries is verified with Gumroad before anything is granted. url_params[uid] is the
+  // buyer's account id attached to the checkout link; without it the key is matched to an account
+  // that already activated it, or left for the buyer to enter in the app.
+  { method: 'POST', pattern: '/gumroad/ping', handler: async ({ request, env }) => {
+    let form;
+    try { form = await request.formData(); } catch { return json({ ok: true, ignored: 'unreadable body' }); }
+    const licenseKey = String(form.get('license_key') || '').trim();
+    const productId = configuredProductFromPing(env, form);
+    if (!licenseKey || !productId) return json({ ok: true, ignored: 'not a premium product' });
 
-    // Parse ts=...;h1=... from header
-    const sigParts = {};
-    for (const part of sigHeader.split(';')) {
-      const [k, v] = part.split('=');
-      if (k && v) sigParts[k] = v;
+    let userId = String(form.get('url_params[uid]') || '').trim();
+    if (!userId) {
+      const existing = await env.DB.prepare('SELECT id FROM users WHERE gumroad_license = ?').bind(licenseKey).first();
+      userId = existing ? existing.id : '';
     }
-    if (!sigParts.ts || !sigParts.h1) return json({ error: 'Invalid signature format' }, 403);
+    if (!userId) return json({ ok: true, ignored: 'no account attached; buyer can enter the key in the app' });
 
-    // Verify HMAC-SHA256: payload = ts:rawBody
-    const payload = sigParts.ts + ':' + rawBody;
-    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.PADDLE_WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    const sigBytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)));
-    const computed = Array.from(sigBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    if (computed !== sigParts.h1) return json({ error: 'Invalid signature' }, 403);
+    const r = await bindLicense(env, userId, licenseKey, productId);
+    if (r.transient) return json({ error: r.error }, 503);   // let Gumroad retry
+    return json({ ok: true, granted: r.ok, plan: r.plan || null, note: r.ok ? undefined : r.error });
+  } },
 
-    const body = JSON.parse(rawBody);
-    const eventType = body.event_type;
-    const data = body.data;
-    const customData = data?.custom_data;
-    const userId = customData?.user_id;
+  // POST /api/activate-license { licenseKey } — the buyer pastes the key Gumroad emailed them.
+  { method: 'POST', pattern: '/api/activate-license', handler: async ({ request, env }) => {
+    const user = await getUser(request, env);
+    if (!user) return json({ error: 'Not logged in' }, 401);
+    const body = await safeJson(request);
+    const licenseKey = String(body?.licenseKey || '').trim().toUpperCase();
+    if (!/^[A-Z0-9-]{8,64}$/.test(licenseKey)) return json({ error: 'That does not look like a Gumroad license key' }, 400);
 
-    if (!userId) return json({ ok: true });
-
-    // transaction.completed — one-time purchase (lifetime)
-    if (eventType === 'transaction.completed' && data?.status === 'completed') {
-      const items = data.items || [];
-      const isLifetime = items.some(i => String(i.price?.id) === env.PADDLE_LIFETIME_PRICE_ID);
-      if (isLifetime) {
-        const custId = data.customer_id || '';
-        await env.DB.prepare('UPDATE users SET premium = 1, premium_type = ?, ls_customer_id = ? WHERE id = ?')
-          .bind('lifetime', custId, userId).run();
-      }
-    }
-
-    // subscription.created or subscription.updated with active status
-    if (eventType === 'subscription.created' || (eventType === 'subscription.updated' && data?.status === 'active')) {
-      const custId = data.customer_id || '';
-      const nextBill = data.next_billed_at || data.current_billing_period?.ends_at;
-      let until = Math.floor(Date.now() / 1000) + 35 * 86400; // default 35 days buffer
-      if (nextBill) {
-        until = Math.floor(new Date(nextBill).getTime() / 1000) + 3 * 86400; // next bill + 3 day buffer
-      }
-      await env.DB.prepare('UPDATE users SET premium = 1, premium_type = ?, premium_until = ?, ls_customer_id = ? WHERE id = ?')
-        .bind('monthly', until, custId, userId).run();
-    }
-
-    // subscription.canceled, subscription.past_due, subscription.paused
-    if (eventType === 'subscription.canceled' || eventType === 'subscription.paused') {
-      await env.DB.prepare('UPDATE users SET premium = 0, premium_type = NULL, premium_until = NULL WHERE id = ?')
-        .bind(userId).run();
-    }
-
-    return json({ ok: true });
+    const r = await bindLicense(env, user.userId, licenseKey);
+    if (!r.ok) return json({ error: r.error }, r.transient ? 503 : 400);
+    return json({ ok: true, plan: r.plan });
   } },
 
   // POST /api/start-trial — start 7-day free trial
@@ -82,17 +60,17 @@ export const routes = [
     return json({ ok: true, trialDaysLeft: 7 });
   } },
 
-  // POST /api/checkout — return Paddle price IDs for client-side checkout
+  // POST /api/checkout { type: 'monthly' | 'lifetime' } — Gumroad product link for this account
   { method: 'POST', pattern: '/api/checkout', handler: async ({ request, env }) => {
     const user = await getUser(request, env);
     if (!user) return json({ error: 'Not logged in' }, 401);
 
     const body = await safeJson(request);
-    if (!body) return json({ error: "Invalid request body" }, 400);
+    if (!body) return json({ error: 'Invalid request body' }, 400);
 
-    const priceId = body.type === 'lifetime' ? env.PADDLE_LIFETIME_PRICE_ID : env.PADDLE_MONTHLY_PRICE_ID;
-    if (!priceId) return json({ error: 'Price not configured' }, 500);
-
-    return json({ priceId, userId: user.userId });
+    const plan = body.type === 'lifetime' ? 'lifetime' : 'monthly';
+    const url = checkoutUrl(env, plan, user.userId);
+    if (!url) return json({ error: 'Checkout is not configured yet' }, 500);
+    return json({ url, plan });
   } },
 ];

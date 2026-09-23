@@ -1,5 +1,5 @@
 // Guild Manager - Cloudflare Worker entry point.
-// Bindings: DB (D1), FILES (R2); secrets: DISCORD_*, GOOGLE_*, JWT_SECRET, PADDLE_*.
+// Bindings: DB (D1), FILES (R2); secrets: DISCORD_*, GOOGLE_*, JWT_SECRET; vars: GUMROAD_* (wrangler.toml).
 import { handleRequest } from './router.js';
 import { handleScheduled } from './cron/scheduled.js';
 import { corsHeaders } from './lib/http.js';

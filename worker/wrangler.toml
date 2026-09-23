@@ -13,3 +13,11 @@ database_id = "1938b20b-8771-47e4-ad55-b9fe5752ef3d"
 [[r2_buckets]]
 binding = "FILES"
 bucket_name = "guild-manager-files"
+
+# Gumroad billing (public values; the license API needs no secret). *_PRODUCT_ID takes the
+# product's permalink (the part after /l/ in its link) or its long product id — either works.
+[vars]
+GUMROAD_MONTHLY_URL = "https://anomalyftw.gumroad.com/l/vbeeit"
+GUMROAD_LIFETIME_URL = "https://anomalyftw.gumroad.com/l/vhuarz"
+GUMROAD_MONTHLY_PRODUCT_ID = "yoUMrHCtjdpBSAr66I6azQ=="
+GUMROAD_LIFETIME_PRODUCT_ID = "gEf0lchUAxDC6tZUfI9W8Q=="

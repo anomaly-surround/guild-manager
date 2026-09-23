@@ -1,0 +1,48 @@
+/* Upgrade modal (js/billing.js): notices, the two plan buttons, license key entry, status line. */
+
+.bill-note {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    margin: 10px 0; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface-2); color: var(--text-muted);
+    font-size: 0.85rem; line-height: 1.45;
+}
+.bill-note b { color: var(--text); }
+.bill-note a { color: var(--accent); }
+.bill-note-success { border-color: color-mix(in srgb, var(--success) 40%, transparent); background: var(--success-soft); color: var(--text); }
+.bill-note-warn { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: var(--warn-soft); color: var(--text); }
+
+.bill-plans { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 8px; }
+@media (max-width: 420px) { .bill-plans { grid-template-columns: 1fr; } }
+.bill-plan {
+    position: relative;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    padding: 14px 14px 12px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius);
+    background: var(--surface-2); color: var(--text);
+    text-align: left; cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.05s;
+}
+.bill-plan:hover { border-color: var(--accent); background: var(--surface-3); }
+.bill-plan:active { transform: translateY(1px); }
+.bill-plan:disabled { opacity: 0.55; cursor: not-allowed; }
+.bill-plan-featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.bill-plan .chip { position: absolute; top: 10px; right: 10px; }
+.bill-plan-name { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.bill-plan-price { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.bill-plan-price small { font-size: 0.8rem; font-weight: 500; color: var(--text-dim); margin-left: 4px; }
+.bill-plan-sub { font-size: 0.8rem; color: var(--text-muted); }
+
+.bill-key { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+.bill-key > summary { cursor: pointer; list-style: none; font-size: 0.85rem; font-weight: 600; color: var(--accent); padding: 4px 0; user-select: none; }
+.bill-key > summary::-webkit-details-marker { display: none; }
+.bill-key-form { display: flex; gap: 8px; margin-top: 8px; }
+.bill-key-form input {
+    flex: 1; min-width: 0; padding: 9px 11px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    background: var(--surface-2); color: var(--text);
+    font-family: var(--mono); font-size: 0.85rem; letter-spacing: 0.03em; text-transform: uppercase;
+}
+.bill-key-form input:focus { outline: none; border-color: var(--accent); }
+.bill-key .tf-help { margin-top: 6px; }
+.bill-status:empty { display: none; }

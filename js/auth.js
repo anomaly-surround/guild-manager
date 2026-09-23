@@ -33,6 +33,12 @@ async function init() {
     currentUser = user;
     showUserInfo();
     showTeamList();
+    // pricing.html links here with ?upgrade=monthly|lifetime
+    const wanted = new URLSearchParams(location.search).get('upgrade');
+    if (wanted) {
+        history.replaceState(null, '', location.pathname);
+        if (!(currentUser.premium && !currentUser.trial)) showUpgradeModal();
+    }
 }
 
 // --- Views ---

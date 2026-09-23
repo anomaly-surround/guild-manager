@@ -10,8 +10,8 @@ cd worker; npx wrangler deploy
 ```
 
 Bindings (D1 `DB`, R2 `FILES`) and the every-minute cron live in `wrangler.toml`.
-Secrets (`DISCORD_*`, `GOOGLE_*`, `JWT_SECRET`, `PADDLE_*`) are set in the Cloudflare dashboard
-and survive deploys. Roll back with `npx wrangler rollback`.
+Secrets (`DISCORD_*`, `GOOGLE_*`, `JWT_SECRET`) are set in the Cloudflare dashboard and survive
+deploys. Gumroad billing needs no secret: the four `GUMROAD_*` values are plain vars in `wrangler.toml`. Roll back with `npx wrangler rollback`.
 
 Dropping the tables of cut features from production is a manual step: see `DROP_TABLES.md`.
 
@@ -41,11 +41,12 @@ src/
     ids.js            generateInviteCode()
     spawn.js          boss spawn-time math
     discord.js        webhook validation + embed sender
+    gumroad.js        checkout link, license verify, grant/revoke premium, daily recheck
     team.js           requireTeamMember(env, teamId, userId), isPremiumTeam(env, teamId)
     rotation.js       lootModeFor(), ensurePositions(), moveMember() — loot rotation math
   routes/             one module per resource; each exports `routes = [{ method, pattern, handler }]`
     auth.js           /auth/*                     (public)
-    billing.js        /paddle/webhook, start-trial, checkout   (public)
+    billing.js        /gumroad/ping, activate-license, start-trial, checkout   (public)
     public.js         /public/timers/:token       (public, read-only timer page)
     teams.js          teams CRUD, member game role, roles, kick/leave/transfer
     invites.js        invite codes, join requests

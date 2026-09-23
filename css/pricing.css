@@ -1,0 +1,48 @@
+/* Pricing page (pricing.html): hero, plan cards, FAQ rows. Mobile-first, on the shared tokens. */
+
+/* The global reset lives in app.css, which this standalone page does not load. */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+a { text-decoration: none; }
+.pricing-faq p a, .module-footer a:hover { text-decoration: underline; }
+
+.pricing-hero { text-align: center; margin: 12px auto 22px; max-width: 560px; }
+.pricing-hero h1 { font-size: 1.9rem; letter-spacing: -0.02em; margin: 0 0 6px; }
+.pricing-hero p { color: var(--text-muted); font-size: 1rem; line-height: 1.5; margin: 0; }
+
+.plans { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: stretch; }
+@media (min-width: 720px) { .plans { grid-template-columns: repeat(3, 1fr); } }
+
+.plan { display: flex; flex-direction: column; padding: 20px 18px; position: relative; }
+.plan-featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+.plan-badge {
+    position: absolute; top: -11px; left: 18px;
+    padding: 3px 9px; border-radius: 999px;
+    background: var(--accent-strong); color: #fff;
+    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.plan h3 { font-size: 1.05rem; margin: 0 0 2px; }
+.plan-sub { color: var(--text-muted); font-size: 0.85rem; margin: 0; }
+.plan-price { display: flex; align-items: baseline; gap: 6px; margin: 14px 0 12px; }
+.plan-price b { font-size: 2.1rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+.plan-price span { color: var(--text-dim); font-size: 0.85rem; }
+.plan ul { list-style: none; padding: 0; margin: 0 0 16px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.plan li { display: flex; gap: 8px; align-items: flex-start; font-size: 0.875rem; line-height: 1.35; }
+.plan li svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; }
+.plan li.yes svg { color: var(--success); }
+.plan li.no { color: var(--text-dim); }
+.plan li.no svg { color: var(--text-dim); }
+.plan .btn { width: 100%; padding: 11px 16px; font-size: 0.9rem; }
+
+.pricing-faq { margin-top: 24px; padding: 4px 18px; }
+.pricing-faq details { border-bottom: 1px solid var(--border); }
+.pricing-faq details:last-child { border-bottom: 0; }
+.pricing-faq summary {
+    list-style: none; cursor: pointer; padding: 13px 0;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    font-weight: 600; font-size: 0.925rem;
+}
+.pricing-faq summary::-webkit-details-marker { display: none; }
+.pricing-faq summary::after { content: '\25BE'; color: var(--text-dim); transition: transform 0.15s; }
+.pricing-faq details[open] summary::after { transform: rotate(180deg); }
+.pricing-faq details p { margin: 0 0 14px; color: var(--text-muted); font-size: 0.875rem; line-height: 1.55; }
+.pricing-faq a { color: var(--accent); }

@@ -1,74 +1,136 @@
-// Premium upgrade modal, free trial, Paddle checkout
+// Premium: upgrade modal, free trial, Gumroad checkout (new tab + activation poll), license key entry
+
+const BILL_POLL_MS = 5000;
+const BILL_POLL_MAX_MS = 3 * 60 * 1000;
+let _billPoll = null;
 
 function showUpgradeModal() {
     const isGuest = currentUser?.authType === 'guest';
-    const trialUsed = currentUser?.trialUsed || isGuest;
-    const trialBtn = trialUsed ? (isGuest ? `
-        <div style="margin-bottom:14px;padding:12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;text-align:center">
-            <p style="color:#f59e0b;font-size:0.85em">Sign in with Discord or Google to start a free trial.</p>
-        </div>` : '') : `
-        <div style="margin-bottom:14px;padding:12px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:8px;text-align:center">
-            <p style="color:#34d399;font-size:0.9em;font-weight:600;margin-bottom:8px">Try Premium free for 7 days!</p>
-            <button class="btn" style="background:#065f46;color:#34d399;padding:8px 20px;font-size:0.9em" onclick="startFreeTrial()">Start Free Trial</button>
-            <p style="color:var(--text-dim);font-size:0.75em;margin-top:6px">No payment required. One trial per account.</p>
+    const onTrial = !!currentUser?.trial;
+    const trialUsed = !!currentUser?.trialUsed;
+
+    let notice = '';
+    if (isGuest) {
+        notice = '<div class="bill-note bill-note-warn">Sign in with Discord or Google first, so your purchase stays with an account you can get back into. Guests can\'t start a trial or buy Premium.</div>';
+    } else if (onTrial) {
+        notice = `<div class="bill-note bill-note-success">Your trial has <b>${currentUser.trialDaysLeft} day${currentUser.trialDaysLeft === 1 ? '' : 's'}</b> left. Buy a plan to keep Premium when it ends.</div>`;
+    } else if (!trialUsed) {
+        notice = '<div class="bill-note bill-note-success"><span><b>Try Premium free for 7 days.</b> No payment details, one trial per account.</span><button class="btn btn-sm btn-secondary" data-act="trial">Start free trial</button></div>';
+    }
+
+    const plans = `
+        <div class="bill-plans">
+            <button class="bill-plan" data-act="buy" data-plan="monthly" ${isGuest ? 'disabled' : ''}>
+                <span class="bill-plan-name">Monthly</span>
+                <span class="bill-plan-price">$2<small>/ month</small></span>
+                <span class="bill-plan-sub">Cancel any time</span>
+            </button>
+            <button class="bill-plan bill-plan-featured" data-act="buy" data-plan="lifetime" ${isGuest ? 'disabled' : ''}>
+                <span class="chip chip-accent">Best value</span>
+                <span class="bill-plan-name">Lifetime</span>
+                <span class="bill-plan-price">$10<small>once</small></span>
+                <span class="bill-plan-sub">Pay once, keep it forever</span>
+            </button>
         </div>`;
+
     document.getElementById('deathModal').innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100" onclick="if(event.target===this)document.getElementById('deathModal').innerHTML=''">
-            <div class="card" style="width:420px;max-width:90vw;margin:0;border-color:#7c3aed;">
-                <h2 style="color:#a78bfa">Upgrade to Premium</h2>
-                <p style="color:var(--text-muted);font-size:0.9em;margin-bottom:6px">Free covers 1 team, 10 members and 15 timers. Premium adds:</p>
-                <ul style="margin:0 0 14px 18px;color:var(--text-muted);font-size:0.85em;line-height:1.6">
-                    <li>Unlimited teams and timers, up to 100 members</li>
-                    <li>Public timer page to pin in Discord</li>
-                    <li>Per-channel Discord webhooks</li>
-                    <li>Boss templates and kill history</li>
-                    <li>Event templates, attendance report, calendar feed</li>
-                    <li>Loot wishlist, points auctions and decay</li>
-                </ul>
-                ${trialBtn}
-                <div style="display:flex;gap:10px;">
-                    <button class="btn btn-primary" onclick="checkout('monthly')">Monthly Plan</button>
-                    <button class="btn btn-primary" onclick="checkout('lifetime')">Lifetime (one-time)</button>
-                </div>
-                <button class="btn" style="margin-top:12px;background:var(--bg-input);color:var(--text);" onclick="document.getElementById('deathModal').innerHTML=''">Cancel</button>
+        <div class="modal-backdrop">
+            <div class="card modal-card bill-modal">
+                <div class="help-head"><h2>Upgrade to Premium</h2><button class="tbtn-icon" data-close title="Close">&#10005;</button></div>
+                <p class="tf-help">Free covers 1 team, 10 members and 15 timers. Premium adds unlimited teams and timers, up to 100 members, the public timer page, per-channel webhooks, templates, kill history, the attendance report, calendar feed, wishlists, auctions and decay. <a href="pricing.html" target="_blank" rel="noopener">Compare plans</a></p>
+                ${notice}
+                ${plans}
+                <p class="tf-help">Checkout opens on Gumroad in a new tab and takes cards and PayPal. Premium switches on here by itself within a minute of paying.</p>
+                <details class="bill-key">
+                    <summary>Already bought? Enter your license key</summary>
+                    <form class="bill-key-form" data-act="activate">
+                        <input id="licenseKeyInput" placeholder="XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" autocomplete="off" spellcheck="false" ${isGuest ? 'disabled' : ''}>
+                        <button class="btn btn-primary" type="submit" ${isGuest ? 'disabled' : ''}>Activate</button>
+                    </form>
+                    <p class="tf-help">It's in the email Gumroad sent after your purchase, and on your Gumroad library page.</p>
+                </details>
+                <div class="bill-status" id="billStatus"></div>
             </div>
         </div>`;
+
+    const back = document.querySelector('#deathModal .modal-backdrop');
+    back.addEventListener('click', (e) => {
+        if (e.target === back || e.target.closest('[data-close]')) { closeUpgradeModal(); return; }
+        const act = e.target.closest('[data-act]');
+        if (!act || act.tagName === 'FORM') return;
+        if (act.dataset.act === 'trial') startFreeTrial();
+        if (act.dataset.act === 'buy') checkout(act.dataset.plan);
+    });
+    back.querySelector('form[data-act="activate"]').addEventListener('submit', (e) => { e.preventDefault(); activateLicense(); });
 }
+
+function closeUpgradeModal() {
+    document.getElementById('deathModal').innerHTML = '';
+}
+
+function billStatus(html, kind) {
+    const el = document.getElementById('billStatus');
+    if (el) el.innerHTML = html ? `<div class="bill-note bill-note-${kind || 'muted'}">${html}</div>` : '';
+}
+
+async function refreshPremiumState() {
+    _apiCache.delete('/auth/me');
+    const user = await api('GET', '/auth/me');
+    if (user && !user.error) { currentUser = user; showUserInfo(); }
+    return user;
+}
+
+async function onPremiumActivated(user) {
+    stopActivationPoll();
+    closeUpgradeModal();
+    showToast(user.premiumType === 'lifetime' ? 'Lifetime Premium activated!' : 'Premium activated!');
+    if (currentTeamId) openTeam(currentTeamId); else showTeamList();
+}
+
+// --- Actions ---
 
 const startFreeTrial = guard('startFreeTrial', async function() {
     const data = await api('POST', '/api/start-trial');
     if (data.error) { showToast(data.error); return; }
-    document.getElementById('deathModal').innerHTML = '';
+    closeUpgradeModal();
     showToast('Free trial started! You have 7 days of Premium.');
-    // Refresh user data
-    const user = await api('GET', '/auth/me');
-    if (user && !user.error) {
-        currentUser = user;
-        showUserInfo();
-    }
-    if (currentTeamId) openTeam(currentTeamId);
+    await refreshPremiumState();
+    if (currentTeamId) openTeam(currentTeamId); else showTeamList();
 });
 
-// --- Actions ---
+const checkout = guard('checkout', async function(plan) {
+    // Open the tab synchronously so mobile browsers don't treat it as a pop-up, then point it at Gumroad.
+    const tab = window.open('about:blank', '_blank');
+    const data = await api('POST', '/api/checkout', { type: plan });
+    if (data.error || !data.url) { if (tab) tab.close(); billStatus(data.error || 'Checkout is not available right now', 'warn'); return; }
+    if (tab) { tab.opener = null; tab.location.href = data.url; }
+    billStatus(`Waiting for your ${plan} purchase on Gumroad&hellip; ${tab ? '' : `<a href="${data.url}" target="_blank" rel="noopener">Open checkout</a> &middot; `}Leave this open; Premium switches on by itself. Nothing happening? Paste your license key above.`, 'muted');
+    startActivationPoll();
+});
 
-const checkout = guard('checkout', async function(type) {
-    const data = await api('POST', '/api/checkout', { type });
-    if (data.error) { showToast(data.error); return; }
-    if (!data.priceId) { showToast('Failed to create checkout'); return; }
+function startActivationPoll() {
+    stopActivationPoll();
+    const started = Date.now();
+    _billPoll = setInterval(async () => {
+        if (!document.getElementById('billStatus')) { stopActivationPoll(); return; }   // modal closed
+        if (Date.now() - started > BILL_POLL_MAX_MS) { stopActivationPoll(); return; }
+        const user = await refreshPremiumState();
+        if (user && user.premium && !user.trial) onPremiumActivated(user);
+    }, BILL_POLL_MS);
+}
 
-    document.getElementById('deathModal').innerHTML = '';
-    Paddle.Checkout.open({
-        items: [{ priceId: data.priceId, quantity: 1 }],
-        customData: { user_id: data.userId },
-        successCallback: async () => {
-            showToast('Payment successful! Activating premium...');
-            // Wait a moment for webhook to process
-            setTimeout(async () => {
-                const user = await api('GET', '/auth/me');
-                if (user && !user.error) { currentUser = user; showUserInfo(); }
-                if (currentTeamId) openTeam(currentTeamId);
-            }, 3000);
-        },
-        closeCallback: () => {},
-    });
+function stopActivationPoll() {
+    if (_billPoll) { clearInterval(_billPoll); _billPoll = null; }
+}
+
+const activateLicense = guard('activateLicense', async function() {
+    const input = document.getElementById('licenseKeyInput');
+    const key = (input?.value || '').trim();
+    if (!key) { billStatus('Paste the license key from your Gumroad email first.', 'warn'); return; }
+    billStatus('Checking your key with Gumroad&hellip;', 'muted');
+    const data = await api('POST', '/api/activate-license', { licenseKey: key });
+    if (data.error) { billStatus(data.error, 'warn'); return; }
+    const user = await refreshPremiumState();
+    if (user && user.premium) onPremiumActivated(user);
+    else billStatus('The key was accepted but Premium did not switch on. Reload the page, and email us if it still shows Free.', 'warn');
 });
