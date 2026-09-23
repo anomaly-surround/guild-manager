@@ -1,9 +1,11 @@
-// Boss timers, kills, templates, kill history (protected routes)
+// Boss timers, kills, templates, game presets, kill history (protected routes)
 
 import { json, safeJson } from '../lib/http.js';
 import { getNextFixedSpawn, getNextWeeklySpawn, getNextBiweeklySpawn, getNextTwiceDailySpawn, calcNextSpawn } from '../lib/spawn.js';
+import { bossInsertStmt } from '../lib/boss-create.js';
 import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
 import { limitsFor } from '../lib/limits.js';
+import { PRESETS, findPreset } from '../presets/index.js';
 
 export const routes = [
   // GET /api/teams/:id/bosses
@@ -40,33 +42,8 @@ export const routes = [
     const settings = await env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
     const tz = settings?.timezone || 'Asia/Manila';
 
-    const id = crypto.randomUUID();
-    let nextSpawn = Date.now() + 3600000; // default 1hr
-
-    if (body.type === 'interval') {
-      nextSpawn = Date.now() + (body.intervalMs || 3600000);
-    } else if (body.type === 'fixed') {
-      nextSpawn = getNextFixedSpawn(body.fixedTime, tz);
-    } else if (body.type === 'weekly') {
-      nextSpawn = getNextWeeklySpawn(body.weeklyDay, body.weeklyTime, tz);
-    } else if (body.type === 'biweekly') {
-      nextSpawn = getNextBiweeklySpawn(body.biweeklyDays, tz);
-    } else if (body.type === 'twicedaily') {
-      nextSpawn = getNextTwiceDailySpawn(body.twiceDailyTimes, tz);
-    }
-
-    // Suppress immediate warning if inside alert window
-    const alertMs = (body.alertMinutes || 5) * 60000;
-    const warned = (nextSpawn - Date.now()) <= alertMs ? 1 : 0;
-
-    const windowMs = Math.max(0, Math.min(86400000, parseInt(body.windowMs) || 0));
-    const location = body.location ? String(body.location).trim().slice(0, 80) : null;
-    await env.DB.prepare(`INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, auto_reset_minutes, next_spawn, warned, window_ms, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id, teamId, body.name.trim(), body.type,
-        body.intervalMs || null, body.fixedTime || null,
-        body.weeklyDay ?? null, body.weeklyTime || null,
-        body.biweeklyDays ? JSON.stringify(body.biweeklyDays) : body.twiceDailyTimes ? JSON.stringify(body.twiceDailyTimes) : null,
-        body.alertMinutes || 5, body.autoResetMinutes || 5, nextSpawn, warned, windowMs, location).run();
+    const { id, stmt } = bossInsertStmt(env, teamId, body, tz);
+    await stmt.run();
 
     return json({ ok: true, id });
   } },
@@ -198,13 +175,48 @@ export const routes = [
     const settings = await env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
     const tz = settings?.timezone || 'Asia/Manila';
 
-    for (const b of bosses) {
-      const id = crypto.randomUUID();
-      const nextSpawn = Date.now() + (b.intervalMs || 3600000);
-      await env.DB.prepare('INSERT INTO bosses (id, team_id, name, type, interval_ms, fixed_time, weekly_day, weekly_time, biweekly_days, alert_minutes, next_spawn) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(id, teamId, b.name, b.type || 'interval', b.intervalMs || null, b.fixedTime || null, b.weeklyDay ?? null, b.weeklyTime || null, b.biweeklyDays ? JSON.stringify(b.biweeklyDays) : null, b.alertMinutes || 5, nextSpawn).run();
+    const stmts = bosses.filter(b => b && b.name).map(b => bossInsertStmt(env, teamId, b, tz).stmt);
+    if (stmts.length) await env.DB.batch(stmts);
+    return json({ ok: true, count: stmts.length });
+  } },
+
+  // GET /api/presets — built-in boss lists per game (free)
+  { method: 'GET', pattern: '/api/presets', handler: async () => {
+    return json({ presets: PRESETS.map(p => ({ id: p.id, game: p.game, note: p.note, bosses: p.bosses })) });
+  } },
+
+  // POST /api/teams/:id/bosses/presets { presetId, names?: [] } — add a game's bosses to the team.
+  // Skips names the team already has, stops at the plan's timer cap, inserts in one batch.
+  { method: 'POST', pattern: /^\/api\/teams\/([^/]+)\/bosses\/presets$/, handler: async ({ request, env, user, params }) => {
+    const teamId = params[1];
+    const member = await requireTeamMember(env, teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+
+    const body = await safeJson(request);
+    const preset = body && findPreset(body.presetId);
+    if (!preset) return json({ error: 'Preset not found' }, 404);
+    const wanted = Array.isArray(body.names) && body.names.length ? new Set(body.names.map(n => String(n).toLowerCase())) : null;
+
+    const [existing, settings, premium] = await Promise.all([
+      env.DB.prepare('SELECT name FROM bosses WHERE team_id = ?').bind(teamId).all(),
+      env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first(),
+      isPremiumTeam(env, teamId),
+    ]);
+    const have = new Set(existing.results.map(r => String(r.name).toLowerCase()));
+    const tz = settings?.timezone || 'Asia/Manila';
+    const cap = limitsFor(premium).timers;
+    let room = Number.isFinite(cap) ? Math.max(0, cap - have.size) : Infinity;
+
+    const stmts = [], added = [], skippedExisting = [], skippedCap = [];
+    for (const b of preset.bosses) {
+      const key = b.name.toLowerCase();
+      if (wanted && !wanted.has(key)) continue;
+      if (have.has(key)) { skippedExisting.push(b.name); continue; }
+      if (room <= 0) { skippedCap.push(b.name); continue; }
+      stmts.push(bossInsertStmt(env, teamId, b, tz).stmt); added.push(b.name); have.add(key); room--;
     }
-    return json({ ok: true, count: bosses.length });
+    if (stmts.length) await env.DB.batch(stmts);
+    return json({ ok: true, added, skippedExisting, skippedCap, cap: Number.isFinite(cap) ? cap : null });
   } },
 
   { method: 'GET', pattern: /^\/api\/teams\/([^/]+)\/bosses\/history$/, handler: async ({ env, user, params }) => {

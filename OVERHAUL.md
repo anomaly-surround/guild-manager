@@ -104,3 +104,21 @@ lifetime with a 7-day trial (unchanged). Billing is Gumroad since M9 (2026-09-23
 | M9 | **Pricing page + payment method** (user request 2026-09-23: "we forgot the pricing page and the payment method"; Paddle and Lemon Squeezy both refused seller verification) | CODE DONE 2026-09-23: `pricing.html` rebuilt on the design system (`css/pricing.css`, deep-links `./?upgrade=`); billing moved to **Gumroad** (no seller review; PayPal/bank payout in PH): `worker/src/lib/gumroad.js` + `routes/billing.js` (unsigned Ping verified via the license API, manual key activation, checkout link with `uid`, cron recheck every ~20 h revokes ended/refunded), upgrade modal rebuilt in `js/billing.js`/`css/billing.css` (new-tab checkout + activation poll + key entry), Paddle removed, legal pages updated. 26-check API test green on the local harness with a mock Gumroad. PENDING: user creates the two Gumroad products, fills `wrangler.toml` `[vars]` (see `worker/GUMROAD_SETUP.md`), then one worker deploy + one page push together; Chrome walkthrough of the modal not done (extension was disconnected) |
 
 Each milestone is one push (page) and, when needed, one `wrangler deploy` (worker).
+
+## After M9 — product stage (agreed 2026-09-23)
+
+The thesis is embodied; the product is not yet real: 7 non-guest sign-ins, 3 teams with timers, 1 event,
+nearly all the author's. The next test is distribution, not features. Agreed queue, in order, each
+small enough to ship between real-guild feedback rounds:
+
+| # | Item | Why |
+|---|---|---|
+| M10 | **Game presets**: built-in boss lists per game, free, one click | DONE 2026-09-23: presets live in code, not the DB (`worker/src/presets/<game>.js`, `GET /api/presets`, `POST /api/teams/:id/bosses/presets` — officer+, skips names the team has, stops at the free cap, one D1 batch); Lord Nine = 41 bosses merged from the two live guilds; shared `lib/boss-create.js` now builds rows for create, template import (which previously mis-timed every non-interval boss) and presets; Timers empty state leads with "Start from a game preset", ⋯ menu has it too; 17-check API test |
+| M11 | **Account deletion + data export** (`DELETE /auth/me`, JSON export) | privacy page promises it; trust item before asking strangers to sign in |
+| M12 | **Per-member timezone** display (timezone is team-level only) | cross-region guilds read every spawn in the leader's clock |
+| M13 | **Discord slash commands** (`/next`, `/killed <boss>`): timers usable inside Discord, not just announced there | biggest product lever left; a real project |
+| M14 | **Web push** for spawn alerts to phones | the other half of "alert me", beyond the Discord channel |
+
+Not doing: adding features to win an argument nobody has had. Post in 2–3 guild communities, watch
+three real guilds for a week, let their questions reorder this list.
+

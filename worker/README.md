@@ -50,13 +50,15 @@ src/
     public.js         /public/timers/:token       (public, read-only timer page)
     teams.js          teams CRUD, member game role, roles, kick/leave/transfer
     invites.js        invite codes, join requests
-    bosses.js         bosses (+window/location), kill, edit, templates, history
+    bosses.js         bosses (+window/location), kill, edit, templates, game presets, history
     settings.js       settings (incl. modules, loot mode, RSVP roles, public timers, points name), webhook test
     events.js         events, RSVP by role, caps, lineup, attendance, templates, report, iCal
     members.js        officer notes, heartbeat, availability
     loot.js  dkp.js   Loot & Points (optional module): loot log, wishlist, points, auctions
     rotation.js       loot rotation order, officer moves, leader reset
   lib/limits.js       plan limits (Free / Premium)
+  lib/boss-create.js  next spawn per schedule type + the INSERT statement (create, template import, presets)
+  presets/            built-in boss lists per game (lordnine.js, ...) served by GET /api/presets
 ```
 
 ## Adding a route

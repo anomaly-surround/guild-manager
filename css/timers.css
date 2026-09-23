@@ -64,6 +64,19 @@
     .tcard-secondary { display: flex; }
 }
 
+/* game presets modal */
+.t-empty-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.preset-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.preset-head select { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: 0.9rem; }
+.preset-head a { color: var(--accent); }
+.preset-tools { display: flex; gap: 6px; margin: 8px 0 6px; }
+.preset-list { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px; margin-bottom: 10px; }
+.preset-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.9rem; }
+.preset-row:hover { background: var(--surface-2); }
+.preset-row input { accent-color: var(--accent); }
+.preset-row.is-added { opacity: 0.5; cursor: default; }
+.preset-name { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* public page */
 .pub-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 6px 0 14px; flex-wrap: wrap; }
 .pub-head h1 { font-size: 1.3rem; margin: 0; letter-spacing: -0.01em; }

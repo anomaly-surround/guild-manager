@@ -3,7 +3,7 @@
 // (teamBosses, teamData, teamTab, currentTeamId, api, showToast, guard, loadTeamBosses, renderTeamView).
 // Exposed to the shell as window.Timers.
 
-import { cardHtml, updateCard, bossState, sortBosses, groupedListHtml, esc, DAY, fmtDuration } from './timer-cards.js?v=20260923k';
+import { cardHtml, updateCard, bossState, sortBosses, groupedListHtml, scheduleText, esc, DAY, fmtDuration } from './timer-cards.js?v=20260923l';
 
 let search = '';
 let tickTimer = null;
@@ -81,7 +81,7 @@ function listHtml() {
         return `<div class="t-empty card">
             <div class="t-empty-title">No boss timers yet</div>
             <div class="t-empty-sub">Add the bosses your guild hunts. Everyone in the team sees the same countdowns, and Discord gets pinged before each spawn.</div>
-            <button class="btn btn-primary" data-action="add">+ Add your first boss</button>
+            <div class="t-empty-actions"><button class="btn btn-primary" data-action="presets">Start from a game preset</button><button class="btn btn-secondary" data-action="add">+ Add a boss</button></div>
         </div>`;
     }
     if (list.length === 0) return '<div class="t-empty card"><div class="t-empty-title">No bosses match “' + esc(search) + '”</div></div>';
@@ -92,6 +92,7 @@ function render() {
     const el = root();
     if (!el) return;
     const more = [
+        canManage() ? `<button class="menu-item" data-action="presets">Add from a game preset</button>` : '',
         `<button class="menu-item" data-action="export">Export JSON</button>`,
         canManage() ? `<button class="menu-item" data-action="import">Import JSON</button>` : '',
         isPremium() ? `<button class="menu-item" data-action="templates">Boss templates</button>` : '',
@@ -145,6 +146,7 @@ function onClick(e) {
         case 'export': exportJson(); break;
         case 'import': root().querySelector('[data-role="importfile"]').click(); break;
         case 'templates': showTemplates(); break;
+        case 'presets': showPresets(); break;
         case 'history': showHistory(); break;
         case 'removeall': removeAll(); break;
         case 'more': btn.closest('.tcard')?.classList.toggle('open'); break;
@@ -376,6 +378,77 @@ async function importFile(input) {
 }
 
 // ---------------------------------------------------------------- premium: templates + history
+
+// Game presets: built-in boss lists, free. Checklist of a game's bosses; already-added ones are
+// greyed out; the free timer cap is shown and enforced server-side (first N selected get added).
+async function showPresets() {
+    if (!canManage()) { showToast('Officers and leaders can add presets'); return; }
+    const data = await api('GET', '/api/presets');
+    const presets = data.presets || [];
+    if (!presets.length) { showToast('No presets available yet'); return; }
+    let preset = presets[0];
+    const cap = teamData?.limits?.timers ?? null;
+    const asBoss = (b) => ({ type: b.type, interval_ms: b.intervalMs, fixed_time: b.fixedTime, weekly_day: b.weeklyDay, weekly_time: b.weeklyTime, biweekly_days: b.biweeklyDays || b.twiceDailyTimes });
+
+    const rowsHtml = () => {
+        const have = new Set(teamBosses.map(b => b.name.toLowerCase()));
+        return preset.bosses.map(b => {
+            const has = have.has(b.name.toLowerCase());
+            return `<label class="preset-row${has ? ' is-added' : ''}">
+                <input type="checkbox" data-name="${esc(b.name)}" ${has ? 'disabled' : 'checked'}>
+                <span class="preset-name">${esc(b.name)}</span>
+                <span class="t-dim">${has ? 'already added' : esc(scheduleText(asBoss(b)) + (b.location ? ' · ' + b.location : ''))}</span>
+            </label>`;
+        }).join('');
+    };
+    const gameSelect = presets.length > 1
+        ? `<select data-role="game">${presets.map(p => `<option value="${p.id}">${esc(p.game)}</option>`).join('')}</select>`
+        : `<b>${esc(preset.game)}</b>`;
+    const back = modal(`<h2>Add from a game preset</h2>
+        <div class="preset-head">${gameSelect}<span class="t-dim" data-role="count"></span></div>
+        <p class="tf-help">${esc(preset.note || '')}</p>
+        <div class="preset-tools"><button class="btn btn-sm btn-secondary" data-pick="all">Select all</button><button class="btn btn-sm btn-secondary" data-pick="none">Select none</button></div>
+        <div class="preset-list" data-role="rows">${rowsHtml()}</div>
+        <div class="tf-actions"><button class="btn btn-secondary btn-sm" data-close="1">Cancel</button><button class="btn btn-primary" data-act="apply">Add bosses</button></div>`, { wide: true });
+
+    const rows = back.querySelector('[data-role="rows"]');
+    const selected = () => [...rows.querySelectorAll('input:checked:not(:disabled)')].map(i => i.dataset.name);
+    const updateCount = () => {
+        const n = selected().length;
+        const room = cap == null ? null : Math.max(0, cap - teamBosses.length);
+        const over = room != null && n > room;
+        const adding = over ? room : n;
+        back.querySelector('[data-role="count"]').innerHTML = `${n} selected` + (room == null ? '' : ` · <span class="${over ? 't-up' : ''}">${room} free slot${room === 1 ? '' : 's'} left</span>`)
+            + (over ? ` · the first ${room} will be added. <a href="#" data-act="upgrade">Upgrade</a> for unlimited timers.` : '');
+        const btn = back.querySelector('[data-act="apply"]');
+        btn.textContent = n ? `Add ${adding} boss${adding === 1 ? '' : 'es'}` : 'Add bosses';
+        btn.disabled = n === 0 || (room != null && room === 0);
+    };
+    updateCount();
+    rows.addEventListener('change', updateCount);
+    back.addEventListener('change', (e) => {
+        if (e.target.dataset.role === 'game') { preset = presets.find(p => p.id === e.target.value) || preset; rows.innerHTML = rowsHtml(); back.querySelector('.tf-help').textContent = preset.note || ''; updateCount(); }
+    });
+    back.addEventListener('click', async (e) => {
+        const pick = e.target.closest('[data-pick]');
+        if (pick) { rows.querySelectorAll('input:not(:disabled)').forEach(i => { i.checked = pick.dataset.pick === 'all'; }); updateCount(); return; }
+        if (e.target.closest('[data-act="upgrade"]')) { e.preventDefault(); closeModal(); showUpgradeModal(); return; }
+        if (e.target.closest('[data-act="apply"]')) {
+            const names = selected();
+            if (!names.length) return;
+            const btn = back.querySelector('[data-act="apply"]'); btn.disabled = true;
+            const res = await api('POST', `/api/teams/${currentTeamId}/bosses/presets`, { presetId: preset.id, names });
+            if (res.error) { showToast(res.error); btn.disabled = false; return; }
+            closeModal();
+            const parts = [`Added ${res.added.length} boss${res.added.length === 1 ? '' : 'es'}`];
+            if (res.skippedCap?.length) parts.push(`${res.skippedCap.length} not added: free plan cap of ${res.cap}`);
+            showToast(parts.join(' · '));
+            await reload(true);
+            return;
+        }
+        if (e.target.closest('[data-close]:not(.modal-backdrop)')) closeModal();
+    });
+}
 
 async function showTemplates() {
     const data = await api('GET', '/api/boss-templates');
