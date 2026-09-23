@@ -7,6 +7,18 @@ import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
 import { parseRoles } from './events.js';
 import { lootModeFor } from '../lib/rotation.js';
 import { createToken } from '../lib/auth.js';
+import { guildName } from '../lib/discord-interactions.js';
+
+// Linked servers for Settings; rows linked before names were fetched get their name filled in here.
+async function linkedGuildsWithNames(env, teamId) {
+  const rows = (await env.DB.prepare('SELECT guild_id, guild_name, linked_at FROM discord_guilds WHERE team_id = ? ORDER BY linked_at').bind(teamId).all()).results;
+  for (const g of rows) {
+    if (g.guild_name) continue;
+    const name = await guildName(env, g.guild_id);
+    if (name) { g.guild_name = name; await env.DB.prepare('UPDATE discord_guilds SET guild_name = ? WHERE guild_id = ?').bind(name, g.guild_id).run(); }
+  }
+  return rows.map(g => ({ guildId: g.guild_id, name: g.guild_name, linkedAt: g.linked_at }));
+}
 
 export const routes = [
   // GET /api/teams/:id/discord-link — the "Add to Discord" URL with a signed state, so the callback
@@ -54,7 +66,7 @@ export const routes = [
       invitesEnabled: settings?.invites_enabled ?? true,
       inviteApproval: !!(settings?.invite_approval),
       publicToken: settings?.public_token || null,
-      discordGuilds: (await env.DB.prepare('SELECT guild_id, guild_name, linked_at FROM discord_guilds WHERE team_id = ? ORDER BY linked_at').bind(teamId).all()).results.map(g => ({ guildId: g.guild_id, name: g.guild_name, linkedAt: g.linked_at })),
+      discordGuilds: await linkedGuildsWithNames(env, teamId),
       rsvpRoles: parseRoles(settings?.rsvp_roles),
       modules: (() => { try { return settings?.modules ? JSON.parse(settings.modules) : {}; } catch { return {}; } })(),
       lootMode: await lootModeFor(env, teamId, settings || null),
