@@ -46,4 +46,11 @@
 .att-warn { color: var(--warn); font-size: 0.75rem; font-weight: 700; cursor: help; }
 @media (max-width: 520px) { .att-line { grid-template-columns: 22px minmax(0, 1fr) auto 36px; } .att-line-boss, .att-line > .t-dim { display: none; } }
 .att-summary-scroll { max-height: 420px; overflow-y: auto; }
+/* pending rows: compact enough for a few dozen a day */
+.att-rows { gap: 4px; }
+.att-row { grid-template-columns: 40px minmax(0, 1fr) auto; padding: 6px 10px; gap: 10px; }
+.att-thumb, .att-thumb-none { width: 40px; height: 40px; font-size: 0.6rem; }
+.att-meta { font-size: 0.75rem; }
+.att-more { display: block; width: 100%; padding: 7px; background: none; border: 0; border-top: 1px solid var(--border); color: var(--accent); font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.att-more:hover { background: var(--surface-2); }
 

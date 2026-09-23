@@ -2,10 +2,12 @@
 // and the points summary. Claims arrive from Discord (/here with a screenshot, /rollcall by an officer).
 // ES module used by events.js. Uses shell globals by name (currentTeamId, teamData, api, token, API, showToast, guard).
 
-import { esc } from './timer-cards.js?v=20260924b';
+import { esc } from './timer-cards.js?v=20260924c';
 
 let claims = [], pending = 0, officer = false, summary = null, days = 7, filter = 'pending', query = '';
-const openDays = new Set();   // days the user opened ('d') or closed ('!d'); default: newest day + days with pending claims open
+const openDays = new Set();
+const fullDays = new Set();   // days where the user asked to see every line
+const LINES_PER_DAY = 25;   // days the user opened ('d') or closed ('!d'); default: newest day + days with pending claims open
 
 const isOfficer = () => { const r = teamData?.team?.my_role; return r === 'leader' || r === 'officer'; };
 const T = () => currentTeamId;
@@ -61,7 +63,10 @@ export function attendanceHtml() {
         const people = new Set(list.map(c => c.user_id)).size;
         const open = openDays.has(day) || (!openDays.has('!' + day) && (i === 0 || p > 0 || !!q));
         const pendingRows = list.filter(c => c.status === 'pending').map(fullRow).join('');
-        const lines = list.filter(c => c.status !== 'pending').map(lineRow).join('');
+        const decided = list.filter(c => c.status !== 'pending');
+        const cut = fullDays.has(day) || q ? decided.length : Math.min(LINES_PER_DAY, decided.length);
+        const lines = decided.slice(0, cut).map(lineRow).join('')
+            + (cut < decided.length ? `<button class="att-more" data-att="more" data-day="${day}">Show all ${decided.length}</button>` : '');
         const label = new Date(day + 'T12:00:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
         return `<details class="att-day" data-day="${day}" ${open ? 'open' : ''}>
             <summary><b>${label}</b><span class="t-dim">${people} member${people === 1 ? '' : 's'} · ${list.length} claim${list.length === 1 ? '' : 's'}${pts ? ` · +${pts} pts` : ''}</span>${p ? `<span class="chip chip-warn">${p} pending</span>` : ''}</summary>
@@ -102,6 +107,7 @@ export async function onAttendanceClick(btn) {
     const act = btn.dataset.att;
     if (!act) return false;
     if (act === 'filter') { filter = btn.dataset.filter; return true; }
+    if (act === 'more') { fullDays.add(btn.dataset.day); return true; }
     if (act === 'days') { days = Number(btn.dataset.days) || 7; summary = await api('GET', `/api/teams/${T()}/attendance/summary?days=${days}`); return true; }
     if (act === 'zoom') {
         const box = Object.assign(document.createElement('div'), { className: 'att-lightbox' });

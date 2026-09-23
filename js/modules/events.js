@@ -3,8 +3,8 @@
 // ES module. Uses shell globals by name (teamData, teamTab, currentTeamId, currentUser, api, token,
 // showToast, guard, renderTeamView, API). Exposed as window.Events.
 
-import { esc } from './timer-cards.js?v=20260924b';
-import { loadAttendance, attendanceHtml, onAttendanceClick, onAttendanceInput, onAttendanceToggle } from './attendance.js?v=20260924b';
+import { esc } from './timer-cards.js?v=20260924c';
+import { loadAttendance, attendanceHtml, onAttendanceClick, onAttendanceInput, onAttendanceToggle } from './attendance.js?v=20260924c';
 
 const DEFAULT_ROLES = ['Tank', 'Healer', 'DPS', 'Support'];
 const TYPE_LABEL = { raid: 'Raid', scrim: 'Scrim', gvg: 'GvG', dungeon: 'Dungeon', meeting: 'Meeting', other: 'Event' };
