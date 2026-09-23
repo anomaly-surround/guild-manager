@@ -35,7 +35,7 @@
 .att-day > summary .t-dim { flex: 1; }
 .att-day .att-rows { margin-bottom: 6px; }
 .att-lines { padding: 2px 0; }
-.att-line { display: grid; grid-template-columns: 26px minmax(80px, 1.2fr) minmax(0, 2fr) auto auto 44px; gap: 10px; align-items: center; padding: 5px 12px; font-size: 0.85rem; border-bottom: 1px solid var(--border); }
+.att-line { display: grid; grid-template-columns: 26px minmax(80px, 1.2fr) minmax(0, 2fr) 36px 64px 44px; gap: 10px; align-items: center; padding: 5px 12px; font-size: 0.85rem; border-bottom: 1px solid var(--border); }
 .att-line:last-child { border-bottom: 0; }
 .att-line.is-rejected { opacity: 0.5; }
 .att-line-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -56,4 +56,4 @@
 .att-row.card, .att-lines.card, .att-summary.card { margin: 0; }
 .att-summary.card { margin-top: 18px; }
 .att-thumb-none { font-size: 1rem; }
-
+.att-line > .t-dim { text-align: right; }

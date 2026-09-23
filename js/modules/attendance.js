@@ -2,7 +2,7 @@
 // and the points summary. Claims arrive from Discord (/here with a screenshot, /rollcall by an officer).
 // ES module used by events.js. Uses shell globals by name (currentTeamId, teamData, api, token, API, showToast, guard).
 
-import { esc } from './timer-cards.js?v=20260924d';
+import { esc } from './timer-cards.js?v=20260924e';
 
 let claims = [], pending = 0, officer = false, summary = null, days = 7, filter = 'pending', query = '';
 const openDays = new Set();
