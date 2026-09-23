@@ -10,6 +10,7 @@ const _resourceWords = ['bosses','events','announcements','wars','loot','dkp','p
 const _ttlRules = [
     { match: /\/chat(\?|$)/, ttl: 0 },
     { match: /\/rotation(\?|$)/, ttl: 0 },   // order changes on every loot write; always fresh
+    { match: /\/bosses(\?|$)/, ttl: 0 },     // kills arrive from Discord and other members; the 15 s Timers loop must see them
     { match: /\/analytics/, ttl: 30000 },
     { match: /\/settings(\?|$)/, ttl: 300000 },
     { match: /\/auth\/me/, ttl: 300000 },

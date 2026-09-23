@@ -1,8 +1,20 @@
 // Home: next spawns, upcoming events and the roster at a glance.
 
-async function loadAndRenderHome() {
+// Home re-reads the boss list every 15 s while it is open, so kills logged from Discord or by
+// other members show without a reload (the Timers tab has its own loop; /bosses is uncached).
+let _homeRefresh = null;
+function startHomeRefresh() {
+    if (_homeRefresh) return;
+    _homeRefresh = setInterval(async () => {
+        if (teamTab !== 'home' || !currentTeamId || !document.getElementById('homeContent')) { clearInterval(_homeRefresh); _homeRefresh = null; return; }
+        await loadTeamBosses(currentTeamId);
+        if (teamTab === 'home') loadAndRenderHome({ shell: false });
+    }, 15000);
+}
+
+async function loadAndRenderHome({ shell = true } = {}) {
     teamTab = 'home';
-    renderTeamView();
+    if (shell) { renderTeamView(); startHomeRefresh(); }
 
     const el = document.getElementById('homeContent');
     if (!el) return;
