@@ -17,6 +17,9 @@ bucket_name = "guild-manager-files"
 # Gumroad billing (public values; the license API needs no secret). *_PRODUCT_ID takes the
 # product's permalink (the part after /l/ in its link) or its long product id — either works.
 [vars]
+# Discord app (same app as the Discord login). The bot token is a secret: `wrangler secret put DISCORD_BOT_TOKEN`.
+DISCORD_APP_ID = "1488742496660881528"
+DISCORD_PUBLIC_KEY = "a294b7c091228d3aa715f7e42135f0f86ead73a87d74355063ceed81825997da"
 GUMROAD_MONTHLY_URL = "https://anomalyftw.gumroad.com/l/vbeeit"
 GUMROAD_LIFETIME_URL = "https://anomalyftw.gumroad.com/l/vhuarz"
 GUMROAD_MONTHLY_PRODUCT_ID = "yoUMrHCtjdpBSAr66I6azQ=="

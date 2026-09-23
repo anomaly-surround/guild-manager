@@ -48,6 +48,7 @@ src/
     auth.js           /auth/*                     (public)
     billing.js        /gumroad/ping, activate-license, start-trial, checkout   (public)
     public.js         /public/timers/:token       (public, read-only timer page)
+    discord.js        /discord/interactions       (public, Discord-signed: /link /unlink /next /killed)
     account.js        GET /api/me/export (JSON download), DELETE /api/me (anonymise + remove personal rows)
     teams.js          teams CRUD, member game role, roles, kick/leave/transfer
     invites.js        invite codes, join requests
@@ -60,6 +61,9 @@ src/
   lib/limits.js       plan limits (Free / Premium)
   lib/boss-create.js  next spawn per schedule type + the INSERT statement (create, template import, presets)
   lib/team-delete.js  child-first DELETE statements for a team (delete team, account deletion)
+  lib/boss-kill.js    reset a timer from a kill + log it (kill route, /killed)
+  lib/discord-interactions.js  Ed25519 request check, response shapes, editOriginal, /next text
+  scripts/register-commands.mjs  registers the slash commands with Discord (needs DISCORD_BOT_TOKEN in env)
   presets/            built-in boss lists per game (lordnine.js, ...) served by GET /api/presets
 ```
 

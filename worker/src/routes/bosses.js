@@ -3,6 +3,7 @@
 import { json, safeJson } from '../lib/http.js';
 import { getNextFixedSpawn, getNextWeeklySpawn, getNextBiweeklySpawn, getNextTwiceDailySpawn, calcNextSpawn } from '../lib/spawn.js';
 import { bossInsertStmt } from '../lib/boss-create.js';
+import { killBoss } from '../lib/boss-kill.js';
 import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
 import { limitsFor } from '../lib/limits.js';
 import { PRESETS, findPreset } from '../presets/index.js';
@@ -62,15 +63,7 @@ export const routes = [
     if (!boss) return json({ error: 'Boss not found' }, 404);
 
     const settings = await env.DB.prepare('SELECT timezone FROM team_settings WHERE team_id = ?').bind(teamId).first();
-    const tz = settings?.timezone || 'Asia/Manila';
-    const nextSpawn = calcNextSpawn(boss, deathTime, tz);
-
-    await env.DB.prepare('UPDATE bosses SET status = ?, spawned_at = NULL, auto_reset_at = NULL, last_death = ?, next_spawn = ?, warned = 0, spawn_notified = 0 WHERE id = ?')
-      .bind('waiting', deathTime, nextSpawn, bossId).run();
-
-    // Log kill for analytics
-    await env.DB.prepare('INSERT INTO boss_kill_log (id, team_id, boss_id, boss_name, killed_at, killed_by) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), teamId, bossId, boss.name, deathTime, user.userId).run();
+    await killBoss(env, { teamId, boss, deathTime, userId: user.userId, tz: settings?.timezone || 'Asia/Manila' });
 
     return json({ ok: true });
   } },

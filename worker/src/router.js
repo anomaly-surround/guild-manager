@@ -21,8 +21,9 @@ import { routes as lootRoutes } from './routes/loot.js';
 import { routes as dkpRoutes } from './routes/dkp.js';
 import { routes as rotationRoutes } from './routes/rotation.js';
 import { routes as accountRoutes } from './routes/account.js';
+import { routes as discordRoutes } from './routes/discord.js';
 
-const PUBLIC_ROUTES = [...authRoutes, ...billingRoutes, ...publicRoutes];
+const PUBLIC_ROUTES = [...authRoutes, ...billingRoutes, ...publicRoutes, ...discordRoutes];
 const PROTECTED_ROUTES = [
   ...accountRoutes, ...teamRoutes, ...inviteRoutes, ...bossRoutes, ...settingsRoutes, ...eventRoutes,
   ...memberRoutes, ...lootRoutes, ...dkpRoutes,

@@ -41,7 +41,7 @@ function render() {
     const el = root();
     if (!el) return;
     el.innerHTML = canManage()
-        ? `<div class="settings">${teamCard()}${invitesCard()}${modulesCard()}${discordCard()}${eventsCard()}${team()?.loot_mode === 'dkp' ? pointsCard() : ''}${publicCard()}${iconCard()}${leadershipCard()}</div>`
+        ? `<div class="settings">${teamCard()}${invitesCard()}${modulesCard()}${discordCard()}${slashCard()}${eventsCard()}${team()?.loot_mode === 'dkp' ? pointsCard() : ''}${publicCard()}${iconCard()}${leadershipCard()}</div>`
         : `<div class="settings"><section class="card s-card"><h3>Settings</h3><p class="s-desc">Only officers and the leader can change team settings. Ask them if something needs adjusting.</p></section>${leaveCard()}</div>`;
     el.onclick = onClick;
     el.onchange = onChange;
@@ -78,6 +78,20 @@ function modulesCard() {
             <label class="loot-mode-opt"><input type="radio" name="sLootMode" value="rotation" ${settings.lootMode !== 'dkp' ? 'checked' : ''} data-auto="lootmode"><span><b>Rotation</b> <span class="chip chip-success">Simple</span><br>An ordered list. Whoever is on top gets the next drop, then moves to the bottom. Officers can nudge people for attendance.</span></label>
             <label class="loot-mode-opt"><input type="radio" name="sLootMode" value="dkp" ${settings.lootMode === 'dkp' ? 'checked' : ''} data-auto="lootmode"><span><b>Points (${esc(ptsName())})</b><br>Members earn points for attendance and kills and spend them on drops. Supports auctions and decay (Premium).</span></label>
         </div></section>`;
+}
+
+function slashCard() {
+    const linked = !!settings.discordGuildId;
+    const invite = 'https://discord.com/oauth2/authorize?client_id=1488742496660881528&scope=applications.commands';
+    return `<section class="card s-card"><h3>Discord slash commands</h3>
+        <p class="s-desc">Use the timers from inside Discord: <code>/next</code> shows the coming spawns to anyone in your server, <code>/killed</code> lets team members log a kill. One server per team.</p>
+        <div class="s-steps">
+            <div class="t-row t-row-sm"><span>1. Add the bot to your server</span><a class="btn btn-sm btn-secondary" href="${invite}" target="_blank" rel="noopener">Add to Discord</a></div>
+            <div class="t-row t-row-sm"><span>2. In that server, run <code>/link ${esc(team()?.invite_code || '<invite code>')}</code> (leader or officer, signed in here with Discord)</span></div>
+            <div class="t-row t-row-sm"><span>3. Status</span><span>${linked ? '<span class="chip chip-success">Linked</span>' : '<span class="chip chip-muted">Not linked</span>'}</span></div>
+        </div>
+        ${linked ? '<div class="tf-actions"><button class="btn btn-secondary btn-sm" data-action="discord-unlink">Unlink server</button></div>' : ''}
+    </section>`;
 }
 
 function discordCard() {
@@ -231,6 +245,7 @@ const act = guard('settings.act', async (a, btn) => {
             break;
         }
         case 'test-webhook': { const r = await api('POST', `/api/teams/${T()}/settings/test`); showToast(r.ok ? 'Test sent to Discord' : r.error || 'Failed'); break; }
+        case 'discord-unlink': if (confirm('Unlink the Discord server? Slash commands stop working there until someone runs /link again.')) { if (await put({ discordGuildId: null }, 'Server unlinked')) await reload(); } break;
         case 'clear-webhook': if (confirm('Remove the Discord webhook? Alerts stop until you add one again.')) { if (await put({ webhookUrl: '' }, 'Webhook removed')) await reload(); } break;
         case 'save-notif': await put({ onWarning: on('sOnWarning'), onSpawn: on('sOnSpawn'), onEvent: on('sOnEvent'), onLoot: on('sOnLoot'), eventReminderMinutes: Math.min(120, Math.max(1, parseInt(val('sReminder')) || 15)) }, 'Alert settings saved'); break;
         case 'save-channels': {

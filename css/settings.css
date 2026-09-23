@@ -27,3 +27,7 @@
 .s-warn h3 { color: var(--warn); }
 .s-danger { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
 .s-danger h3 { color: var(--danger); }
+
+/* slash-command setup steps */
+.s-steps { display: flex; flex-direction: column; }
+.s-steps code { font-family: var(--mono); background: var(--surface-2); padding: 1px 6px; border-radius: 4px; font-size: 0.85em; }

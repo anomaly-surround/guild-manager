@@ -1,0 +1,53 @@
+# Discord slash commands — setup and how it works
+
+Built 2026-09-23 (M13). Same Discord application as the "Continue with Discord" login
+(app id `1488742496660881528`, in `wrangler.toml` as `DISCORD_APP_ID`; public key `DISCORD_PUBLIC_KEY`).
+The bot token is the secret `DISCORD_BOT_TOKEN` (`npx wrangler secret put DISCORD_BOT_TOKEN`); the
+worker itself never needs it — only `scripts/register-commands.mjs` does.
+
+## Commands
+
+| Command | Who | Does |
+|---|---|---|
+| `/link <code>` | leader/officer of the team, signed in to Guild Manager with Discord | ties this Discord server to the team with that invite code (one server per team; re-running moves it) |
+| `/unlink` | leader/officer | removes the tie (also possible from Settings → Discord slash commands) |
+| `/next [count]` | **anyone** in the linked server | next spawns, up-now first, team time, with a link to the timer page / app |
+| `/killed <boss> [minutes_ago]` | team members only | logs the kill and restarts the timer; boss name autocompletes; ambiguous names ask "which one?" |
+
+`/next` is deliberately open: it is the discovery surface (every reply carries the Guild Manager
+link). `/killed` is not, because a stranger in a public server could reset a guild's timers.
+
+## One-time setup (portal + terminal)
+
+1. **Interactions Endpoint URL** — Developer Portal → the app → General Information →
+   `https://guild-manager.xpropics.workers.dev/discord/interactions` → Save. Discord sends a signed
+   PING; the worker must answer PONG or the save is refused (that is the signature check working).
+2. **Register the commands** (from the worker folder, token in the environment, never in a file):
+   ```
+   $env:DISCORD_BOT_TOKEN='<token>'; node scripts/register-commands.mjs
+   ```
+   Global registration can take up to an hour to show in clients. For instant testing on one server:
+   `node scripts/register-commands.mjs <server id>` (Developer Mode → right-click the server → Copy ID).
+3. **Add the bot to a server** — the "Add to Discord" button in Settings → Discord slash commands, or
+   `https://discord.com/oauth2/authorize?client_id=1488742496660881528&scope=applications.commands`.
+   Only the `applications.commands` scope is needed; the bot has no gateway presence and reads no messages.
+4. In that server, a leader/officer runs `/link <invite code>`.
+
+## How a command is handled (`routes/discord.js`, `lib/discord-interactions.js`)
+
+- Discord signs `timestamp + body` with the app's Ed25519 key. `verifyDiscordRequest` checks it with
+  WebCrypto; anything unsigned or mis-signed gets 401 (tested).
+- Discord requires an answer within 3 s and this worker's D1 sits in Hong Kong, far from Discord's
+  servers. So commands are acknowledged with a **deferred** response immediately and completed in
+  `ctx.waitUntil`, which then PATCHes the placeholder via the interaction token (`editOriginal`).
+  Autocomplete cannot be deferred: it does one query and answers directly.
+- `/link` and `/unlink` replies are ephemeral (only the invoker sees them).
+- Membership = `users.discord_id` (from Discord login) joined to `team_members`. Google-only accounts
+  cannot use `/killed` until they sign in with Discord once (Discord login on the same account is not
+  supported yet — separate accounts).
+
+## Local test
+
+`.dev.vars` holds a TEST public key (`DISCORD_PUBLIC_KEY`) and `DISCORD_API = http://127.0.0.1:8797`;
+the scratchpad's `m13_discord_test.mjs` signs requests with the matching private key and runs a mock
+Discord API that records the follow-up edits. 24 checks. Production uses the real key from `wrangler.toml`.

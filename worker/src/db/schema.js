@@ -238,6 +238,7 @@ async function initDB(db) {
     ['users', 'premium'], ['team_settings', 'accent_color'], ['users', 'trial_started'], ['users', 'google_id'],
     ['team_settings', 'invites_enabled'], ['join_requests', null], ['team_settings', 'public_token'],
     ['team_settings', 'rsvp_roles'], ['team_settings', 'points_name'], ['users', 'gumroad_license'],
+    ['team_settings', 'discord_guild_id'],
   ];
   const tables = await db.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table'").all();
   const createSql = Object.fromEntries(tables.results.map(t => [t.name, t.sql || '']));
@@ -302,6 +303,7 @@ async function initDB(db) {
       'ALTER TABLE users ADD COLUMN gumroad_license TEXT',
       'ALTER TABLE users ADD COLUMN gumroad_product TEXT',
       'ALTER TABLE users ADD COLUMN license_checked_at INTEGER',
+      'ALTER TABLE team_settings ADD COLUMN discord_guild_id TEXT',
       `CREATE TABLE IF NOT EXISTS join_requests (
         id TEXT PRIMARY KEY,
         team_id TEXT NOT NULL,
