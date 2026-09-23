@@ -20,6 +20,7 @@ export function teamDeleteStmts(env, teamId) {
     t('DELETE FROM loot_wishlist WHERE team_id = ?'),
     t('DELETE FROM event_templates WHERE team_id = ?'),
     t('DELETE FROM join_requests WHERE team_id = ?'),
+    t('DELETE FROM attendance_claims WHERE team_id = ?'),
     t('DELETE FROM discord_guilds WHERE team_id = ?'),
     t('DELETE FROM team_settings WHERE team_id = ?'),
     t('DELETE FROM team_members WHERE team_id = ?'),

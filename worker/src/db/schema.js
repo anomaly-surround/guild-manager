@@ -238,7 +238,7 @@ async function initDB(db) {
     ['users', 'premium'], ['team_settings', 'accent_color'], ['users', 'trial_started'], ['users', 'google_id'],
     ['team_settings', 'invites_enabled'], ['join_requests', null], ['team_settings', 'public_token'],
     ['team_settings', 'rsvp_roles'], ['team_settings', 'points_name'], ['users', 'gumroad_license'],
-    ['team_settings', 'discord_guild_id'], ['discord_guilds', null],
+    ['team_settings', 'discord_guild_id'], ['discord_guilds', null], ['attendance_claims', null], ['team_settings', 'attendance_self_checkin'],
   ];
   const tables = await db.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table'").all();
   const createSql = Object.fromEntries(tables.results.map(t => [t.name, t.sql || '']));
@@ -312,6 +312,28 @@ async function initDB(db) {
         linked_at INTEGER DEFAULT (unixepoch()),
         FOREIGN KEY (team_id) REFERENCES teams(id)
       )`,
+      `CREATE TABLE IF NOT EXISTS attendance_claims (
+        id TEXT PRIMARY KEY,
+        team_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        bosses TEXT NOT NULL,
+        day TEXT NOT NULL,
+        source TEXT NOT NULL,
+        image_key TEXT,
+        image_sha256 TEXT,
+        note TEXT,
+        flags TEXT,
+        status TEXT DEFAULT 'pending',
+        points INTEGER DEFAULT 1,
+        reviewed_by TEXT,
+        reviewed_at INTEGER,
+        created_at INTEGER DEFAULT (unixepoch()),
+        FOREIGN KEY (team_id) REFERENCES teams(id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )`,
+      'ALTER TABLE team_settings ADD COLUMN attendance_points INTEGER DEFAULT 1',
+      'ALTER TABLE team_settings ADD COLUMN attendance_auto_approve INTEGER DEFAULT 0',
+      'ALTER TABLE team_settings ADD COLUMN attendance_self_checkin INTEGER DEFAULT 1',
       // carry over the single-server links made before this table existed
       'INSERT OR IGNORE INTO discord_guilds (guild_id, team_id) SELECT discord_guild_id, team_id FROM team_settings WHERE discord_guild_id IS NOT NULL',
       `CREATE TABLE IF NOT EXISTS join_requests (

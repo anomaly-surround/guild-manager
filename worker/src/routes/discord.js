@@ -10,6 +10,7 @@
 import { json } from '../lib/http.js';
 import { verifyToken } from '../lib/auth.js';
 import { killBoss } from '../lib/boss-kill.js';
+import { attendanceSettings, dayIn, claimFlags, alreadyClaimed, createClaim, fetchImage, storeImage } from '../lib/attendance.js';
 import {
   InteractionType, verifyDiscordRequest, pong, message, deferred, choices, editOriginal,
   optionValue, focusedOption, invoker, nextSpawnsText, fmtDuration, clockIn, linkGuild, unlinkGuild,
@@ -82,8 +83,82 @@ async function cmdKilled(env, interaction) {
   return `☠️ **${boss.name}** killed by ${who.name}${when}. Next spawn in ${fmtDuration(nextSpawn - Date.now())} (${clockIn(nextSpawn, team.timezone || 'Asia/Manila')}).${footer(team)}`;
 }
 
-const COMMANDS = { link: cmdLink, unlink: cmdUnlink, next: cmdNext, killed: cmdKilled };
-const EPHEMERAL_COMMANDS = new Set(['link', 'unlink']);
+// Resolve boss option values (autocomplete gives ids; typed text gives names) -> [{ id, name }] | error string
+function pickBosses(bosses, values) {
+  const out = [];
+  for (const raw of values) {
+    const wanted = String(raw || '').trim(); if (!wanted) continue;
+    let boss = bosses.find(b => b.id === wanted) || bosses.find(b => b.name.toLowerCase() === wanted.toLowerCase());
+    if (!boss) { const hits = bosses.filter(b => b.name.toLowerCase().includes(wanted.toLowerCase())); if (hits.length === 1) boss = hits[0]; }
+    if (!boss) return `No boss called "${wanted}" on this team.`;
+    if (!out.some(b => b.id === boss.id)) out.push({ id: boss.id, name: boss.name });
+  }
+  return out.length ? out : 'Pick at least one boss.';
+}
+
+// /here boss [boss2] proof [note] — member self check-in with a screenshot
+async function cmdHere(env, interaction) {
+  const team = await linkedTeam(env, interaction.guild_id);
+  if (!team) return 'This server is not linked to a team yet.';
+  const who = invoker(interaction);
+  const m = await membership(env, team.id, who.id);
+  if (!m) return `Only members of **${team.name}** in Guild Manager can check in. Join the team there with your Discord account.`;
+  const cfg = await attendanceSettings(env, team.id);
+  if (!cfg.selfCheckin) return 'This team logs attendance by officer roll call only. Ask an officer to run `/rollcall`.';
+  const bosses = (await env.DB.prepare('SELECT id, name FROM bosses WHERE team_id = ?').bind(team.id).all()).results;
+  const picked = pickBosses(bosses, [optionValue(interaction, 'boss'), optionValue(interaction, 'boss2')]);
+  if (typeof picked === 'string') return picked;
+  const day = dayIn(cfg.tz);
+  const dup = await alreadyClaimed(env, { teamId: team.id, userId: m.user_id, bosses: picked, day });
+  if (dup.length) return `You already checked in for ${dup.join(', ')} today.`;
+  const attId = optionValue(interaction, 'proof');
+  const att = interaction.data?.resolved?.attachments?.[attId];
+  if (!att) return 'Attach a screenshot as proof.';
+  if (att.content_type && !att.content_type.startsWith('image/')) return 'The proof must be an image.';
+  const img = await fetchImage(att.url, att.size);
+  if (!img) return 'Could not read that screenshot (max 8 MB). Try again.';
+  const note = String(optionValue(interaction, 'note') || '').trim().slice(0, 200) || null;
+  const flags = await claimFlags(env, { teamId: team.id, userId: m.user_id, bosses: picked, day, tz: cfg.tz, imageHash: img.hash });
+  const status = cfg.autoApprove && flags.length === 0 ? 'approved' : 'pending';
+  const { id, points } = await createClaim(env, { teamId: team.id, userId: m.user_id, bosses: picked, day, source: 'screenshot', imageHash: img.hash, note, flags, status, pointsPerBoss: cfg.pointsPerBoss });
+  await storeImage(env, { teamId: team.id, claimId: id, buf: img.buf, contentType: att.content_type });
+  const names = picked.map(b => b.name).join(' + ');
+  if (status === 'approved') return `✅ Checked in for **${names}** — approved, +${points} pt${points === 1 ? '' : 's'}.`;
+  return `📸 Checked in for **${names}** — pending an officer's review${flags.length ? ` (flagged: ${flags.map(f => f.text).join('; ')})` : ''}.`;
+}
+
+// /rollcall boss members [boss2] [note] — officer logs who was in the rally; approved immediately
+async function cmdRollcall(env, interaction) {
+  const team = await linkedTeam(env, interaction.guild_id);
+  if (!team) return 'This server is not linked to a team yet.';
+  const who = invoker(interaction);
+  const m = await membership(env, team.id, who.id);
+  if (!m || m.role === 'member') return 'Only the leader or an officer can run a roll call.';
+  const cfg = await attendanceSettings(env, team.id);
+  const bosses = (await env.DB.prepare('SELECT id, name FROM bosses WHERE team_id = ?').bind(team.id).all()).results;
+  const picked = pickBosses(bosses, [optionValue(interaction, 'boss'), optionValue(interaction, 'boss2')]);
+  if (typeof picked === 'string') return picked;
+  const mentioned = [...String(optionValue(interaction, 'members') || '').matchAll(/<@!?(\d+)>/g)].map(x => x[1]);
+  if (!mentioned.length) return 'Mention the members who were there, e.g. `@Kaizuka @Ratan`.';
+  const rows = (await env.DB.prepare(`SELECT m.user_id, u.username, u.discord_id FROM team_members m JOIN users u ON u.id = m.user_id WHERE m.team_id = ? AND u.discord_id IN (${mentioned.map(() => '?').join(',')})`).bind(team.id, ...mentioned).all()).results;
+  const day = dayIn(cfg.tz);
+  const note = String(optionValue(interaction, 'note') || '').trim().slice(0, 200) || null;
+  const logged = [], skipped = [];
+  for (const r of rows) {
+    const dup = await alreadyClaimed(env, { teamId: team.id, userId: r.user_id, bosses: picked, day });
+    if (dup.length) { skipped.push(r.username); continue; }
+    await createClaim(env, { teamId: team.id, userId: r.user_id, bosses: picked, day, source: 'rollcall', note, status: 'approved', pointsPerBoss: cfg.pointsPerBoss, reviewerId: m.user_id });
+    logged.push(r.username);
+  }
+  const unknown = mentioned.length - rows.length;
+  const names = picked.map(b => b.name).join(' + ');
+  return `📋 Roll call for **${names}** by ${who.name}: ${logged.length ? logged.join(', ') : 'nobody new'} (+${cfg.pointsPerBoss * picked.length} pt${cfg.pointsPerBoss * picked.length === 1 ? '' : 's'} each)` +
+    (skipped.length ? `\n-# already logged today: ${skipped.join(', ')}` : '') +
+    (unknown ? `\n-# ${unknown} mentioned ${unknown === 1 ? 'person is' : 'people are'} not on the team in Guild Manager (Discord sign-in needed)` : '');
+}
+
+const COMMANDS = { link: cmdLink, unlink: cmdUnlink, next: cmdNext, killed: cmdKilled, here: cmdHere, rollcall: cmdRollcall };
+const EPHEMERAL_COMMANDS = new Set(['link', 'unlink', 'here']);
 
 export const routes = [
   // GET /discord/added?guild_id&state — Discord sends the leader here after "Add to Discord".
@@ -108,6 +183,7 @@ export const routes = [
 
     if (interaction.type === InteractionType.PING) return pong();
     console.log('discord interaction', JSON.stringify({ type: interaction.type, command: interaction.data?.name, guild: interaction.guild_id, user: (interaction.member?.user || interaction.user || {}).id }));
+    // `/rollcall` takes a while when many members are mentioned; still under the 15-minute follow-up window.
 
     if (interaction.type === InteractionType.AUTOCOMPLETE) {
       const team = await linkedTeam(env, interaction.guild_id);

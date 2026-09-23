@@ -22,10 +22,11 @@ import { routes as dkpRoutes } from './routes/dkp.js';
 import { routes as rotationRoutes } from './routes/rotation.js';
 import { routes as accountRoutes } from './routes/account.js';
 import { routes as discordRoutes } from './routes/discord.js';
+import { routes as attendanceRoutes } from './routes/attendance.js';
 
 const PUBLIC_ROUTES = [...authRoutes, ...billingRoutes, ...publicRoutes, ...discordRoutes];
 const PROTECTED_ROUTES = [
-  ...accountRoutes, ...teamRoutes, ...inviteRoutes, ...bossRoutes, ...settingsRoutes, ...eventRoutes,
+  ...accountRoutes, ...attendanceRoutes, ...teamRoutes, ...inviteRoutes, ...bossRoutes, ...settingsRoutes, ...eventRoutes,
   ...memberRoutes, ...lootRoutes, ...dkpRoutes,
   ...rotationRoutes,
 ];

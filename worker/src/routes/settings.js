@@ -67,6 +67,9 @@ export const routes = [
       inviteApproval: !!(settings?.invite_approval),
       publicToken: settings?.public_token || null,
       discordGuilds: await linkedGuildsWithNames(env, teamId),
+      attendancePoints: settings?.attendance_points ?? 1,
+      attendanceAutoApprove: !!settings?.attendance_auto_approve,
+      attendanceSelfCheckin: settings?.attendance_self_checkin ?? 1 ? true : false,
       rsvpRoles: parseRoles(settings?.rsvp_roles),
       modules: (() => { try { return settings?.modules ? JSON.parse(settings.modules) : {}; } catch { return {}; } })(),
       lootMode: await lootModeFor(env, teamId, settings || null),
@@ -135,6 +138,9 @@ export const routes = [
       if (body.autoDeleteEventsDays !== undefined) { sets.push('auto_delete_events_days = ?'); vals.push(body.autoDeleteEventsDays); }
       if (body.pointsName !== undefined) { const n = String(body.pointsName).trim().slice(0, 20); sets.push('points_name = ?'); vals.push(n || null); }
       if (body.timezone !== undefined) { sets.push('timezone = ?'); vals.push(body.timezone); }
+      if (body.attendancePoints !== undefined) { sets.push('attendance_points = ?'); vals.push(Math.max(0, Math.min(100, parseInt(body.attendancePoints) || 0))); }
+      if (body.attendanceAutoApprove !== undefined) { sets.push('attendance_auto_approve = ?'); vals.push(body.attendanceAutoApprove ? 1 : 0); }
+      if (body.attendanceSelfCheckin !== undefined) { sets.push('attendance_self_checkin = ?'); vals.push(body.attendanceSelfCheckin ? 1 : 0); }
       // Premium fields — require premium team
       const hasPremiumFields = body.webhookBoss !== undefined || body.webhookEvents !== undefined ||
         body.dkpDecayEnabled !== undefined || body.dkpDecayPercent !== undefined ||

@@ -11,6 +11,8 @@ worker itself never needs it — only `scripts/register-commands.mjs` does.
 |---|---|---|
 | `/link <code>` | leader/officer of the team, signed in to Guild Manager with Discord | ties this Discord server to the team with that invite code (a server belongs to one team; a team may link many servers — `discord_guilds`) |
 | `/unlink` | leader/officer | removes the tie (also possible from Settings → Discord slash commands) |
+| `/here <boss> <proof> [boss2] [note]` | team members (if self check-in is on) | rally check-in with a screenshot; stored in R2, hashed; flagged when no kill of that boss was logged that day, sent >3 h after the kill, or the image was seen before; pending review unless trust mode is on |
+| `/rollcall <boss> <@members…> [boss2] [note]` | leader/officer | logs everyone mentioned as attended, approved immediately, points awarded |
 | `/next [count]` | **anyone** in the linked server | next spawns, up-now first, team time, with a link to the timer page / app |
 | `/killed <boss> [minutes_ago]` | team members only | logs the kill and restarts the timer; boss name autocompletes; ambiguous names ask "which one?" |
 

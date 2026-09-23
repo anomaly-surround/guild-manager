@@ -3,7 +3,8 @@
 // ES module. Uses shell globals by name (teamData, teamTab, currentTeamId, currentUser, api, token,
 // showToast, guard, renderTeamView, API). Exposed as window.Events.
 
-import { esc } from './timer-cards.js?v=20260923e';
+import { esc } from './timer-cards.js?v=20260923s';
+import { loadAttendance, attendanceHtml, onAttendanceClick } from './attendance.js?v=20260923s';
 
 const DEFAULT_ROLES = ['Tank', 'Healer', 'DPS', 'Support'];
 const TYPE_LABEL = { raid: 'Raid', scrim: 'Scrim', gvg: 'GvG', dungeon: 'Dungeon', meeting: 'Meeting', other: 'Event' };
@@ -33,6 +34,7 @@ export async function open() {
     renderTeamView();
     await load();
     if (teamTab !== 'events') return;
+    if (view === 'attendance') { render(); await loadAttendance(); if (teamTab !== 'events') return; }
     render();
     startLoops();
 }
@@ -117,6 +119,8 @@ function memberName(userId) { return teamData?.members?.find(m => m.id === userI
 
 // ---------------------------------------------------------------- render
 
+function renderBody() { const b = root()?.querySelector('[data-role="body"]'); if (b) b.innerHTML = view === 'attendance' ? attendanceHtml() : view === 'week' ? weekHtml() : listHtml(); }
+
 function render() {
     const el = root();
     if (!el) return;
@@ -129,19 +133,20 @@ function render() {
             <div class="sub-nav e-viewswitch">
                 <button class="${view === 'list' ? 'active' : ''}" data-action="view" data-view="list">List</button>
                 <button class="${view === 'week' ? 'active' : ''}" data-action="view" data-view="week">Week</button>
+                <button class="${view === 'attendance' ? 'active' : ''}" data-action="view" data-view="attendance">Attendance</button>
             </div>
             <div class="header-spacer"></div>
             <button class="btn btn-primary" data-action="add">+ New event</button>
             <details class="menu" data-role="menu"><summary class="btn btn-secondary" title="More">&#8943;</summary><div class="menu-list">${more}</div></details>
         </div>
-        <div data-role="body">${view === 'week' ? weekHtml() : listHtml()}</div>`;
+        <div data-role="body">${view === 'attendance' ? attendanceHtml() : view === 'week' ? weekHtml() : listHtml()}</div>`;
     el.onclick = onClick;
     el.onchange = onChange;
 }
 
 function rerenderBody() {
     const b = root()?.querySelector('[data-role="body"]');
-    if (b) b.innerHTML = view === 'week' ? weekHtml() : listHtml();
+    if (b) b.innerHTML = view === 'attendance' ? attendanceHtml() : view === 'week' ? weekHtml() : listHtml();
 }
 
 function listHtml() {
@@ -285,14 +290,16 @@ function weekHtml() {
 
 // ---------------------------------------------------------------- events
 
-function onClick(ev) {
+async function onClick(ev) {
+    const attBtn = ev.target.closest('[data-att]');
+    if (attBtn && root()?.contains(attBtn)) { if (await onAttendanceClick(attBtn)) renderBody(); return; }
     const btn = ev.target.closest('[data-action]');
     if (!btn || !root()?.contains(btn)) return;
     const menu = root().querySelector('[data-role="menu"]');
     if (menu && menu.open && !menu.contains(btn)) menu.open = false;
     const id = btn.dataset.id;
     switch (btn.dataset.action) {
-        case 'view': view = btn.dataset.view; localStorage.setItem('gm_events_view', view); render(); break;
+        case 'view': view = btn.dataset.view; localStorage.setItem('gm_events_view', view); if (view === 'attendance') { render(); await loadAttendance(); } render(); break;
         case 'add': openEventModal(null); break;
         case 'edit': openEventModal(byId(id)); break;
         case 'toggle': expanded.has(id) ? expanded.delete(id) : expanded.add(id); rerenderBody(); break;

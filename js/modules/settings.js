@@ -41,7 +41,7 @@ function render() {
     const el = root();
     if (!el) return;
     el.innerHTML = canManage()
-        ? `<div class="settings">${teamCard()}${invitesCard()}${modulesCard()}${discordCard()}${slashCard()}${eventsCard()}${team()?.loot_mode === 'dkp' ? pointsCard() : ''}${publicCard()}${iconCard()}${leadershipCard()}</div>`
+        ? `<div class="settings">${teamCard()}${invitesCard()}${modulesCard()}${discordCard()}${slashCard()}${attendanceCard()}${eventsCard()}${team()?.loot_mode === 'dkp' ? pointsCard() : ''}${publicCard()}${iconCard()}${leadershipCard()}</div>`
         : `<div class="settings"><section class="card s-card"><h3>Settings</h3><p class="s-desc">Only officers and the leader can change team settings. Ask them if something needs adjusting.</p></section>${leaveCard()}</div>`;
     el.onclick = onClick;
     el.onchange = onChange;
@@ -123,6 +123,20 @@ function discordCard() {
         <div class="t-h3">Per-channel webhooks <span class="chip chip-accent">Premium</span></div>
         ${gate(`<div class="tform">${hookField('sHookBoss', 'Boss alerts', settings.webhookBossSet)}${hookField('sHookEvents', 'Event alerts', settings.webhookEventsSet)}
             <div class="tf-actions tf-wide"><button class="btn btn-primary btn-sm" data-action="save-channels">Save</button></div></div>`, 'Sending boss and event alerts to different channels')}
+    </section>`;
+}
+
+function attendanceCard() {
+    return `<section class="card s-card"><h3>Rally attendance</h3>
+        <p class="s-desc">Members check in from Discord with <code>/here</code> + a screenshot; officers log a whole rally with <code>/rollcall</code>. Review under Events → Attendance. Approved rallies award points to the team ledger.</p>
+        <div class="tform">
+            <label class="tf-field"><span>Points per boss attended</span><input type="number" id="sAttPts" min="0" max="100" value="${settings.attendancePoints ?? 1}"></label>
+            <div class="tf-field tf-wide s-toggles">
+                ${toggle('sAttSelf', 'Members can check in themselves (/here with a screenshot)', settings.attendanceSelfCheckin !== false, { help: 'Off = officer roll call only, nothing to verify.' })}
+                ${toggle('sAttAuto', 'Trust mode: approve unflagged check-ins automatically', !!settings.attendanceAutoApprove, { help: 'Flagged ones (no kill logged, sent hours late, duplicate screenshot) always wait for review.' })}
+            </div>
+            <div class="tf-actions tf-wide"><button class="btn btn-primary btn-sm" data-action="save-attendance">Save</button></div>
+        </div>
     </section>`;
 }
 
@@ -260,6 +274,7 @@ const act = guard('settings.act', async (a, btn) => {
             break;
         }
         case 'clear-channel': { const which = btn.dataset.which; if (confirm(`Clear the ${which.toLowerCase()} webhook? Alerts fall back to the main one.`)) { if (await put({ ['webhook' + which]: '' }, `${which} webhook cleared`)) await reload(); } break; }
+        case 'save-attendance': await put({ attendancePoints: Math.max(0, Math.min(100, parseInt(val('sAttPts')) || 0)), attendanceSelfCheckin: on('sAttSelf'), attendanceAutoApprove: on('sAttAuto') }, 'Attendance settings saved'); break;
         case 'save-events': {
             const list = val('sRsvp').split(',').map(s => s.trim()).filter(Boolean).slice(0, 8);
             if (await put({ rsvpRoles: list, autoDeleteEventsDays: Math.max(0, parseInt(val('sAutoDelete')) || 0) }, 'Event settings saved')) await reload();
