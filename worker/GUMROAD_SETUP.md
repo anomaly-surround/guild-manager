@@ -24,7 +24,7 @@ Premium columns on `users`: `premium`, `premium_type` ('monthly' | 'lifetime'), 
 ## Steps (Gumroad's editor as of 2026-09: tabs Product / Content / Receipt / Share)
 
 1. **Gumroad account** — done (`anomalyftw.gumroad.com`). Payouts → PayPal.
-2. **Premium Monthly** (Membership, already created at `/l/vbeeit`):
+2. **Premium Monthly** (Membership, `/l/vbeeit`, id `yoUMrHCtjdpBSAr66I6azQ==`):
    - *Product* tab: one tier, rename it from "Untitled" to **Premium**, price **$2 monthly** only (leave the other
      periods off). Under *Settings* on that same tab turn ON **Members will lose access when their memberships end**.
      Leave "Offer a free trial" OFF (the app has its own trial).
@@ -32,15 +32,15 @@ Premium columns on `users`: `premium`, `premium_type` ('monthly' | 'lifetime'), 
      key per sale" switch: every buyer gets a key on their receipt and in their library. Above it type one line
      such as "Paste this key in Guild Manager → account menu → Upgrade to Premium → Already bought?".
    - *Share* tab → **Publish**. The preview says "not currently for sale" until you do.
-3. **Premium Lifetime** — New product → type *Digital product*, price **$10**, URL e.g. `gm-lifetime`.
+3. **Premium Lifetime** (Digital product, `/l/vhuarz`, id `gEf0lchUAxDC6tZUfI9W8Q==`) — price **$10**.
    Same *Content* tab → Insert → License key, same one-line text, Publish.
 4. **Ping URL** — sidebar *Everything else* → *Settings* → *Advanced* → **Ping** endpoint:
    `https://guild-manager.xpropics.workers.dev/gumroad/ping`
 5. **Copy four values into `worker/wrangler.toml` `[vars]`**:
    - `GUMROAD_MONTHLY_URL` = `https://anomalyftw.gumroad.com/l/vbeeit`, `GUMROAD_LIFETIME_URL` = the lifetime link.
-   - `GUMROAD_MONTHLY_PRODUCT_ID` = `vbeeit`, `GUMROAD_LIFETIME_PRODUCT_ID` = the lifetime product's permalink
-     (the part after `/l/`). The editor no longer shows the long product id; the worker sends the permalink
-     to the license API instead, which accepts either.
+   - `GUMROAD_MONTHLY_PRODUCT_ID` / `GUMROAD_LIFETIME_PRODUCT_ID` = the product ID shown inside the Insert →
+     License key block ("Use your product ID to verify licenses through the API"). The permalink (`vbeeit`)
+     also works; the worker sends whichever form it is given.
 6. **Deploy both halves together** (the old page expects the old Paddle route shape):
    `cd worker; npx wrangler deploy` then push the page.
 7. **Test without paying**: while logged into Gumroad as the seller, buying your own product is a free *test
