@@ -33,12 +33,14 @@ async function init() {
     currentUser = user;
     showUserInfo();
     showTeamList();
-    // pricing.html links here with ?upgrade=monthly|lifetime
-    const wanted = new URLSearchParams(location.search).get('upgrade');
-    if (wanted) {
-        history.replaceState(null, '', location.pathname);
-        if (!(currentUser.premium && !currentUser.trial)) showUpgradeModal();
-    }
+    // pricing.html links here with ?upgrade=monthly|lifetime; /discord/added sends ?discord=linked|cancelled|error
+    const params = new URLSearchParams(location.search);
+    const wanted = params.get('upgrade'), discord = params.get('discord');
+    if (wanted || discord) history.replaceState(null, '', location.pathname);
+    if (wanted && !(currentUser.premium && !currentUser.trial)) showUpgradeModal();
+    if (discord === 'linked') showToast('Discord server linked. Try /next there.');
+    else if (discord === 'cancelled') showToast('Discord link cancelled.');
+    else if (discord === 'error') showToast('Could not link the Discord server. Try again from Settings.');
 }
 
 // --- Views ---

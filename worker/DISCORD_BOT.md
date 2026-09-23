@@ -28,10 +28,17 @@ link). `/killed` is not, because a stranger in a public server could reset a gui
    ```
    Global registration can take up to an hour to show in clients. For instant testing on one server:
    `node scripts/register-commands.mjs <server id>` (Developer Mode → right-click the server → Copy ID).
-3. **Add the bot to a server** — the "Add to Discord" button in Settings → Discord slash commands, or
-   `https://discord.com/oauth2/authorize?client_id=1488742496660881528&scope=applications.commands`.
-   Only the `applications.commands` scope is needed; the bot has no gateway presence and reads no messages.
-4. In that server, a leader/officer runs `/link <invite code>`.
+3. **Redirect URI** (one-time, so the one-click link works) — Developer Portal → OAuth2 → Redirects → add
+   `https://guild-manager.xpropics.workers.dev/discord/added` → Save.
+
+## What a guild leader does (every guild)
+
+Settings → Discord slash commands → **Add to Discord**. Discord asks which server; on Authorize it
+sends the leader to `/discord/added?guild_id=…&state=…` where `state` is our signed token naming the
+team and the user (issued by `GET /api/teams/:id/discord-link`, officer+). The worker links the server
+and redirects back to the app with `?discord=linked`. Scopes: `applications.commands bot` with
+permissions 0 — the `bot` scope is what makes Discord include `guild_id` in the redirect; the bot
+user reads nothing and has no permissions. Fallback: `/link <invite code>` in the server.
 
 ## How a command is handled (`routes/discord.js`, `lib/discord-interactions.js`)
 

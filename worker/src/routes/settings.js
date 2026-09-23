@@ -6,8 +6,24 @@ import { sendDiscord, isValidDiscordWebhook } from '../lib/discord.js';
 import { requireTeamMember, isPremiumTeam } from '../lib/team.js';
 import { parseRoles } from './events.js';
 import { lootModeFor } from '../lib/rotation.js';
+import { createToken } from '../lib/auth.js';
 
 export const routes = [
+  // GET /api/teams/:id/discord-link — the "Add to Discord" URL with a signed state, so the callback
+  // (/discord/added, public) can link the chosen server to this team without a /link command.
+  { method: 'GET', pattern: /^\/api\/teams\/([^/]+)\/discord-link$/, handler: async ({ env, user, url, params }) => {
+    const teamId = params[1];
+    const member = await requireTeamMember(env, teamId, user.userId);
+    if (!member || member.role === 'member') return json({ error: 'Officers+ only' }, 403);
+    if (!env.DISCORD_APP_ID) return json({ error: 'Discord app not configured' }, 500);
+    const state = await createToken({ kind: 'discord-link', teamId, userId: user.userId }, env.JWT_SECRET);
+    const q = new URLSearchParams({
+      client_id: env.DISCORD_APP_ID, scope: 'applications.commands bot', permissions: '0',
+      response_type: 'code', redirect_uri: url.origin + '/discord/added', state,
+    });
+    return json({ url: `https://discord.com/oauth2/authorize?${q}` });
+  } },
+
   // GET /api/teams/:id/settings
   { method: 'GET', pattern: /^\/api\/teams\/([^/]+)\/settings$/, handler: async ({ env, user, params }) => {
     const teamId = params[1];

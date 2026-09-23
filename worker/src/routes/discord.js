@@ -8,6 +8,7 @@
 // so it does one query and answers directly.
 
 import { json } from '../lib/http.js';
+import { verifyToken } from '../lib/auth.js';
 import { killBoss } from '../lib/boss-kill.js';
 import {
   InteractionType, verifyDiscordRequest, pong, message, deferred, choices, editOriginal,
@@ -89,6 +90,23 @@ const COMMANDS = { link: cmdLink, unlink: cmdUnlink, next: cmdNext, killed: cmdK
 const EPHEMERAL_COMMANDS = new Set(['link', 'unlink']);
 
 export const routes = [
+  // GET /discord/added?guild_id&state — Discord sends the leader here after "Add to Discord".
+  // The state is our signed token naming the team and the user; guild_id is the server they picked.
+  { method: 'GET', pattern: '/discord/added', handler: async ({ env, url }) => {
+    const back = (q) => Response.redirect(`${APP_URL}?discord=${q}`, 302);
+    const guildId = url.searchParams.get('guild_id');
+    const state = await verifyToken(url.searchParams.get('state') || '', env.JWT_SECRET);
+    if (url.searchParams.get('error')) return back('cancelled');
+    if (!state || state.kind !== 'discord-link' || !guildId) return back('error');
+    const m = await env.DB.prepare('SELECT role FROM team_members WHERE team_id = ? AND user_id = ?').bind(state.teamId, state.userId).first();
+    if (!m || m.role === 'member') return back('error');
+    await env.DB.batch([
+      env.DB.prepare('UPDATE team_settings SET discord_guild_id = NULL WHERE discord_guild_id = ?').bind(guildId),
+      env.DB.prepare('INSERT INTO team_settings (team_id, discord_guild_id) VALUES (?, ?) ON CONFLICT(team_id) DO UPDATE SET discord_guild_id = excluded.discord_guild_id').bind(state.teamId, guildId),
+    ]);
+    return back('linked');
+  } },
+
   { method: 'POST', pattern: '/discord/interactions', handler: async ({ request, env, ctx }) => {
     const raw = await request.text();
     if (!(await verifyDiscordRequest(request, raw, env.DISCORD_PUBLIC_KEY))) return json({ error: 'bad signature' }, 401);
