@@ -9,10 +9,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/tokens.css?v=20260923j">
-    <link rel="stylesheet" href="css/shell.css?v=20260923j">
-    <link rel="stylesheet" href="css/components.css?v=20260923j">
-    <link rel="stylesheet" href="css/timers.css?v=20260923j">
+    <link rel="stylesheet" href="css/tokens.css?v=20260923k">
+    <link rel="stylesheet" href="css/shell.css?v=20260923k">
+    <link rel="stylesheet" href="css/components.css?v=20260923k">
+    <link rel="stylesheet" href="css/timers.css?v=20260923k">
 </head>
 <body>
     <header class="app-header">
@@ -27,7 +27,7 @@
     </main>
 
     <script type="module">
-        import { cardHtml, updateCard, sortBosses, bossState, esc, fmtDuration } from './js/modules/timer-cards.js?v=20260923j';
+        import { updateCard, sortBosses, bossState, groupedListHtml, esc, fmtDuration } from './js/modules/timer-cards.js?v=20260923k';
         const API = 'https://guild-manager.xpropics.workers.dev';
         const token = new URLSearchParams(location.search).get('t') || '';
         const pub = document.getElementById('pub');
@@ -48,7 +48,7 @@
             document.title = `${team.name} — Boss Timers`;
             pub.innerHTML = `
                 <div class="pub-head"><h1>${esc(team.name)}</h1><span class="t-dim" data-role="summary">${summary(now)}</span></div>
-                <div class="tcards">${sortBosses(bosses, now).map(b => cardHtml(b, { readOnly: true }, now)).join('') || '<div class="t-empty card"><div class="t-empty-title">No timers yet</div></div>'}</div>`;
+                <div class="tcards">${groupedListHtml(bosses, { readOnly: true }, now) || '<div class="t-empty card"><div class="t-empty-title">No timers yet</div></div>'}</div>`;
         }
 
         async function load() {

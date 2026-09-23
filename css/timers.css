@@ -1,7 +1,17 @@
 /* Timers module: dense countdown rows and the public timer page. Shared components live in components.css. */
 
-/* rows (dense: 20+ bosses is the normal case) */
-.tcards { display: flex; flex-direction: column; gap: 6px; }
+/* rows (dense: 20+ bosses is the normal case). One column on phones, two from tablet width up,
+   with time-group headings (Up now / Next hour / Later today / Tomorrow / Later) once the list is long. */
+.tcards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-items: start; }
+@media (min-width: 760px) { .tcards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; } }
+.t-group {
+    grid-column: 1 / -1;
+    margin: 10px 2px 0;
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted);
+}
+.t-group:first-child { margin-top: 2px; }
+.t-empty { grid-column: 1 / -1; }
 .tcard {
     display: grid;
     grid-template-columns: 40px minmax(0, 1fr) auto;

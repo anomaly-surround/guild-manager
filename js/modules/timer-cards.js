@@ -151,6 +151,30 @@ export function updateCard(el, boss, now = Date.now()) {
     const ring = el.querySelector('.ring-fg'); if (ring) ring.setAttribute('stroke-dashoffset', (RING_C * (1 - st.fraction)).toFixed(1));
 }
 
+// Time groups for long lists: Up now / Next hour / Later today / Tomorrow / Later.
+// Headers only appear once the list is long enough to need them (minForGroups).
+export function groupedListHtml(list, opts, now = Date.now(), minForGroups = 8) {
+    const sorted = sortBosses(list, now);
+    if (sorted.length < minForGroups) return sorted.map(b => cardHtml(b, opts, now)).join('');
+    const endOfToday = new Date(now); endOfToday.setHours(24, 0, 0, 0);
+    const endOfTomorrow = endOfToday.getTime() + 86400000;
+    const groupOf = (b) => {
+        const st = bossState(b, now);
+        if (st.key === 'spawned' || st.key === 'window') return 'Up now';
+        if (st.remaining <= 3600000) return 'Next hour';
+        if (b.next_spawn < endOfToday.getTime()) return 'Later today';
+        if (b.next_spawn < endOfTomorrow) return 'Tomorrow';
+        return 'Later';
+    };
+    let current = null, html = '';
+    for (const b of sorted) {
+        const g = groupOf(b);
+        if (g !== current) { current = g; html += `<h3 class="t-group">${g}</h3>`; }
+        html += cardHtml(b, opts, now);
+    }
+    return html;
+}
+
 // Sort: spawned / window first, then soonest.
 export function sortBosses(list, now = Date.now()) {
     const rank = { spawned: 0, window: 0, soon: 1, waiting: 1 };
