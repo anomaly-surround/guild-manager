@@ -9,25 +9,30 @@ function showUpgradeModal() {
     const onTrial = !!currentUser?.trial;
     const trialUsed = !!currentUser?.trialUsed;
 
+    const ownPlan = currentUser?.premium && !onTrial ? (currentUser.premiumType || 'lifetime') : null;   // legacy grants have no type
     let notice = '';
     if (isGuest) {
         notice = '<div class="bill-note bill-note-warn">Sign in with Discord or Google first, so your purchase stays with an account you can get back into. Guests can\'t start a trial or buy Premium.</div>';
     } else if (onTrial) {
         notice = `<div class="bill-note bill-note-success">Your trial has <b>${currentUser.trialDaysLeft} day${currentUser.trialDaysLeft === 1 ? '' : 's'}</b> left. Buy a plan to keep Premium when it ends.</div>`;
+    } else if (ownPlan === 'lifetime') {
+        notice = '<div class="bill-note bill-note-success"><b>You have Lifetime Premium.</b> There is nothing more to buy.</div>';
+    } else if (ownPlan === 'monthly') {
+        notice = '<div class="bill-note bill-note-success"><span><b>You&rsquo;re on the monthly plan.</b> Switch to Lifetime below, then cancel the monthly membership on Gumroad so it stops billing.</span></div>';
     } else if (!trialUsed) {
         notice = '<div class="bill-note bill-note-success"><span><b>Try Premium free for 7 days.</b> No payment details, one trial per account.</span><button class="btn btn-sm btn-secondary" data-act="trial">Start free trial</button></div>';
     }
 
-    const plans = `
+    const plans = ownPlan === 'lifetime' ? '' : `
         <div class="bill-plans">
-            <button class="bill-plan" data-act="buy" data-plan="monthly" ${isGuest ? 'disabled' : ''}>
+            ${ownPlan === 'monthly' ? '' : `<button class="bill-plan" data-act="buy" data-plan="monthly" ${isGuest ? 'disabled' : ''}>
                 <span class="bill-plan-name">Monthly</span>
                 <span class="bill-plan-price">$2<small>/ month</small></span>
                 <span class="bill-plan-sub">Cancel any time</span>
-            </button>
+            </button>`}
             <button class="bill-plan bill-plan-featured" data-act="buy" data-plan="lifetime" ${isGuest ? 'disabled' : ''}>
                 <span class="chip chip-accent">Best value</span>
-                <span class="bill-plan-name">Lifetime</span>
+                <span class="bill-plan-name">${ownPlan === 'monthly' ? 'Switch to Lifetime' : 'Lifetime'}</span>
                 <span class="bill-plan-price">$10<small>once</small></span>
                 <span class="bill-plan-sub">Pay once, keep it forever</span>
             </button>
@@ -40,7 +45,7 @@ function showUpgradeModal() {
                 <p class="tf-help">Free covers 1 team, 10 members and 15 timers. Premium adds unlimited teams and timers, up to 100 members, the public timer page, per-channel webhooks, templates, kill history, the attendance report, calendar feed, wishlists, auctions and decay. <a href="pricing.html" target="_blank" rel="noopener">Compare plans</a></p>
                 ${notice}
                 ${plans}
-                <p class="tf-help">Checkout opens on Gumroad in a new tab and takes cards and PayPal. Premium switches on here by itself within a minute of paying.</p>
+                ${ownPlan === 'lifetime' ? '' : '<p class="tf-help">Checkout opens on Gumroad in a new tab and takes cards and PayPal. Premium switches on here by itself within a minute of paying.</p>'}
                 <details class="bill-key">
                     <summary>Already bought? Enter your license key</summary>
                     <form class="bill-key-form" data-act="activate">
@@ -108,14 +113,17 @@ const checkout = guard('checkout', async function(plan) {
     startActivationPoll();
 });
 
+// Flips only when the plan actually changes from what it was when checkout opened, so an account
+// that is already Premium is not reported as "activated" by its own existing plan.
 function startActivationPoll() {
     stopActivationPoll();
     const started = Date.now();
+    const planBefore = currentUser?.premium && !currentUser.trial ? currentUser.premiumType : null;
     _billPoll = setInterval(async () => {
         if (!document.getElementById('billStatus')) { stopActivationPoll(); return; }   // modal closed
         if (Date.now() - started > BILL_POLL_MAX_MS) { stopActivationPoll(); return; }
         const user = await refreshPremiumState();
-        if (user && user.premium && !user.trial) onPremiumActivated(user);
+        if (user && user.premium && !user.trial && user.premiumType !== planBefore) onPremiumActivated(user);
     }, BILL_POLL_MS);
 }
 

@@ -106,9 +106,10 @@ async function touchLicense(env, userId, checkedAt) {
 // Verify a key and attach it to a user. productId may be omitted (manual activation): both
 // products are tried. -> { ok: true, plan } | { ok: false, error, transient? }
 export async function bindLicense(env, userId, licenseKey, productId, lap = () => {}) {
-  const user = await env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(userId).first();
+  const user = await env.DB.prepare('SELECT id, premium, premium_type FROM users WHERE id = ?').bind(userId).first();
   lap('user row');
   if (!user) return { ok: false, error: 'Unknown account' };
+  const hasLifetime = !!user.premium && String(user.premium_type || '').toLowerCase() === 'lifetime';
 
   const candidates = productId ? [productId] : [productForPlan(env, 'monthly'), productForPlan(env, 'lifetime')].filter(Boolean);
   let last = { ok: false, error: 'Billing is not configured' };
@@ -123,6 +124,7 @@ export async function bindLicense(env, userId, licenseKey, productId, lap = () =
 
     const status = licenseStatus(v.purchase);
     if (!status.active) return { ok: false, error: status.reason };
+    if (plan === 'monthly' && hasLifetime) return { ok: false, error: 'This account already has Lifetime Premium; a monthly membership would not add anything. Cancel it on Gumroad for a refund.' };
 
     const other = await env.DB.prepare('SELECT id FROM users WHERE gumroad_license = ? AND id != ?').bind(licenseKey, userId).first();
     if (other) return { ok: false, error: 'This license key is already in use on another account' };
