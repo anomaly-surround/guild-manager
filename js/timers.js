@@ -21,10 +21,10 @@ setInterval(() => {
         if (!el) continue;
         if (isSpawned) {
             el.textContent = 'SPAWNED';
-            el.className = 'boss-countdown spawned';
+            el.className = 'when boss-countdown spawned';   // keep 'when': it carries the Home font size
         } else {
             el.textContent = formatTime(remaining);
-            el.className = remaining <= alertMs ? 'boss-countdown warning-text' : 'boss-countdown active';
+            el.className = remaining <= alertMs ? 'when boss-countdown warning-text' : 'when boss-countdown active';
         }
     }
 }, 1000);
